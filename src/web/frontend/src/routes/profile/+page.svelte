@@ -1,15 +1,11 @@
 <script>
     import { onMount } from 'svelte';
+    import { PUBLIC_API_URL } from '$env/static/public';
     import { BoominBeatsLogo } from "$lib";
 
     import { page, user, access_token} from '../../stores.js'
 
-    let username = '';
-    let password = '';
-
     let token = $access_token;
-    let expires_in = '';
-    let token_type = '';
 
     let user_profile = {};
     let top_artists = [];
@@ -24,60 +20,153 @@
 
     let logged_in = false;
 
-    const CLIENT_ID = 'a6e889c6521040a797bdda3dbb27b451';
-    const SPOTIFY_AUTHORIZE_ENPOINT = 'https://accounts.spotify.com/authorize'
-    const REDIRECT_URI_AFTER_LOGIN = 'http://localhost:5173/profile';
-    const SPACE_DELIMITER = '%20';
-    const SCOPES = ['user-top-read', 'playlist-read-private'];
-    const SCOPES_URI_PARAM = SCOPES.join(SPACE_DELIMITER);
+    const CLIENT_ID = 'a700071d47504ba68082a5a59d2b0bc0';
+    const SPOTIFY_AUTHORIZE_ENDPOINT = 'https://accounts.spotify.com/authorize';
+    const REDIRECT_URI = 'http://127.0.0.1:5173/profile';
+    const SCOPES = 'user-top-read playlist-read-private playlist-modify-private playlist-modify-public user-modify-playback-state';
 
-    const AUTHORIZE_URI = `${SPOTIFY_AUTHORIZE_ENPOINT}?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI_AFTER_LOGIN}&scope=${SCOPES_URI_PARAM}&response_type=token&show_dialog=true`
-
-    onMount(async() => {
-        console.log('on mount');
-        $page = 'Profile';
-        console.log('page in profile: ', $page)
-        if (window.location.href.includes('access_token')) {
-            console.log('hash exists');
-            let params = getReturnedParamsFromSpotifyAuth(window.location.hash);
-            // console.log(params)
-            token = params.access_token;
-            expires_in = params.expires_in;
-            token_type = params.token_type;
-            $access_token = token;
-            getProfile()
-        }
-    })
-
-    const handleLogin = () => {
-        if (typeof window !== "undefined") {
-            console.log('Handle Login Test')
-            window.location = AUTHORIZE_URI;
-        }
-
+    // PKCE helpers
+    function generateCodeVerifier(length = 128) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+        const array = new Uint8Array(length);
+        crypto.getRandomValues(array);
+        return Array.from(array).map(b => chars[b % chars.length]).join('');
     }
 
-    const getReturnedParamsFromSpotifyAuth = (hash) => {
-        console.log('Get Returned params from Spotify Auth');
-        // console.log(hash);
-        const stringAfterHashtag = hash.substring(1);
-        const paramsInUrl = stringAfterHashtag.split("&");
-        const paramsSplitUp = paramsInUrl.reduce((accumulater, currentValue) => {
-            console.log(currentValue);
-            const [key, value] = currentValue.split("=");
-            accumulater[key] = value;
-            return accumulater;
-        }, {});
+    async function generateCodeChallenge(verifier) {
+        const data = new TextEncoder().encode(verifier);
+        const digest = await crypto.subtle.digest('SHA-256', data);
+        return btoa(String.fromCharCode(...new Uint8Array(digest)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
 
-        return paramsSplitUp;
+    // Token storage helpers
+    function saveTokens(tokenData) {
+        localStorage.setItem('spotify_access_token', tokenData.access_token);
+        localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
+        localStorage.setItem('spotify_expires_at', Date.now() + tokenData.expires_in * 1000);
+    }
+
+    function loadStoredToken() {
+        const accessToken = localStorage.getItem('spotify_access_token');
+        const refreshToken = localStorage.getItem('spotify_refresh_token');
+        const expiresAt = parseInt(localStorage.getItem('spotify_expires_at') || '0');
+        if (!accessToken) return null;
+        return { accessToken, refreshToken, expiresAt };
+    }
+
+    function clearStoredTokens() {
+        localStorage.removeItem('spotify_access_token');
+        localStorage.removeItem('spotify_refresh_token');
+        localStorage.removeItem('spotify_expires_at');
+    }
+
+    function handleLogout() {
+        clearStoredTokens();
+        $access_token = '';
+        token = '';
+        logged_in = false;
+    }
+
+    async function exchangeCodeForToken(code, verifier) {
+        const res = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type: 'authorization_code',
+                code,
+                redirect_uri: REDIRECT_URI,
+                client_id: CLIENT_ID,
+                code_verifier: verifier,
+            }),
+        });
+        return res.json();
+    }
+
+    async function refreshAccessToken(refreshToken) {
+        const res = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type: 'refresh_token',
+                refresh_token: refreshToken,
+                client_id: CLIENT_ID,
+            }),
+        });
+        return res.json();
+    }
+
+    onMount(async () => {
+        $page = 'Profile';
+
+        // Check if returning from Spotify OAuth
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (code) {
+            const verifier = sessionStorage.getItem('spotify_pkce_verifier');
+            if (verifier) {
+                const tokenData = await exchangeCodeForToken(code, verifier);
+                if (tokenData.access_token) {
+                    saveTokens(tokenData);
+                    token = tokenData.access_token;
+                    $access_token = token;
+                }
+                sessionStorage.removeItem('spotify_pkce_verifier');
+                window.history.replaceState({}, '', '/profile');
+                getProfile();
+            }
+            return;
+        }
+
+        // Check localStorage for a stored session
+        const stored = loadStoredToken();
+        if (stored) {
+            if (Date.now() < stored.expiresAt) {
+                // Token still valid
+                token = stored.accessToken;
+                $access_token = token;
+                getProfile();
+            } else if (stored.refreshToken) {
+                // Token expired — refresh silently
+                const tokenData = await refreshAccessToken(stored.refreshToken);
+                if (tokenData.access_token) {
+                    saveTokens(tokenData);
+                    token = tokenData.access_token;
+                    $access_token = token;
+                    getProfile();
+                } else {
+                    // Refresh failed — clear stored tokens and show login
+                    clearStoredTokens();
+                }
+            } else {
+                clearStoredTokens();
+            }
+        }
+    });
+
+    const handleLogin = async () => {
+        if (typeof window === 'undefined') return;
+        const verifier = generateCodeVerifier();
+        const challenge = await generateCodeChallenge(verifier);
+        sessionStorage.setItem('spotify_pkce_verifier', verifier);
+        const params = new URLSearchParams({
+            client_id: CLIENT_ID,
+            response_type: 'code',
+            redirect_uri: REDIRECT_URI,
+            scope: SCOPES,
+            code_challenge_method: 'S256',
+            code_challenge: challenge,
+            show_dialog: 'true',
+        });
+        window.location = `${SPOTIFY_AUTHORIZE_ENDPOINT}?${params}`;
     };
 
     async function getProfile() {
         console.log('Get Profile Test 1')
         try {
             console.log('Get Profile Test In Try')
-			// let url = `http://127.0.0.1:8000/account-analysis/?access_token=${access_token}`
-			let url = `http://127.0.0.1:8000/get-profile/?access_token=${token}&num_tops=${number_of_tops}&time_period=${time_period}`
+			// let url = `${PUBLIC_API_URL}/account-analysis/?access_token=${access_token}`
+			let url = `${PUBLIC_API_URL}/get-profile/?access_token=${token}&num_tops=${number_of_tops}&time_period=${time_period}`
 
             console.log('Fetching User Profile')
 			const response = await fetch(url, {
@@ -156,6 +245,9 @@
         </div>
         <div class='followers-div'>
             Followers: {user_profile.followers.total}
+        </div>
+        <div class='logout-div'>
+            <button on:click={handleLogout} class='logout-button'>Log Out</button>
         </div>
     </div>
     <div class='top-parameters-div'>
@@ -322,9 +414,31 @@
     }
 
     .followers-div {
-        width: 40%;
+        width: 30%;
         text-align: center;
         font-size: 20px;
+    }
+
+    .logout-div {
+        width: 10%;
+        display: flex;
+        justify-content: center;
+    }
+
+    .logout-button {
+        height: 30px;
+        padding: 0 14px;
+        background-color: var(--color-dark-gray);
+        color: var(--color-light-blue);
+        border: 2px solid var(--color-light-blue);
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 0.8rem;
+    }
+
+    .logout-button:hover {
+        border-color: var(--color-purple);
+        color: var(--color-purple);
     }
 
     .top-parameters-div {

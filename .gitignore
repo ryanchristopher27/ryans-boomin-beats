@@ -1,0 +1,14 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.cache
+
+# Misc
+.DS_Store

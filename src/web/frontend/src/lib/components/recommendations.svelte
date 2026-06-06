@@ -1,4 +1,5 @@
 <script>
+    import { PUBLIC_API_URL } from '$env/static/public';
     export let track_id = '';
     export let number_of_songs = 25;
     
@@ -10,7 +11,7 @@
 
     async function getRecommendations() {
 		try {
-			let url = `http://127.0.0.1:8000/get-recommendations/?trackId=${track_id}&numberOfSongs=${number_of_songs}`
+			let url = `${PUBLIC_API_URL}/get-recommendations/?trackId=${track_id}&numberOfSongs=${number_of_songs}`
 
 			const response = await fetch(url)
 

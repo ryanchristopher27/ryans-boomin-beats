@@ -1,13 +1,15 @@
 <script>
-	import { page } from '../stores.js';
+	import { page, llmConfig } from '../stores.js';
 	import { BoominBeatsLogo } from '$lib';
-	import { stackOrderDescending } from 'd3-shape';
-	import { onMount } from 'svelte';
+	import LLMSettingsPanel from '$lib/components/LLMSettingsPanel.svelte';
 
-	let current_page = 'Home';
+	const navLinks = [
+		{ label: 'Explore', href: '/', page: 'Explore' },
+		{ label: 'Playlist Builder', href: '/playlist-builder/', page: 'Playlist Builder' },
+		{ label: 'Profile', href: '/profile/', page: 'Profile' },
+	];
 
-	$: console.log('page: ', $page)
-	
+	let settingsOpen = false;
 </script>
 
 <header>
@@ -17,41 +19,30 @@
 		</div>
 
 		<nav>
-			{#if $page === 'Home'}
-			<div class='nav-button-div'>
-				<a class="nav-button-active" href="/">Home</a>
+			{#each navLinks as link}
+			<div class="nav-button-div">
+				<a class={$page === link.page ? 'nav-button-active' : 'nav-button'} href={link.href}>
+					{link.label}
+				</a>
 			</div>
-			<div class='nav-button-div'>
-				<a class="nav-button" href="/profile/">Profile</a>
-			</div>
-			{:else if $page === 'Profile'}
-			<div class='nav-button-div'>
-				<a class="nav-button" href="/">Home</a>
-			</div>
-			<div class='nav-button-div'>
-				<a class="nav-button-active" href="/profile/">Profile</a>
-			</div>
-			{/if}
-
-			<!-- <div class='nav-button-div'>
-				<a class="nav-button" href="/account_analysis/">Account Analysis</a>
-			</div> -->
-			<!-- <div class='nav-button-div'>
-				<a class="nav-button" href="/profile/">Profile</a>
-			</div> -->
-			<!-- <svg viewBox="0 0 2 3" aria-hidden="true">
-				<path d="M0,0 L1,2 C1.5,3 1.5,3 2,3 L2,0 Z" />
-			</svg>
-			<ul>
-				<li aria-current={$page.url.pathname === '/' ? 'page' : undefined}>
-					<a href="/">Home</a>
-				</li>
-			</ul>
-			<svg viewBox="0 0 2 3" aria-hidden="true">
-				<path d="M0,0 L0,3 C0.5,3 0.5,3 1,2 L2,0 Z" />
-			</svg> -->
+			{/each}
 		</nav>
+
+		<div class="header-actions">
+			<button class="settings-toggle" on:click={() => settingsOpen = !settingsOpen} title="AI Settings">
+				<span class="settings-icon">⚙</span>
+				{#if $llmConfig.connected}
+					<span class="connected-dot"></span>
+				{/if}
+			</button>
+		</div>
 	</div>
+
+	{#if settingsOpen}
+		<div class="settings-popover">
+			<LLMSettingsPanel onClose={() => settingsOpen = false} />
+		</div>
+	{/if}
 </header>
 
 <style>
@@ -69,12 +60,63 @@
 
 	.header-div {
 		display: flex;
+		align-items: center;
 		height: 50px;
 		background-color: #242424;
 		width: 100%;
 		min-width: 800px;
 		border-bottom: 2px solid var(--color-light-blue);
 		border-radius: 20px;
+	}
+
+	.header-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		min-width: 50px;
+		margin-right: 10px;
+	}
+
+	.settings-toggle {
+		position: relative;
+		background: none;
+		border: 2px solid var(--color-light-blue);
+		border-radius: 50%;
+		width: 34px;
+		height: 34px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.settings-toggle:hover {
+		border-color: var(--color-purple);
+	}
+
+	.settings-icon {
+		font-size: 1rem;
+		color: var(--color-light-blue);
+		line-height: 1;
+	}
+
+	.connected-dot {
+		position: absolute;
+		top: -3px;
+		right: -3px;
+		width: 9px;
+		height: 9px;
+		background-color: #6bffb8;
+		border-radius: 50%;
+		border: 1px solid var(--color-dark-gray);
+	}
+
+	.settings-popover {
+		position: absolute;
+		top: calc(100% - 8px);
+		right: 15px;
+		z-index: 50;
 	}
 
 	#boomin-beats-logo {
@@ -98,7 +140,7 @@
 	nav {
 		display: flex;
 		justify-content: center;
-		--background: rgba(255, 255, 255, 0.7);
+		flex: 1;
 	}
 
 	nav a {

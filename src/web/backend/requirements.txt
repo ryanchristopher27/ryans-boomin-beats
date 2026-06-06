@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+httpx
+python-multipart
+itsdangerous
+python-dotenv
+spotipy
+anthropic
+openai
+groq
