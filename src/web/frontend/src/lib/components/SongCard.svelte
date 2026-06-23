@@ -60,21 +60,21 @@
 		align-items: center;
 		gap: 12px;
 		padding: 10px 14px;
-		border-radius: 10px;
-		transition: background-color 0.15s;
+		border-radius: var(--radius);
+		transition: background-color var(--transition);
 		flex-wrap: wrap;
 	}
 
 	.card:hover {
-		background-color: rgba(94, 201, 255, 0.06);
+		background-color: var(--surface-2);
 	}
 
 	.card.checked {
-		background-color: rgba(94, 201, 255, 0.1);
+		background-color: var(--surface-2);
 	}
 
 	.checkbox {
-		accent-color: var(--color-light-blue);
+		accent-color: var(--accent);
 		width: 16px;
 		height: 16px;
 		flex-shrink: 0;
@@ -84,7 +84,7 @@
 	.album-art {
 		width: 48px;
 		height: 48px;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 		object-fit: cover;
 	}
@@ -95,7 +95,7 @@
 	}
 
 	.title {
-		font-weight: 700;
+		font-weight: 600;
 		font-size: 0.9rem;
 		white-space: nowrap;
 		overflow: hidden;
@@ -103,17 +103,18 @@
 	}
 
 	.title a {
-		color: var(--color-light-blue);
+		color: var(--text-primary);
 		text-decoration: none;
+		transition: color var(--transition);
 	}
 
 	.title a:hover {
-		color: var(--color-purple);
+		color: var(--accent);
 	}
 
 	.artist {
 		font-size: 0.8rem;
-		color: rgba(94, 201, 255, 0.75);
+		color: var(--text-muted);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -121,7 +122,7 @@
 
 	.album {
 		font-size: 0.75rem;
-		color: rgba(255, 255, 255, 0.4);
+		color: var(--text-subtle);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -136,14 +137,14 @@
 
 	.duration {
 		font-size: 0.8rem;
-		color: rgba(255, 255, 255, 0.5);
+		color: var(--text-subtle);
 	}
 
 	.reason-btn {
 		background: none;
-		border: 1px solid rgba(94, 201, 255, 0.4);
+		border: 1px solid var(--border-subtle);
 		border-radius: 50%;
-		color: var(--color-light-blue);
+		color: var(--text-muted);
 		width: 20px;
 		height: 20px;
 		font-size: 0.65rem;
@@ -152,34 +153,36 @@
 		align-items: center;
 		justify-content: center;
 		padding: 0;
+		transition: border-color var(--transition), color var(--transition);
 	}
 
 	.reason-btn:hover {
-		border-color: var(--color-purple);
-		color: var(--color-purple);
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.explore-btn {
 		background: none;
-		border: 1px solid rgba(94, 201, 255, 0.4);
-		border-radius: 8px;
-		color: var(--color-light-blue);
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-sm);
+		color: var(--accent);
 		font-size: 0.7rem;
 		font-weight: 700;
-		padding: 2px 8px;
+		padding: 3px 10px;
 		cursor: pointer;
 		white-space: nowrap;
+		transition: background-color var(--transition), color var(--transition);
 	}
 
 	.explore-btn:hover {
-		border-color: var(--color-purple);
-		color: var(--color-purple);
+		background-color: var(--accent);
+		color: var(--surface-0);
 	}
 
 	.reason {
 		width: 100%;
 		font-size: 0.78rem;
-		color: rgba(94, 201, 255, 0.7);
+		color: var(--text-muted);
 		font-style: italic;
 		padding: 4px 14px 0 76px;
 	}

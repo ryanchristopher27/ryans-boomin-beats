@@ -42,9 +42,9 @@
 	}
 
 	.modal {
-		background-color: var(--color-dark-gray);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 16px;
+		background-color: var(--surface-1);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
 		padding: 24px;
 		width: 340px;
 	}
@@ -52,7 +52,7 @@
 	.modal-title {
 		font-size: 1rem;
 		font-weight: 700;
-		color: var(--color-light-blue);
+		color: var(--text-primary);
 		margin-bottom: 16px;
 		text-align: center;
 	}
@@ -60,13 +60,23 @@
 	.name-input {
 		width: 100%;
 		box-sizing: border-box;
-		background-color: var(--color-dark-gray);
-		color: var(--color-light-blue);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 8px;
-		padding: 8px 12px;
+		background-color: var(--surface-0);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		padding: 10px 12px;
 		font-size: 0.9rem;
 		margin-bottom: 16px;
+		transition: border-color var(--transition);
+	}
+
+	.name-input::placeholder {
+		color: var(--text-subtle);
+	}
+
+	.name-input:focus {
+		outline: none;
+		border-color: var(--accent);
 	}
 
 	.actions {
@@ -76,31 +86,32 @@
 	}
 
 	.cancel-btn {
-		height: 34px;
+		height: 36px;
 		padding: 0 16px;
-		background: none;
-		border: 2px solid var(--color-light-blue);
-		border-radius: 8px;
-		color: var(--color-light-blue);
+		background-color: var(--surface-2);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		color: var(--text-primary);
 		font-size: 0.8rem;
 		cursor: pointer;
+		transition: border-color var(--transition);
 	}
 
 	.cancel-btn:hover {
-		border-color: var(--color-purple);
-		color: var(--color-purple);
+		border-color: var(--accent);
 	}
 
 	.save-btn {
-		height: 34px;
+		height: 36px;
 		padding: 0 16px;
-		background-color: var(--color-light-blue);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 8px;
-		color: var(--color-dark-gray);
+		background: var(--brand-gradient);
+		border: none;
+		border-radius: var(--radius-sm);
+		color: var(--surface-0);
 		font-weight: 700;
 		font-size: 0.8rem;
 		cursor: pointer;
+		transition: filter var(--transition);
 	}
 
 	.save-btn:disabled {
@@ -109,6 +120,6 @@
 	}
 
 	.save-btn:hover:not(:disabled) {
-		border-color: var(--color-purple);
+		filter: brightness(1.1);
 	}
 </style>

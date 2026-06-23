@@ -20,7 +20,7 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 100vh;
-		background-color: var(--color-light-blue);
+		background-color: var(--surface-0);
 	}
 
 	main {
@@ -29,11 +29,9 @@
 		flex-direction: column;
 		padding: var(--primary-spacing);
 		width: 100%;
-		/* max-width: 64rem; */
 		margin: 0 auto;
 		box-sizing: border-box;
-		/* background-color: var(--color-dark-gray); */
-		background-color: var(--color-light-blue);
+		background-color: var(--surface-0);
 	}
 
 	/* footer {

@@ -14,35 +14,33 @@
 
 <style>
 	.tag-pill {
-		height: 28px;
-		padding: 0 12px;
-		background: none;
-		border: 1px solid var(--color-light-blue);
-		border-radius: 14px;
-		color: var(--color-light-blue);
+		height: 30px;
+		padding: 0 14px;
+		background: var(--surface-2);
+		border: 1px solid var(--border-subtle);
+		border-radius: 15px;
+		color: var(--text-muted);
 		font-size: 0.75rem;
 		cursor: pointer;
-		opacity: 0.6;
-		transition: all 0.15s;
+		transition: border-color var(--transition), color var(--transition),
+			background-color var(--transition);
 		white-space: nowrap;
 	}
 
 	.tag-pill:hover {
-		opacity: 1;
-		border-color: var(--color-purple);
-		color: var(--color-purple);
+		border-color: var(--accent);
+		color: var(--text-primary);
 	}
 
 	.tag-pill.selected {
-		background-color: var(--color-light-blue);
-		color: var(--color-dark-gray);
-		opacity: 1;
+		background-color: var(--accent);
+		border-color: var(--accent);
+		color: var(--surface-0);
 		font-weight: 700;
 	}
 
 	.tag-pill.selected:hover {
-		background-color: var(--color-purple);
-		border-color: var(--color-purple);
-		color: white;
+		background-color: var(--accent-hover);
+		border-color: var(--accent-hover);
 	}
 </style>

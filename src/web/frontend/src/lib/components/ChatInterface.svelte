@@ -118,9 +118,10 @@
 
 <style>
 	.chat-container {
-		background-color: var(--color-dark-gray);
-		border-radius: 20px;
-		padding: 16px;
+		background-color: var(--surface-1);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		padding: 18px;
 		margin-bottom: 20px;
 	}
 
@@ -135,21 +136,21 @@
 
 	.message {
 		padding: 8px 14px;
-		border-radius: 12px;
+		border-radius: var(--radius);
 		font-size: 0.85rem;
 		max-width: 80%;
 	}
 
 	.user-message {
-		background-color: var(--color-light-blue);
-		color: var(--color-dark-gray);
+		background: var(--brand-gradient);
+		color: var(--surface-0);
 		align-self: flex-end;
 		font-weight: 600;
 	}
 
 	.assistant-message {
-		border: 1px solid var(--color-light-blue);
-		color: var(--color-light-blue);
+		background-color: var(--surface-2);
+		color: var(--text-muted);
 		align-self: flex-start;
 	}
 
@@ -165,31 +166,38 @@
 
 	.prompt-input {
 		flex: 1;
-		background-color: var(--color-dark-gray);
-		color: var(--color-light-blue);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 10px;
-		padding: 8px 12px;
+		background-color: var(--surface-0);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius);
+		padding: 10px 14px;
 		font-size: 0.85rem;
 		resize: none;
 		font-family: inherit;
+		transition: border-color var(--transition);
 	}
 
 	.prompt-input::placeholder {
-		color: rgba(94, 201, 255, 0.5);
+		color: var(--text-subtle);
+	}
+
+	.prompt-input:focus {
+		outline: none;
+		border-color: var(--accent);
 	}
 
 	.send-btn {
-		height: 40px;
-		width: 40px;
-		background-color: var(--color-light-blue);
-		color: var(--color-dark-gray);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 10px;
+		height: 44px;
+		width: 44px;
+		background: var(--brand-gradient);
+		color: var(--surface-0);
+		border: none;
+		border-radius: var(--radius);
 		font-size: 1.1rem;
 		font-weight: 700;
 		cursor: pointer;
 		flex-shrink: 0;
+		transition: filter var(--transition);
 	}
 
 	.send-btn:disabled {
@@ -198,7 +206,7 @@
 	}
 
 	.send-btn:hover:not(:disabled) {
-		border-color: var(--color-purple);
+		filter: brightness(1.1);
 	}
 
 	.settings-bar {
@@ -206,10 +214,10 @@
 		gap: 16px;
 		align-items: center;
 		margin-bottom: 12px;
-		padding: 8px 12px;
-		background-color: rgba(94, 201, 255, 0.05);
-		border: 1px solid rgba(94, 201, 255, 0.15);
-		border-radius: 10px;
+		padding: 10px 14px;
+		background-color: var(--surface-0);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius);
 	}
 
 	.setting {
@@ -219,27 +227,28 @@
 	}
 
 	.setting-label {
-		font-size: 0.75rem;
+		font-size: 0.72rem;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		color: rgba(94, 201, 255, 0.6);
+		color: var(--text-subtle);
 	}
 
 	.count-input {
 		width: 56px;
-		background-color: var(--color-dark-gray);
-		color: var(--color-light-blue);
-		border: 1px solid rgba(94, 201, 255, 0.4);
-		border-radius: 6px;
+		background-color: var(--surface-1);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
 		padding: 4px 8px;
 		font-size: 0.85rem;
 		text-align: center;
+		transition: border-color var(--transition);
 	}
 
 	.count-input:focus {
 		outline: none;
-		border-color: var(--color-light-blue);
+		border-color: var(--accent);
 	}
 
 	.error {

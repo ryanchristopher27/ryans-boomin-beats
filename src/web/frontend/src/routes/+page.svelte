@@ -1,14 +1,11 @@
 <script>
 	import { onMount } from 'svelte';
 	import { PUBLIC_API_URL } from '$env/static/public';
-	import { page } from '../stores.js';
+	import { page, selectedSong, discoveryPlaylist, discoveryRequested } from '../stores.js';
 	import SongSearch from '$lib/components/SongSearch.svelte';
 	import SongProfile from '$lib/components/SongProfile.svelte';
 	import PlaylistResult from '$lib/components/PlaylistResult.svelte';
 
-	let selectedSong = null;
-	let discoveryPlaylist = [];
-	let discoveryRequested = 0;
 	let discoveringLoading = false;
 	let discoverError = '';
 
@@ -17,20 +14,22 @@
 	});
 
 	function onSongSelect(song) {
-		selectedSong = song;
-		discoveryPlaylist = [];
-		discoveryRequested = 0;
+		$selectedSong = song;
+		$discoveryPlaylist = [];
+		$discoveryRequested = 0;
 		discoverError = '';
 	}
 
-	async function onDiscover(selectedTags) {
-		if (!selectedSong || selectedTags.length === 0) return;
+	async function onDiscover({ tags, aspects }) {
+		if (!$selectedSong || (tags.length === 0 && aspects.length === 0)) return;
 		discoveringLoading = true;
 		discoverError = '';
 
-		const tagList = selectedTags.join(', ');
-		const artistName = selectedSong.artists?.[0] ?? selectedSong.artist ?? '';
-		const prompt = `Using "${selectedSong.title}" by ${artistName} as a reference point, find 12 songs that share these specific qualities: ${tagList}. Focus on these aspects when choosing songs.`;
+		const artistName = $selectedSong.artists?.[0] ?? $selectedSong.artist ?? '';
+		const aspectLines = aspects.map(a => `- ${a.label}: ${a.value}`).join('\n');
+		const tagLine = tags.length ? `Shared tags/descriptors: ${tags.join(', ')}` : '';
+		const qualities = [aspectLines, tagLine].filter(Boolean).join('\n');
+		const prompt = `Using "${$selectedSong.title}" by ${artistName} as a reference point, find 12 songs that share these specific qualities:\n${qualities}\nFocus on these aspects when choosing songs. Do not include the reference song itself.`;
 
 		try {
 			const res = await fetch(`${PUBLIC_API_URL}/llm/generate-playlist/`, {
@@ -46,8 +45,8 @@
 			}
 
 			const data = await res.json();
-			discoveryPlaylist = data.playlist ?? [];
-			discoveryRequested = data.requested ?? 12;
+			$discoveryPlaylist = data.playlist ?? [];
+			$discoveryRequested = data.requested ?? 12;
 		} catch {
 			discoverError = 'Could not reach the server.';
 		} finally {
@@ -57,9 +56,9 @@
 
 	// Exploration chain: clicking a discovery result loads that song's profile
 	function onExploreSong(song) {
-		selectedSong = { title: song.title, artists: song.artists, id: song.id };
-		discoveryPlaylist = [];
-		discoveryRequested = 0;
+		$selectedSong = { title: song.title, artists: song.artists, id: song.id };
+		$discoveryPlaylist = [];
+		$discoveryRequested = 0;
 		discoverError = '';
 		window.scrollTo({ top: 0, behavior: 'smooth' });
 	}
@@ -71,8 +70,8 @@
 </svelte:head>
 
 <div class="body-div">
-	<div class="search-section" class:compact={selectedSong !== null}>
-		{#if !selectedSong}
+	<div class="search-section" class:compact={$selectedSong !== null}>
+		{#if !$selectedSong}
 			<div class="idle-heading">What are you in the mood for?</div>
 		{/if}
 		<div class="search-wrap">
@@ -80,8 +79,8 @@
 		</div>
 	</div>
 
-	{#if selectedSong}
-		<SongProfile song={selectedSong} {onDiscover} />
+	{#if $selectedSong}
+		<SongProfile song={$selectedSong} {onDiscover} />
 
 		{#if discoveringLoading}
 			<div class="status-notice">Finding songs...</div>
@@ -91,11 +90,11 @@
 			<div class="error-notice">{discoverError}</div>
 		{/if}
 
-		{#if discoveryPlaylist.length > 0}
+		{#if $discoveryPlaylist.length > 0}
 			<div class="discovery-header">Similar Songs</div>
 			<PlaylistResult
-				playlist={discoveryPlaylist}
-				requested={discoveryRequested}
+				playlist={$discoveryPlaylist}
+				requested={$discoveryRequested}
 				onSongExplore={onExploreSong}
 			/>
 		{/if}
@@ -107,7 +106,7 @@
 		min-height: 100vh;
 		width: 100%;
 		min-width: 800px;
-		margin-top: 65px;
+		margin-top: 88px;
 		display: flex;
 		flex-direction: column;
 	}
@@ -126,10 +125,14 @@
 	}
 
 	.idle-heading {
-		font-size: 1.8rem;
+		font-size: 2.4rem;
 		font-weight: 700;
-		color: var(--color-light-blue);
-		margin-bottom: 28px;
+		letter-spacing: -0.02em;
+		background: var(--brand-gradient);
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+		margin-bottom: 32px;
 		text-align: center;
 	}
 
@@ -140,7 +143,7 @@
 
 	.status-notice {
 		text-align: center;
-		color: rgba(94, 201, 255, 0.45);
+		color: var(--text-subtle);
 		font-size: 0.85rem;
 		padding: 20px;
 	}
@@ -153,11 +156,11 @@
 	}
 
 	.discovery-header {
-		font-size: 0.75rem;
+		font-size: 0.72rem;
 		font-weight: 700;
-		color: rgba(94, 201, 255, 0.5);
+		color: var(--text-subtle);
 		text-transform: uppercase;
-		letter-spacing: 0.1em;
+		letter-spacing: 0.12em;
 		margin-top: 28px;
 		margin-bottom: 10px;
 	}

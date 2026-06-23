@@ -28,6 +28,7 @@
 	"type": "module",
 	"svelte": "index.js",
 	"dependencies": {
+		"@fontsource/inter": "^5.2.8",
 		"d3-scale": "^4.0.2",
 		"d3-shape": "^3.2.0",
 		"layercake": "^7.6.1"

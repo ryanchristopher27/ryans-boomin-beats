@@ -1,24 +1,22 @@
 <script>
 	import { onMount } from 'svelte';
-	import { page, generatedPlaylist, chatMessages } from '../../stores.js';
+	import { page, generatedPlaylist, chatMessages, playlistRequested } from '../../stores.js';
 	import ChatInterface from '$lib/components/ChatInterface.svelte';
 	import PlaylistResult from '$lib/components/PlaylistResult.svelte';
-
-	let requested = 0;
 
 	onMount(() => {
 		$page = 'Playlist Builder';
 	});
 
 	function onResult(data) {
-		requested = data.requested;
+		$playlistRequested = data.requested;
 		$generatedPlaylist = data.playlist;
 	}
 
 	function clearPlaylist() {
 		$generatedPlaylist = [];
 		$chatMessages = [];
-		requested = 0;
+		$playlistRequested = 0;
 	}
 </script>
 
@@ -29,7 +27,7 @@
 
 <div class="body-div">
 	<ChatInterface {onResult} />
-	<PlaylistResult playlist={$generatedPlaylist} {requested} onClear={clearPlaylist} />
+	<PlaylistResult playlist={$generatedPlaylist} requested={$playlistRequested} onClear={clearPlaylist} />
 </div>
 
 <style>
@@ -37,6 +35,6 @@
 		min-height: 100vh;
 		width: 100%;
 		min-width: 800px;
-		margin-top: 65px;
+		margin-top: 88px;
 	}
 </style>

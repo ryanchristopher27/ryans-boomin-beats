@@ -137,9 +137,11 @@
 
 <style>
 	.result-container {
-		background-color: var(--color-dark-gray);
-		border-radius: 20px;
-		padding: 16px;
+		background-color: var(--surface-1);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-lg);
+		padding: 18px;
+		animation: fadeIn 0.3s ease;
 	}
 
 	.short-notice {
@@ -155,7 +157,7 @@
 
 	.divider {
 		border: none;
-		border-top: 1px solid rgba(94, 201, 255, 0.15);
+		border-top: 1px solid var(--border-subtle);
 		margin: 0;
 	}
 
@@ -168,20 +170,20 @@
 	}
 
 	.action-btn {
-		height: 34px;
+		height: 38px;
 		padding: 0 18px;
-		background-color: var(--color-dark-gray);
-		color: var(--color-light-blue);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 10px;
+		background-color: var(--surface-2);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius);
 		font-size: 0.8rem;
-		font-weight: 700;
+		font-weight: 600;
 		cursor: pointer;
+		transition: border-color var(--transition), background-color var(--transition);
 	}
 
 	.action-btn:hover:not(:disabled) {
-		background-color: var(--color-light-blue);
-		color: var(--color-dark-gray);
+		border-color: var(--accent);
 	}
 
 	.action-btn:disabled {
@@ -190,12 +192,13 @@
 	}
 
 	.clear-btn {
-		border-color: rgba(255, 107, 107, 0.5);
-		color: rgba(255, 107, 107, 0.8);
+		border-color: rgba(255, 107, 107, 0.4);
+		color: rgba(255, 107, 107, 0.85);
+		background-color: transparent;
 	}
 
 	.clear-btn:hover {
-		background-color: rgba(255, 107, 107, 0.15);
+		background-color: rgba(255, 107, 107, 0.12);
 		border-color: #ff6b6b;
 		color: #ff6b6b;
 	}
@@ -215,6 +218,6 @@
 	}
 
 	.action-success a {
-		color: var(--color-light-blue);
+		color: var(--accent);
 	}
 </style>

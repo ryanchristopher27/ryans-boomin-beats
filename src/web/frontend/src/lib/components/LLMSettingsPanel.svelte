@@ -89,11 +89,12 @@
 
 <style>
 	.panel {
-		background-color: var(--color-dark-gray);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 12px;
+		background-color: var(--surface-1);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius);
 		padding: 16px;
 		width: 280px;
+		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
 	}
 
 	.panel-header {
@@ -104,20 +105,25 @@
 	}
 
 	.panel-title {
-		font-size: 0.85rem;
+		font-size: 0.8rem;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		color: var(--color-light-blue);
+		color: var(--text-subtle);
 	}
 
 	.close-btn {
 		background: none;
 		border: none;
-		color: var(--color-light-blue);
+		color: var(--text-muted);
 		cursor: pointer;
 		font-size: 0.9rem;
 		padding: 0;
+		transition: color var(--transition);
+	}
+
+	.close-btn:hover {
+		color: var(--text-primary);
 	}
 
 	.provider-select {
@@ -132,31 +138,44 @@
 		align-items: center;
 		gap: 8px;
 		font-size: 0.85rem;
+		color: var(--text-muted);
 		cursor: pointer;
+		accent-color: var(--accent);
 	}
 
 	.key-input {
 		width: 100%;
 		box-sizing: border-box;
-		background-color: var(--color-dark-gray);
-		color: var(--color-light-blue);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 8px;
-		padding: 6px 10px;
+		background-color: var(--surface-0);
+		color: var(--text-primary);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		padding: 8px 10px;
 		font-size: 0.8rem;
 		margin-bottom: 10px;
+		transition: border-color var(--transition);
+	}
+
+	.key-input::placeholder {
+		color: var(--text-subtle);
+	}
+
+	.key-input:focus {
+		outline: none;
+		border-color: var(--accent);
 	}
 
 	.connect-btn {
 		width: 100%;
-		height: 32px;
-		background-color: var(--color-light-blue);
-		color: var(--color-dark-gray);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 8px;
+		height: 36px;
+		background: var(--brand-gradient);
+		color: var(--surface-0);
+		border: none;
+		border-radius: var(--radius-sm);
 		font-weight: 700;
 		font-size: 0.8rem;
 		cursor: pointer;
+		transition: filter var(--transition);
 	}
 
 	.connect-btn:disabled {
@@ -165,7 +184,7 @@
 	}
 
 	.connect-btn:hover:not(:disabled) {
-		border-color: var(--color-purple);
+		filter: brightness(1.1);
 	}
 
 	.connected-state {
@@ -176,26 +195,27 @@
 
 	.connected-label {
 		font-size: 0.8rem;
+		color: var(--text-muted);
 	}
 
 	.provider-name {
-		color: var(--color-light-blue);
+		color: var(--accent);
 		font-weight: 700;
 	}
 
 	.disconnect-btn {
-		background: none;
-		border: 2px solid var(--color-light-blue);
-		border-radius: 8px;
-		color: var(--color-light-blue);
+		background-color: var(--surface-2);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-sm);
+		color: var(--text-primary);
 		font-size: 0.75rem;
-		padding: 4px 10px;
+		padding: 6px 12px;
 		cursor: pointer;
+		transition: border-color var(--transition);
 	}
 
 	.disconnect-btn:hover {
-		border-color: var(--color-purple);
-		color: var(--color-purple);
+		border-color: var(--accent);
 	}
 
 	.error {

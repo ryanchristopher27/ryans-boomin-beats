@@ -521,3 +521,288 @@ Get one at: https://www.last.fm/api/account/create (free, instant)
 | Nav structure | Explore \| Playlist Builder \| Profile | Home removed; Explore at root is the app's primary entry point | 2026-06-05 |
 | Discovery result click | Load new song profile on same page | Creates natural exploration chain; no navigation away from the page | 2026-06-05 |
 | LLM analysis when data sparse | Structured template always shown | LLM fills in Mood/Instrumentation/Era/Themes/Context from its own knowledge; consistent format regardless of Last.fm data quality | 2026-06-05 |
+
+---
+
+# Plan — Frontend Redesign: Sleek Dark Theme
+Date: 2026-06-22
+Status: Draft
+Brainstorm: docs/brainstorm.md (Frontend Redesign — Sleek Dark Theme, 2026-06-22)
+
+## Overview
+A full visual redesign of the SvelteKit frontend to a sleek, dark, layered theme — Spotify's design language as reference, not a pixel-perfect clone. Keep the existing `#5ec9ff` light blue as the single accent. The app's structure and functionality are unchanged; this is purely a styling/typography/polish pass across every page and component, plus a foundational token system to make it cohesive and maintainable.
+
+## Goals & Success Criteria
+- **Cohesive dark theme** — layered surfaces (`#0a0a0a` → `#181818` → `#282828`) across the whole app
+- **Monochrome accent discipline** — blue only for active states, primary actions, and links; everything else grayscale
+- **Typography upgrade** — Inter replaces Arial; consistent type scale
+- **Subtle motion** — smooth hover transitions, gentle load fades
+- **Quality parity** — every page meets the same bar; profile page no longer lags
+- **Success = the consistency checklist passes** (see Acceptance Criteria): one radius scale, one spacing rhythm, one type scale, consistent hover behavior, zero purple, zero light-theme remnants
+
+## Scope
+### In Scope
+- Global token system (semantic tokens + Inter font)
+- Shell: `+layout.svelte`, `Header.svelte`, `styles.css`
+- Explore page (`+page.svelte`) + SongSearch, SongProfile, TagPill
+- Playlist Builder (`playlist-builder/+page.svelte`) + ChatInterface, PlaylistResult, SongCard, PlaylistNameModal
+- Profile page (`profile/+page.svelte`) — restyle (structural changes only if needed for parity)
+- LLMSettingsPanel popover
+- Removal of purple hover color across all 9 files
+- Removal/repurposing of legacy light-theme tokens in `styles.css`
+
+### Out of Scope
+- Backend changes (none required)
+- New features or layout restructure (no sidebar — top nav stays)
+- Responsive/mobile work beyond existing `min-width: 800px`
+- Dead-code deletion of unused legacy components (Counter, Radar*, recommendations, sverdle, account_analysis) — noted as a separate cleanup, not part of this redesign
+
+## Tech Stack & Architecture
+- **No new stack** — SvelteKit, scoped `<style>` blocks per component, CSS custom properties in `styles.css :root`
+- **Font:** add `@fontsource/inter` (matches existing `@fontsource/fira-mono` pattern; no licensing concerns, unlike Spotify's Circular). DM Sans was the alternative — Inter chosen for its proven UI legibility and tighter metrics.
+- **Token strategy (the foundation):** introduce **semantic tokens** in `:root`, and alias the existing raw color names to them so components keep working during migration:
+  ```
+  --surface-0: #0a0a0a;   /* page background */
+  --surface-1: #181818;   /* cards */
+  --surface-2: #282828;   /* hover / raised */
+  --text-primary: #ffffff;
+  --text-muted: rgba(255,255,255,0.65);
+  --text-subtle: rgba(255,255,255,0.4);
+  --accent: #5ec9ff;
+  --accent-hover: #8ad8ff;   /* replaces purple hovers */
+  --border-subtle: rgba(255,255,255,0.08);
+  --radius: 12px;
+
+  /* backward-compat aliases — let old components render correctly mid-migration */
+  --color-dark-gray: var(--surface-1);
+  --color-light-blue: var(--accent);
+  --color-purple: var(--accent-hover);   /* neutralizes purple immediately */
+  ```
+  Reasoning: aliasing `--color-purple` to `--accent-hover` instantly removes purple app-wide in one line, even before each component is individually migrated. Components then migrate from raw names → semantic names page by page without breakage.
+
+## Milestones
+| # | Milestone | Description | Dependencies |
+|---|-----------|-------------|--------------|
+| R1 | Design system foundation | Semantic tokens, Inter font, surface/elevation scale, compat aliases, base element styles in `styles.css` + `+layout.svelte` dark background | — |
+| R2 | Shell | Redesign `Header.svelte` (slim, clean active state) and layout chrome | R1 |
+| R3 | Explore page | `+page.svelte` + SongSearch, SongProfile, TagPill | R1, R2 |
+| R4 | Playlist Builder | `playlist-builder/+page.svelte` + ChatInterface, PlaylistResult, SongCard, PlaylistNameModal | R1, R2 |
+| R5 | Profile page | Restyle `profile/+page.svelte` to parity (the roughest page) | R1, R2 |
+| R6 | Polish & cleanup | Migrate remaining raw tokens → semantic, remove compat aliases + legacy light-theme tokens, motion pass, consistency audit | R2–R5 |
+
+## Task Breakdown
+
+### R1 — Design system foundation
+- Install `@fontsource/inter`; import in `styles.css`; set `--font-body` to Inter
+- Replace `:root` token block with semantic tokens + compat aliases (above)
+- Set page background to `--surface-0` in `+layout.svelte` (remove the light-blue `.app`/`main` backgrounds and the light radial-gradient body background in `styles.css`)
+- Define base styles: link color → `--accent`, type scale (h1/h2/body), default border + radius vars
+- Verify app still renders (compat aliases should keep every component working, now dark + purple-free)
+
+### R2 — Shell
+- `Header.svelte`: slim height, refined nav buttons, cleaner active state (filled accent vs. ghost), settings gear + connected dot restyle, popover container
+- Confirm fixed-header spacing still works with new page background
+
+### R3 — Explore page
+- `+page.svelte`: idle "What are you in the mood for?" state + compact searching state, discovery header, status/error notices
+- `SongSearch`: searchbar on `--surface-1`, accent focus ring
+- `SongProfile`: card on `--surface-1`, section labels, analysis fields, discover button (primary accent), loading state
+- `TagPill`: selected = filled accent; idle = subtle outline; hover = `--accent-hover` (no purple)
+
+### R4 — Playlist Builder
+- `ChatInterface`: messages, settings bar (Songs count input), prompt textarea, send button
+- `PlaylistResult`: result container, action bar (primary/secondary/clear-destructive buttons), notices
+- `SongCard`: album art, title/artist, reason tooltip, explore button, checkbox accent
+- `PlaylistNameModal`: dark modal surface, inputs, buttons
+
+### R5 — Profile page
+- Login button state, profile header card, top-artists / top-tracks tables, parameter selectors (count + time period), logout button
+- Bring spacing/typography/hover to parity; restructure only if tables look off on dark
+
+### R6 — Polish & cleanup
+- Migrate all components from raw color names → semantic tokens
+- Remove compat aliases and legacy light-theme tokens (`--color-bg-0/1/2`, `--color-theme-1/2`, light gradient)
+- Subtle motion pass: hover transitions (150ms), gentle fade-in on results/profile load
+- Consistency audit against acceptance criteria
+
+## Acceptance Criteria (the "sleek" checklist)
+- [ ] One radius scale (`--radius`, optionally `--radius-sm/lg`) used everywhere
+- [ ] One spacing rhythm (consistent multiples)
+- [ ] One type scale; Inter applied globally; no Arial
+- [ ] Layered surfaces consistent (page/card/hover)
+- [ ] Accent used only for active states, primary actions, links
+- [ ] Zero purple remaining
+- [ ] Zero light-theme remnants (no light backgrounds/gradients)
+- [ ] Hover states consistent across all interactive elements
+- [ ] Profile page visually on par with Explore
+
+## Risks & Mitigations
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Component-by-component migration leaves inconsistent intermediate states | Med | Low | Compat aliases keep everything coherent (dark + purple-free) from R1 onward; migration is cosmetic refinement, not breakage |
+| Profile tables look broken on dark backgrounds | Med | Med | R5 allows structural tweaks if restyle alone isn't enough |
+| Removing light-theme tokens breaks an unaudited legacy component (Radar, sverdle) | Low | Low | Those are out-of-scope/unused; verify they're not routed before removing tokens, else leave a token stub |
+| Accent-only discipline makes UI feel flat/monotonous | Low | Med | Use surface elevation + `--accent-hover` brightening for depth instead of extra colors |
+
+## Dependencies
+- `@fontsource/inter` (new npm dep)
+- No backend or API changes
+
+## Open Questions
+- Keep `--accent-hover` as a brighter blue (`#8ad8ff`), or make hovers purely surface-elevation based (no color shift)? (Lean: brighter blue for interactive affordance.)
+- Should the profile data tables become card/list rows (more Spotify-like) or stay tabular? Resolve in R5 once seen on dark.
+- Remove unused legacy components now or defer? (Defer — separate cleanup task.)
+
+## Decisions Log
+| Decision | Choice | Reasoning | Date |
+|----------|--------|-----------|------|
+| Visual direction | Dark, top-nav, full component pass (Direction C) | Lands "sleek" without structural rewrite; sidebar overkill for 3 pages | 2026-06-22 |
+| Accent intensity | Minimal / monochrome | Restraint reads as premium; blue is the brand anchor | 2026-06-22 |
+| Scope | Everything (tokens + all pages + all components) | One cohesive pass avoids mismatched intermediate look | 2026-06-22 |
+| Motion | Subtle | Tasteful polish without distraction | 2026-06-22 |
+| Font | Inter via @fontsource | Free, proven UI legibility; matches existing fontsource pattern | 2026-06-22 |
+| Token system | Semantic tokens + backward-compat aliases | Foundation for cohesion; aliases enable safe page-by-page migration and instant purple removal | 2026-06-22 |
+| Purple hover color | Remove (alias to --accent-hover) | Directly follows from monochrome decision; purple spans 9 files | 2026-06-22 |
+
+### Revision 1 — Logo-derived palette + profile list rows (2026-06-22)
+
+**Two decisions from the initial draft are overridden (intentional, user-directed):**
+
+1. **Accent intensity: monochrome → logo-derived brand palette.** The Boomin Beats logo is a blue→purple gradient cube on a `#242424` plate. The app's two existing tokens (`#5ec9ff`, `#a235ff`) *are* the logo colors, so purple is **kept and promoted** to a full palette member rather than removed. Adds a periwinkle mid-tone and a brand gradient.
+
+2. **Profile tables: tabular → Spotify-like list rows.** Resolves the R5 open question. Top Artists / Top Tracks become hoverable list rows (rank · art · name · meta) instead of HTML tables.
+
+**Revised token system** (replaces the monochrome block in Tech Stack & Architecture):
+```
+--surface-0: #121212;   /* page background (darker than logo plate) */
+--surface-1: #242424;   /* cards — matches logo plate, header blends in */
+--surface-2: #2e2e2e;   /* hover / raised */
+--text-primary: #ffffff;
+--text-muted: rgba(255,255,255,0.65);
+--text-subtle: rgba(255,255,255,0.4);
+--accent:     #5ec9ff;   /* logo blue — primary accent, links, active */
+--accent-mid: #7b7ff0;   /* logo gradient midpoint (periwinkle) */
+--accent-2:   #a235ff;   /* logo purple — secondary accent */
+--brand-gradient: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+--accent-hover: #8ad8ff; /* brightened blue for hover affordance */
+--border-subtle: rgba(255,255,255,0.08);
+--radius: 12px;
+
+/* backward-compat aliases */
+--color-dark-gray:  var(--surface-1);
+--color-light-blue: var(--accent);
+--color-purple:     var(--accent-2);   /* purple retained, no longer neutralized */
+```
+
+**Where the gradient/purple are used (deliberate, still restrained):**
+- `--brand-gradient`: primary buttons (Discover, Connect, Send), active nav state, key headings/section accents
+- `--accent-2` (purple): secondary hover/active accents, selected-state variety, focus rings on alternating elements
+- `--accent` (blue): default accent, links, most active states, icons
+- Restraint still applies — gradient is a highlight element, not a background wash
+
+**Impact on milestones:**
+- R1: token block above (not the monochrome version); add gradient + periwinkle
+- R5: rebuild profile tables as list-row components (structural change, now confirmed)
+- R6: do **not** remove purple; remove only legacy *light-theme* tokens (`--color-bg-0/1/2`, `--color-theme-1/2`, light gradient)
+
+**Decisions Log additions:**
+| Decision | Choice | Reasoning | Date |
+|----------|--------|-----------|------|
+| Accent intensity (override) | Logo-derived blue→purple palette + gradient | Logo colors == existing brand tokens; cohesive, distinctive; purple kept | 2026-06-22 |
+| Purple (override) | Keep & promote to palette member | Reverses earlier removal; it's a core logo hue | 2026-06-22 |
+| Page vs card surface | Page #121212, cards #242424 (logo plate) | Header/logo blend seamlessly; Spotify-like elevation | 2026-06-22 |
+| Profile tables | Spotify-like list rows | Resolves R5 open question; more modern, on-brand | 2026-06-22 |
+
+**Revision 1 — confirmations (2026-06-22):**
+- Eyeballed hexes accepted as-is (periwinkle `#7b7ff0`, page `#121212`, etc.) — tune live during R1 if needed
+- Gradient usage: **recommended scope confirmed** — primary buttons (Discover, Connect, Send), active nav state, and select heading/section accents. Status: planning complete, ready for /scaffold (R1).
+
+---
+
+# Plan — Discover Similar Songs (make it work)
+Date: 2026-06-22
+Status: Draft
+Brainstorm: inline (grounded from code trace + clarifying Qs)
+
+## Overview
+The "Discover Similar Songs" flow on the Explore page is wired end-to-end (SongProfile → `onDiscover` → `/llm/generate-playlist/` → Spotify validation → results → explore-chain), but it's effectively unusable: the Discover button is gated on selecting at least one tag, and tags come *only* from Last.fm. Songs Last.fm doesn't tag (or any setup without a Last.fm key) produce zero pills, so the button stays permanently disabled. This plan makes discovery usable by also making the LLM analysis aspects selectable.
+
+## Goals & Success Criteria
+- **Discovery is reachable for any song**, not just well-tagged Last.fm songs
+- Users can select from **LLM analysis aspects (Mood, Instrumentation, Lyrical Themes, Era, Cultural Context)** in addition to Last.fm tags
+- Selected aspects meaningfully shape the discovery results (the LLM receives the aspect *values*, not just labels)
+- The explore-chain still works (clicking a result loads its profile)
+- **Success = with an LLM connected, you can always select aspects and get a validated similar-songs list, even with no Last.fm tags**
+
+## Scope
+### In Scope
+- Make LLM analysis fields selectable in `SongProfile.svelte`
+- Merge tag selections + aspect selections into one selection model
+- Enable the Discover button when *anything* is selected
+- Build a richer discovery prompt (tags + aspect label:value pairs) in `+page.svelte`
+- Empty/disabled-state copy so it's clear what to do
+
+### Out of Scope
+- A dedicated backend discovery endpoint (reuse `/llm/generate-playlist/` — it already does the LLM + Spotify-validate loop)
+- Changing the validation/retry engine
+- Discovery without an LLM (the endpoint requires one by design)
+- Tuning the analysis prompt itself (separate concern)
+
+## Tech Stack & Architecture
+- **No backend changes.** Reuse `POST /llm/generate-playlist/` — it already takes a free-form `prompt` + `count` and returns validated, deduped songs. The only change is *how the prompt is built* on the frontend.
+- **Key design decision — couple discoverable aspects to the LLM analysis.** Discovery needs an LLM (endpoint 401s otherwise); whenever an LLM is connected, `song_profile` returns the 5 analysis fields. So aspect selection is always available exactly when discovery is possible. This dissolves the Last.fm-tag gate without adding a fallback path.
+- **Selection model:** `SongProfile` tracks two sets — `selectedTags` (existing) and `selectedAspects` (new, keyed by analysis label). At discover time it emits a structured payload `{ tags: string[], aspects: {label,value}[] }` via `onDiscover`, instead of today's flat tag-name array.
+- **Prompt construction** moves to a small richer builder in `+page.svelte onDiscover`: reference song + bulleted aspect `label: value` lines + tag list + an instruction to exclude the reference track.
+
+## Milestones
+| # | Milestone | Description | Dependencies |
+|---|-----------|-------------|--------------|
+| D1 | Selectable analysis aspects | Make the 5 analysis fields toggle-able in SongProfile; add `selectedAspects`; enable Discover when tags **or** aspects selected | — |
+| D2 | Richer discovery prompt | Change `onDiscover` payload to `{tags, aspects}`; build prompt from both; exclude reference song | D1 |
+| D3 | Polish & states (optional) | Clearer disabled/empty copy ("Select tags or aspects above"); selected-count reflects both; verify explore-chain | D1, D2 |
+
+## Task Breakdown
+
+### D1 — Selectable analysis aspects (SongProfile.svelte)
+- Add `selectedAspects = new Set()` keyed by field label
+- Render each parsed analysis field as a toggle (clickable row / pill) with a selected visual state (accent border/fill, matching TagPill language)
+- `toggleAspect(label)` add/remove from set
+- Discover button `disabled` = `selectedTags.size === 0 && selectedAspects.size === 0`
+- Button label count reflects tags + aspects combined
+
+### D2 — Richer discovery prompt (SongProfile + +page.svelte)
+- Change `onDiscover` to emit `{ tags: Array.from(selectedTags), aspects: parsedFields.filter(f => selectedAspects.has(f.label)) }`
+- In `+page.svelte onDiscover({tags, aspects})`:
+  - Build aspect lines: `aspects.map(a => `- ${a.label}: ${a.value}`).join('\n')`
+  - Build tag line: `tags.length ? `Shared tags: ${tags.join(', ')}` : ''`
+  - Prompt: reference song + "find N songs that share these qualities:" + aspect lines + tag line + "Do not include the reference song itself."
+  - Keep `count` (12) and the existing 401 handling
+
+### D3 — Polish (optional)
+- Disabled-state helper text under the button
+- Ensure `onExploreSong` resets both selection sets (already resets profile on new song)
+- Manual pass: song with tags, song without tags, explore-chain hop
+
+## Risks & Mitigations
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| LLM connected but analysis generation failed (no fields, no tags) → still disabled | Low | Low | Rare; if it happens the disabled copy tells the user to pick something. Could later add a "discover from whole song" fallback button |
+| Aspect values are long → bloated prompt | Low | Low | Values are 1–2 sentences by the analysis prompt's own constraint; fine for a single request |
+| Results include the reference song | Med | Low | Explicit "exclude the reference song" instruction; validator already dedupes by Spotify id |
+| Selected aspects don't visibly change results | Low | Med | Pass aspect *values* (not just labels) so the LLM has concrete signal |
+
+## Dependencies
+- An LLM connected (Groq/Claude/OpenAI) — already required for discovery
+- Existing `/llm/generate-playlist/`, `validate_songs`, `song_profile` — unchanged
+
+## Open Questions
+- Should discovery be allowed with **nothing** selected (pure "find similar to this song")? Current plan keeps selection required, now satisfiable via aspects. Easy to relax later.
+- Should Last.fm tags and analysis aspects be visually merged into one "Select aspects" section, or stay as two labeled groups? (Lean: two groups — tags are descriptors, aspects are richer analysis.)
+
+## Decisions Log
+| Decision | Choice | Reasoning | Date |
+|----------|--------|-----------|------|
+| Backend changes | None — reuse generate-playlist | Endpoint already does LLM + validate + dedupe; DRY | 2026-06-22 |
+| Root fix | Make LLM analysis aspects selectable | Removes the Last.fm-tag gate; aspects always present when discovery is possible | 2026-06-22 |
+| Prompt location | Frontend (onDiscover) | Minimal change; consistent with current design | 2026-06-22 |
+| Pass labels or values | Aspect label + value | Gives the LLM concrete similarity signal | 2026-06-22 |

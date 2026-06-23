@@ -271,90 +271,48 @@
 		</div>
     </div>
     <div class='top-div'>
-        <div class='top-artists-div'>
-            <div class='top-artists-header-div'>
-                Top Artists
-            </div>
-            <hr class='track-splitter'>
+        <div class='top-list-card'>
+            <div class='top-list-header'>Top Artists</div>
             <div class='col-desc'>
-                <div class='col-num'>#</div>
-                <div class='col-artist'>Artist</div>
-                <div class='col-genres'>Genres</div>
-                <div class='col-popularity'>Popularity</div>
+                <div class='cell-num'>#</div>
+                <div class='cell-img-spacer'></div>
+                <div class='cell-main'>Artist</div>
+                <div class='cell-side'>Genres</div>
+                <div class='cell-trail'>Popularity</div>
             </div>
-            <hr class='track-splitter'>
             {#each top_artists as artist, i}
-                <div class='top-artist-div'>
-                    <div class='number-div'>
-                        {i+1}
-                    </div>
-                    <img src={artist.images[0].url} alt="{artist.album}" class="artist-image"/>
-                    <div class='artist-name-div'>
-                        {artist.name}
-                    </div>
-                    <div class='artist-genres-div'>
-                        {artist.genres}
-                    </div>
-                    <div class='artist-popularity-div'>
-                        {artist.popularity}
-                    </div>
+                <div class='list-row'>
+                    <div class='cell-num'>{i+1}</div>
+                    <img src={artist.images[0].url} alt={artist.name} class="row-img"/>
+                    <div class='cell-main row-name'>{artist.name}</div>
+                    <div class='cell-side row-sub'>{artist.genres}</div>
+                    <div class='cell-trail row-sub'>{artist.popularity}</div>
                 </div>
-                {#if i != top_artists.length-1}
-                    <hr class='track-splitter'>
-                {/if}
             {/each}
         </div>
-        <div class='top-tracks-div'>
-            <div class='top-tracks-header-div'>
-                Top Tracks
-            </div>
-            <hr class='track-splitter'>
+        <div class='top-list-card'>
+            <div class='top-list-header'>Top Tracks</div>
             <div class='col-desc'>
-                <div class='col-num'>#</div>
-                <div class='col-title'>Title</div>
-                <div class='col-album'>Album</div>
-                <div class='col-duration'>Duration</div>
+                <div class='cell-num'>#</div>
+                <div class='cell-img-spacer'></div>
+                <div class='cell-main'>Title</div>
+                <div class='cell-side'>Album</div>
+                <div class='cell-trail'>Duration</div>
             </div>
-            <hr class='track-splitter'>
             {#each top_tracks as track, i}
-                <div class='top-track-div'>
-                    <div class='number-div'>
-                        {i+1}
-                    </div>
-                    <img src={track.image} alt="{track.album}" class="track-image"/>
-                    <div class='title-artist-div'>
-                        <div class='title-div'>
-                            {track.title}
-                        </div>
-                        <div class='artist-div'>
-                            {#if track.explicit === true}
-                                <div class='explicit-div'>
-                                    E
-                                </div>
-                            {/if}
-                            {#each track.artists as artist, i}
-                                <div class='each-artist-div'>
-                                    {#if i === track.artists.length - 1}
-                                        {artist}
-                                    {:else}
-                                        {artist},
-                                    {/if}
-                                </div>
-                            {/each}
+                <div class='list-row'>
+                    <div class='cell-num'>{i+1}</div>
+                    <img src={track.image} alt={track.album} class="row-img"/>
+                    <div class='cell-main track-main'>
+                        <div class='row-name'>{track.title}</div>
+                        <div class='row-sub track-artists'>
+                            {#if track.explicit}<span class='explicit-badge'>E</span>{/if}
+                            {track.artists.join(', ')}
                         </div>
                     </div>
-                    <div class='album-div'>
-                        {track.album}
-                    </div>
-                    <div class='duration-div'>
-                        {millisToMinutesAndSeconds(Number(track.duration_ms))}
-                    </div>
+                    <div class='cell-side row-sub'>{track.album}</div>
+                    <div class='cell-trail row-sub'>{millisToMinutesAndSeconds(Number(track.duration_ms))}</div>
                 </div>
-                {#if i != top_tracks.length-1}
-                    <hr class='track-splitter'>
-                {/if}
-            <!-- <iframe style="border-radius:12px" src={`https://open.spotify.com/embed/track/${track.id}?utm_source=generator&theme=0`} width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe> -->
-            <!-- <iframe style="border-radius:12px" src={`https://open.spotify.com/embed/track/${track.id}?utm_source=generator`} width="100%" height="76" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe> -->
             {/each}
         </div>
     </div>
@@ -363,297 +321,272 @@
 </div>
 
 <style>
+    .profile-body {
+        margin-top: 88px;
+    }
+
+    /* --- Login --- */
     .login-button-div {
         display: flex;
         width: 40%;
-        background-color: var(--color-dark-gray);
-        height: 80px;
-        border-radius: 20px;
-        margin: auto;
+        min-width: 320px;
+        background-color: var(--surface-1);
+        border: 1px solid var(--border-subtle);
+        height: 120px;
+        border-radius: var(--radius-lg);
+        margin: 40px auto;
         align-items: center;
         justify-content: center;
     }
 
     .login-button {
-        height: 30px;
-		background-color: var(--color-dark-gray);
-		color: var(--color-light-blue);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 10px;
+        height: 44px;
+        padding: 0 24px;
+        background: var(--brand-gradient);
+        color: var(--surface-0);
+        border: none;
+        border-radius: var(--radius);
+        font-weight: 700;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: filter var(--transition);
     }
 
-    .profile-body {
-        margin-top: 70px;
+    .login-button:hover {
+        filter: brightness(1.1);
     }
 
+    /* --- Profile header card --- */
     .profile-div {
-        height: 120px;
         display: flex;
         align-items: center;
-        background-color: var(--color-dark-gray);
-        border-radius: 20px;
+        gap: 24px;
+        background-color: var(--surface-1);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 22px 28px;
     }
 
     .profile-image-div {
-        width: 20%;
+        flex-shrink: 0;
     }
 
     .profile-image {
-        width: 100px;
-        height: 100px;
-        border-radius: 5px;
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        object-fit: cover;
         display: block;
-        margin-left: auto;
-        margin-right: auto;
     }
 
     .profile-name-div {
-        width: 40%;
-        text-align: center;
-        font-size: 30px;
+        flex: 1;
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--text-primary);
     }
 
     .followers-div {
-        width: 30%;
-        text-align: center;
-        font-size: 20px;
+        color: var(--text-muted);
+        font-size: 0.9rem;
     }
 
     .logout-div {
-        width: 10%;
-        display: flex;
-        justify-content: center;
+        margin-left: 8px;
     }
 
     .logout-button {
-        height: 30px;
-        padding: 0 14px;
-        background-color: var(--color-dark-gray);
-        color: var(--color-light-blue);
-        border: 2px solid var(--color-light-blue);
-        border-radius: 10px;
+        height: 36px;
+        padding: 0 16px;
+        background-color: var(--surface-2);
+        color: var(--text-primary);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius);
         cursor: pointer;
         font-size: 0.8rem;
+        transition: border-color var(--transition);
     }
 
     .logout-button:hover {
-        border-color: var(--color-purple);
-        color: var(--color-purple);
+        border-color: var(--accent);
     }
 
+    /* --- Parameter selectors --- */
     .top-parameters-div {
-        width: 100%;
-		background-color: var(--color-dark-gray);
-		border-radius: 20px;
-		padding-top: 10px;
-		padding-bottom: 10px;
-		margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 28px;
+        background-color: var(--surface-1);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 16px;
+        margin-top: 16px;
     }
 
     .number-of-tops-div, .time-period-div {
-		display: flex;
-		width: 80%;
-		min-width: 640px;
-
-		margin: 20px 0 20px 10%;
-	}
-
-	.number-of-tops-button, .time-period-button {
-		height: 30px;
-		width: 10%;
-		margin-left: 15%;
-		background-color: var(--color-dark-gray);
-		color: var(--color-light-blue);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 10px;
-	}
-
-	.number-of-tops-button-selected, .time-period-button-selected {
-		height: 30px;
-		width: 10%;
-		margin-left: 15%;
-		background-color: var(--color-light-blue);
-		color: var(--color-dark-gray);
-		border: 2px solid var(--color-light-blue);
-		border-radius: 10px;
-	}
-
-    .login-button:hover, .number-of-tops-button:hover, .time-period-button:hover, .number-of-tops-button-selected:hover, .time-period-button-selected:hover {
-        border-color: var(--color-purple);
-        color: var(--color-purple)
+        display: flex;
+        gap: 8px;
+        align-items: center;
     }
 
+    .number-of-tops-button, .time-period-button,
+    .number-of-tops-button-selected, .time-period-button-selected {
+        height: 34px;
+        padding: 0 16px;
+        border-radius: var(--radius);
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: border-color var(--transition), color var(--transition),
+            background-color var(--transition);
+    }
+
+    .number-of-tops-button, .time-period-button {
+        background-color: var(--surface-2);
+        color: var(--text-muted);
+        border: 1px solid var(--border-subtle);
+    }
+
+    .number-of-tops-button:hover, .time-period-button:hover {
+        border-color: var(--accent);
+        color: var(--text-primary);
+    }
+
+    .number-of-tops-button-selected, .time-period-button-selected {
+        background-color: var(--accent);
+        color: var(--surface-0);
+        border: 1px solid var(--accent);
+    }
+
+    /* --- Top lists --- */
     .top-div {
         display: flex;
-        margin-top: 20px;
+        gap: 16px;
+        margin-top: 16px;
     }
 
-    .top-artists-div {
-        width: 49%;
-        margin-right: 1%;
-        background-color: var(--color-dark-gray);
-        border-radius: 20px;
-        padding-bottom: 10px;
+    .top-list-card {
+        flex: 1;
+        min-width: 0;
+        background-color: var(--surface-1);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 8px 8px 14px;
     }
 
-    .top-artists-header-div {
-        height: 40px;
-        align-items: center;
-        text-align: center;
-        font-size: 30px;
-        margin: 10px auto;
+    .top-list-header {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        padding: 14px 14px 10px;
     }
 
-    .top-artist-div {
-        /* display: flex;
-        align-content: center;
-        justify-content: center; */
+    .col-desc, .list-row {
         display: flex;
-        height: 64px;
         align-items: center;
-    }
-
-    .artist-image {
-        height: 64px;
-        width: 64px;
-    }
-
-    .top-tracks-div {
-        width: 49%;
-        margin-left: 1%;
-        background-color: var(--color-dark-gray);
-        border-radius: 20px;
-        padding-bottom: 10px;
-    }
-
-    .top-tracks-header-div {
-        height: 40px;
-        align-items: center;
-        text-align: center;
-        font-size: 30px;
-        margin: 10px auto;
-    }
-
-    .top-track-div {
-        display: flex;
-        height: 64px;
-        align-items: center;
-    }
-
-    .number-div {
-        width: 5%;
-        align-items: center;
-        text-align: center;
-    }
-
-    .title-artist-div {
-        width: 40%;
-        white-space: nowrap;
-        overflow: hidden;
-        padding: 0 10px;
-    }
-
-    .artist-name-div {
-        width: 33%;
-        white-space: nowrap;
-        overflow: hidden;
-        padding: 0 10px;
-        font-weight: bold;
-    }
-
-    .title-div {
-        display: table-cell;
-        height: 40px;
-        width: 100%;
-        vertical-align: middle;
-        font-weight: bold;
-        /* text-align: center; */
-    }
-
-    .artist-div {
-        display: flex;
-        height: 24px;
-        width: 100%;
-        vertical-align: middle;
-        align-items: center;
-        /* text-align: center; */
-    }
-
-    .explicit-div {
-        height: 15px;
-        width: 15px;
-        margin-right: 5px;
-        text-align: center;
-        font-size: 12px;
-        background-color: white;
-        color: var(--color-dark-gray);
-        border-radius: 2px;
-    }
-
-    .each-artist-div {
-        margin-right: 10px;
-    }
-
-    .album-div {
-        width: 25%;
-        padding: 0 10px;
-        vertical-align: middle;
-        text-align: center;
-        white-space: nowrap;
-        overflow: hidden;
-    }
-
-    .artist-genres-div {
-        width: 32%;
-        padding: 0 10px;
-        vertical-align: middle;
-        text-align: center;
-        white-space: nowrap;
-        overflow: hidden;
-    }
-
-    .duration-div, .artist-popularity-div {
-        width: 20%;
-        padding: 0 10px;
-        vertical-align: middle;
-        text-align: center;
+        gap: 12px;
+        padding: 0 14px;
     }
 
     .col-desc {
+        height: 32px;
+        font-size: 0.66rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-subtle);
+        border-bottom: 1px solid var(--border-subtle);
+        margin-bottom: 6px;
+    }
+
+    .list-row {
+        height: 56px;
+        border-radius: var(--radius-sm);
+        transition: background-color var(--transition);
+    }
+
+    .list-row:hover {
+        background-color: var(--surface-2);
+    }
+
+    .cell-num {
+        width: 20px;
+        flex-shrink: 0;
+        text-align: right;
+        color: var(--text-subtle);
+        font-size: 0.85rem;
+    }
+
+    .cell-img-spacer, .row-img {
+        width: 44px;
+        flex-shrink: 0;
+    }
+
+    .row-img {
+        height: 44px;
+        border-radius: var(--radius-sm);
+        object-fit: cover;
+    }
+
+    .cell-main {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .cell-side {
+        width: 28%;
+        flex-shrink: 0;
+        min-width: 0;
+    }
+
+    .cell-trail {
+        width: 72px;
+        flex-shrink: 0;
+        text-align: right;
+    }
+
+    .row-name {
+        color: var(--text-primary);
+        font-weight: 600;
+        font-size: 0.88rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .row-sub {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .track-main {
         display: flex;
-        height: 1rem;
+        flex-direction: column;
+        gap: 2px;
     }
 
-    .col-num {
-        width: 5%;
-        text-align: center;
+    .track-artists {
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
 
-    .col-artist {
-        width: 40%;
-        text-align: center;
-    }
-
-    .col-genres {
-        width: 34%;
-        text-align: center;
-    }
-
-    .col-title{
-        width: 47%;
-        text-align: center;
-    }
-    .col-album{
-        width: 27%;
-        text-align: center;
-    }
-    .col-duration, .col-popularity {
-        width: 21%;
-        text-align: center;
-    }
-
-    .track-splitter {
-        color: white;
-        width: 95%;
+    .explicit-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 16px;
+        min-width: 16px;
+        padding: 0 3px;
+        font-size: 0.6rem;
+        font-weight: 700;
+        background-color: var(--text-subtle);
+        color: var(--surface-0);
+        border-radius: 3px;
+        flex-shrink: 0;
     }
 </style>

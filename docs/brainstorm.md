@@ -299,3 +299,71 @@ Same as Pillar 2 — personal/developer use initially. The explore page is the p
 5. Map the explore page component tree and data flow
 6. Decide on home page interim state during this build
 7. Plan Last.fm API key addition to `.env`, `config.py`, and `setup.md`
+
+---
+
+# Frontend Redesign — Sleek Dark Theme (2026-06-22)
+
+## Problem / Opportunity
+The current frontend is visually inverted from modern music apps: a light-blue background with dark cards, Arial typography, and inconsistent polish across pages (the profile page lags noticeably behind the explore page). The app works end-to-end but doesn't *look* the part. The opportunity is a cohesive visual redesign that reads as sleek and premium — using Spotify's design language as a proven reference, not a pixel-perfect target.
+
+## Goals
+- A sleek, polished, cohesive look across the entire app
+- Dark, layered surfaces (Spotify-like depth via elevation)
+- Use the existing `#5ec9ff` light blue as the single accent color
+- Bring every page up to a consistent quality bar
+- Keep it tasteful and restrained — premium over busy
+
+## Audience
+Primary user is Ryan (personal project), but the design bar is "something you'd be proud to show off."
+
+## Constraints
+- Keep the existing `#5ec9ff` accent — this is the brand anchor
+- SvelteKit component structure already exists; redesign should reuse structure where sound, not rebuild from scratch
+- No proprietary fonts (Spotify's Circular is licensed) — use a free geometric sans
+- Local dev only; no responsive/mobile mandate beyond what already exists (min-width 800px)
+
+## Ideas & Directions
+
+### Direction A — Token swap + polish (low effort)
+Flip global color tokens so the background goes dark and blue becomes accent-only. Most components already use `--color-dark-gray` for cards and `--color-light-blue` for accents, so flipping the page background gets ~70% there. Clean up rough edges after. Fast, low-risk, but stops short of "genuinely polished."
+
+### Direction B — Full Spotify structural clone (high effort)
+Dark background + left sidebar nav (Library/Explore/Builder). Closer to how Spotify actually feels, but a big layout restructure that's overkill for a 3-page app with no persistent "now playing" concept.
+
+### Direction C — Dark + top nav, full component rewrite (medium effort) [CHOSEN]
+Dark layered background, keep and slim down the top header, full styling pass on every component: typography upgrade, consistent card radius + hover states, refined buttons, spacing rhythm. Bigger than A, smaller than B. Lands the "sleek" goal without a structural rewrite.
+
+## Recommendations
+Go with **Direction C**, tuned by the confirmed decisions below:
+
+- **Surfaces:** layered dark — `#0a0a0a` page → `#181818` cards → `#282828` hover. Depth-via-elevation is the biggest "sleek" lever.
+- **Accent:** minimal/monochrome. Mostly grayscale dark UI; `#5ec9ff` reserved for active states, primary buttons, and links. Restraint reads as intentional.
+- **Typography:** swap Arial → **Inter**. Heading weights 600–700, comfortable body line-height.
+- **Components:** full pass — consistent radius, real hover transitions, refined buttons, better spacing. Profile page brought up to explore-page quality.
+- **Nav:** keep top header, slim it down, cleaner active state.
+- **Motion:** subtle — smooth hover transitions, gentle fades on results loading. Tasteful, not flashy.
+- **Scope:** everything this round — global tokens + all pages + every component, one cohesive pass.
+
+## Suggested Decisions (confirmed)
+- [x] Direction C — dark, polished, top nav
+- [x] Accent intensity: **minimal / monochrome**
+- [x] Scope: **everything** (tokens + all pages + all components)
+- [x] Motion: **subtle**
+- [x] Keep top navigation (no sidebar)
+- [x] Typography: Inter (pending final confirmation in plan)
+
+## Open Questions (for /plan to resolve)
+- Final font choice: Inter vs. DM Sans (both free, geometric) — lock one
+- Exact surface/elevation token values and naming (`--surface-0/1/2`?)
+- Whether to introduce semantic tokens (`--surface`, `--text-primary`, `--text-muted`, `--accent`) vs. keep the current raw color names
+- Build order across components to minimize churn (design system → shell/header → pages)
+- How to handle the legacy `styles.css` light-theme tokens (`--color-bg-0/1/2`, `--color-theme-1/2`) — remove or repurpose
+- Profile page is the roughest — does it need structural changes or just restyle?
+
+## Next Steps (what /plan needs)
+1. Lock the final type + token system (semantic naming, surface elevation values)
+2. Define the build order (design system first, then shell, then pages)
+3. Inventory every component + page that needs a pass
+4. Decide the legacy `styles.css` cleanup approach
+5. Set acceptance criteria for "sleek" (consistency checklist: radius, spacing, hover, type scale)
