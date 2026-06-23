@@ -1,6 +1,7 @@
 <script>
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import TagPill from './TagPill.svelte';
+	import SongRadar from './SongRadar.svelte';
 	import { exploreSession } from '../../stores.js';
 
 	export let song = null;
@@ -74,47 +75,69 @@
 	</div>
 {:else if profile}
 	<div class="profile-container">
+		{#if song?.image}
+			<div class="profile-backdrop" style="background-image: url({song.image})"></div>
+			<div class="profile-scrim"></div>
+		{/if}
+
+		<div class="profile-content">
 		<div class="profile-header">
-			<div class="song-title">{profile.title}</div>
-			<div class="song-artist">{profile.artist}</div>
-			{#if profile.listeners > 0}
-				<div class="listeners">{profile.listeners.toLocaleString()} listeners on Last.fm</div>
+			{#if song?.image}
+				<img class="profile-cover" src={song.image} alt="" />
 			{/if}
+			<div class="profile-heading-text">
+				<div class="song-title">{profile.title}</div>
+				<div class="song-artist">{profile.artist}</div>
+				{#if profile.listeners > 0}
+					<div class="listeners">{profile.listeners.toLocaleString()} listeners on Last.fm</div>
+				{/if}
+			</div>
 		</div>
 
-		{#if profile.tags.length > 0}
-			<div class="section">
-				<div class="section-label">Tags · tap to select</div>
-				<div class="tag-pills">
-					{#each profile.tags as tag}
-						<TagPill
-							tag={tag.name}
-							selected={selectedTags.has(tag.name)}
-							onToggle={toggleTag}
-						/>
-					{/each}
-				</div>
-			</div>
-		{/if}
+		<div class="profile-body">
+			<div class="profile-body-left">
+				{#if profile.tags.length > 0}
+					<div class="section tags-section">
+						<div class="section-label">Tags · tap to select</div>
+						<div class="tag-pills">
+							{#each profile.tags as tag}
+								<TagPill
+									tag={tag.name}
+									selected={selectedTags.has(tag.name)}
+									onToggle={toggleTag}
+								/>
+							{/each}
+						</div>
+					</div>
+				{/if}
 
-		{#if analysisFields.length > 0}
-			<div class="section">
-				<div class="section-label">Analysis · tap an aspect to select</div>
-				{#each analysisFields as field}
-					<button
-						type="button"
-						class="analysis-field"
-						class:selected={selectedAspects.has(field.label)}
-						on:click={() => toggleAspect(field.label)}
-					>
-						<span class="field-label">{field.label}</span>
-						<span class="field-value">{field.value}</span>
-					</button>
-				{/each}
+				{#if analysisFields.length > 0}
+					<div class="section analysis-section">
+						<div class="section-label">Analysis · tap an aspect to select</div>
+						{#each analysisFields as field}
+							<button
+								type="button"
+								class="analysis-field"
+								class:selected={selectedAspects.has(field.label)}
+								on:click={() => toggleAspect(field.label)}
+							>
+								<span class="field-label">{field.label}</span>
+								<span class="field-value">{field.value}</span>
+							</button>
+						{/each}
+					</div>
+				{:else}
+					<div class="no-llm">Connect an AI account via ⚙ to see a song analysis and discover similar songs.</div>
+				{/if}
 			</div>
-		{:else}
-			<div class="no-llm">Connect an AI account via ⚙ to see a song analysis and discover similar songs.</div>
-		{/if}
+
+			{#if profile.scores}
+				<div class="profile-body-radar">
+					<div class="section-label">Sound profile</div>
+					<SongRadar scores={profile.scores} />
+				</div>
+			{/if}
+		</div>
 
 		<button
 			class="discover-btn"
@@ -129,17 +152,51 @@
 		{#if totalSelected === 0 && (profile.tags.length > 0 || analysisFields.length > 0)}
 			<div class="discover-hint">Select one or more tags or aspects above to discover similar songs.</div>
 		{/if}
+		</div>
 	</div>
 {/if}
 
 <style>
 	.profile-container {
+		position: relative;
+		overflow: hidden;
 		background-color: var(--surface-1);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		padding: 28px;
 		margin-top: 20px;
 		animation: fadeIn 0.3s ease;
+	}
+
+	.profile-backdrop {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 360px;
+		background-size: cover;
+		background-position: center;
+		filter: blur(50px) saturate(1.3);
+		opacity: 0.45;
+		transform: scale(1.2);
+		-webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+		mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+		pointer-events: none;
+	}
+
+	.profile-scrim {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 360px;
+		background: linear-gradient(180deg, rgba(18, 18, 18, 0.55) 0%, var(--surface-1) 100%);
+		pointer-events: none;
+	}
+
+	.profile-content {
+		position: relative;
+		z-index: 1;
 	}
 
 	.loading {
@@ -150,7 +207,53 @@
 	}
 
 	.profile-header {
+		display: flex;
+		align-items: center;
+		gap: 18px;
 		margin-bottom: 28px;
+	}
+
+	.profile-cover {
+		width: 96px;
+		height: 96px;
+		border-radius: var(--radius);
+		object-fit: cover;
+		flex-shrink: 0;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+	}
+
+	.profile-heading-text {
+		min-width: 0;
+	}
+
+	.profile-body {
+		display: flex;
+		gap: 32px;
+		align-items: stretch;
+		margin-bottom: 28px;
+	}
+
+	.profile-body-left {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.profile-body-left .section:last-child {
+		margin-bottom: 0;
+	}
+
+	.profile-body-radar {
+		flex: 0 0 48%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.profile-body-radar .section-label {
+		text-align: center;
+		margin-bottom: 0;
 	}
 
 	.song-title {

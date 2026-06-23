@@ -63,7 +63,9 @@ export const discoveryRequested = persisted('discoveryRequested', 0);
 
 // Cached song profile + selections, keyed to the song so returning to the same
 // song does NOT re-query Last.fm / the LLM.
-export const exploreSession = persisted('exploreSession', {
+// NOTE: bump the storage key suffix (_vN) whenever the profile shape changes so
+// stale cached profiles are invalidated and re-fetched. v2 added `scores`.
+export const exploreSession = persisted('exploreSession_v2', {
     key: null,
     profile: null,
     selectedTags: [],

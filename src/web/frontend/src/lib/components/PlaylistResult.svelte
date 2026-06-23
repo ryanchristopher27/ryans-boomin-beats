@@ -8,6 +8,9 @@
 	export let requested = 0;
 	export let onSongExplore = null;
 	export let onClear = null;
+	export let coverImage = null;
+	export let coverTitle = '';
+	export let coverSubtitle = '';
 
 	let checkedIds = new Set();
 	let showModal = false;
@@ -83,14 +86,30 @@
 {/if}
 
 {#if playlist.length > 0}
-	<div class="result-container">
-		{#if requested > 0 && playlist.length < requested}
-			<div class="short-notice">
-				Could only confirm {playlist.length} of {requested} songs on Spotify.
-			</div>
+	<div class="result-container" class:has-cover={coverImage}>
+		{#if coverImage}
+			<div class="cover-backdrop" style="background-image: url({coverImage})"></div>
+			<div class="cover-scrim"></div>
 		{/if}
 
-		<div class="song-list">
+		<div class="result-content">
+			{#if coverImage}
+				<div class="cover-header">
+					<img class="cover-thumb" src={coverImage} alt="" />
+					<div class="cover-meta">
+						{#if coverSubtitle}<div class="cover-eyebrow">{coverSubtitle}</div>{/if}
+						{#if coverTitle}<div class="cover-title">{coverTitle}</div>{/if}
+					</div>
+				</div>
+			{/if}
+
+			{#if requested > 0 && playlist.length < requested}
+				<div class="short-notice">
+					Could only confirm {playlist.length} of {requested} songs on Spotify.
+				</div>
+			{/if}
+
+			<div class="song-list">
 			{#each dedupedPlaylist as song (song.spotify.id)}
 				<SongCard
 					{song}
@@ -132,16 +151,86 @@
 				Playlist saved! <a href={savedPlaylistUrl} target="_blank" rel="noreferrer">Open in Spotify →</a>
 			</div>
 		{/if}
+		</div>
 	</div>
 {/if}
 
 <style>
 	.result-container {
+		position: relative;
+		overflow: hidden;
 		background-color: var(--surface-1);
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		padding: 18px;
 		animation: fadeIn 0.3s ease;
+	}
+
+	.cover-backdrop {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 320px;
+		background-size: cover;
+		background-position: center;
+		filter: blur(44px) saturate(1.3);
+		opacity: 0.5;
+		transform: scale(1.2);
+		-webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+		mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+		pointer-events: none;
+	}
+
+	.cover-scrim {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 320px;
+		background: linear-gradient(180deg, rgba(18, 18, 18, 0.5) 0%, var(--surface-1) 100%);
+		pointer-events: none;
+	}
+
+	.result-content {
+		position: relative;
+		z-index: 1;
+	}
+
+	.cover-header {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		margin-bottom: 18px;
+	}
+
+	.cover-thumb {
+		width: 72px;
+		height: 72px;
+		border-radius: var(--radius);
+		object-fit: cover;
+		flex-shrink: 0;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+	}
+
+	.cover-meta {
+		min-width: 0;
+	}
+
+	.cover-eyebrow {
+		font-size: 0.68rem;
+		text-transform: uppercase;
+		letter-spacing: 0.12em;
+		font-weight: 700;
+		color: var(--text-subtle);
+		margin-bottom: 4px;
+	}
+
+	.cover-title {
+		font-size: 1.3rem;
+		font-weight: 700;
+		letter-spacing: -0.01em;
+		color: var(--text-primary);
 	}
 
 	.short-notice {

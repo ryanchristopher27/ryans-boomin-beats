@@ -806,3 +806,95 @@ The "Discover Similar Songs" flow on the Explore page is wired end-to-end (SongP
 | Root fix | Make LLM analysis aspects selectable | Removes the Last.fm-tag gate; aspects always present when discovery is possible | 2026-06-22 |
 | Prompt location | Frontend (onDiscover) | Minimal change; consistent with current design | 2026-06-22 |
 | Pass labels or values | Aspect label + value | Gives the LLM concrete similarity signal | 2026-06-22 |
+
+---
+
+# Plan — Cover Art on Playlist Results
+Date: 2026-06-23
+Status: Draft
+Brainstorm: docs/brainstorm.md (Cover Art on Playlist Results, 2026-06-23)
+
+## Overview
+Add the selected song's album cover as an immersive visual on the Explore discovery results: a heavily-blurred, low-opacity backdrop that bleeds from the top of the results container and fades into the surface, with a dark scrim for readability, plus a crisp cover thumbnail + "Based on *Song* by Artist" header. Built so `PlaylistResult` takes an optional cover, letting the Playlist Builder adopt it later. Purely presentational — no functional changes to discovery/validation.
+
+## Goals & Success Criteria
+- Discovery results show the selected song's cover as a tasteful blurred backdrop + crisp "Based on" header
+- Cohesive with the dark theme; readable on any cover (bright/busy/dark)
+- `PlaylistResult` gains an **optional** cover API so Explore opts in and the Builder can later
+- **Success = with a song selected, discovery results render the blurred backdrop + "Based on" header; readable on a bright cover; graceful no-backdrop fallback when no image; no layout shift**
+
+## Scope
+### In Scope
+- Thread the selected song's `image` through the selection paths so `$selectedSong.image` is reliable
+- Optional cover props on `PlaylistResult` (`coverImage`, `coverTitle`, `coverSubtitle`)
+- Blurred backdrop + scrim + gradient-mask fade inside `.result-container`
+- Crisp thumbnail "Based on …" header
+- Wire Explore page to pass the selected song's cover/labels
+
+### Out of Scope
+- Playlist Builder adoption (deferred; structure for it but don't wire — no reference song, would use first-song cover)
+- Dominant-color extraction / color-adaptive tint (v1 uses neutral dark scrim)
+- 2×2 mosaic covers
+- Per-row art treatment changes (SongCard rows already show thumbnails)
+
+## Tech Stack & Architecture
+- **Pure frontend, no backend changes.** `search.py` already returns `image`; `song.spotify.image` exists on result rows.
+- **Enabling change — thread the cover through selection:** today `onSongSelect` (search path) carries `image`, but the Explore→ chain drops it: `SongCard`'s explore button emits `{title, artists, id}` and `onExploreSong` rebuilds the same. Fix: include `image: song.spotify.image` in the explore payload and preserve it in `onExploreSong`. `$selectedSong` is already a persisted store, so the cover persists across nav/reload for free.
+- **`PlaylistResult` optional cover API:** new props `coverImage` (string), `coverTitle`, `coverSubtitle`. When `coverImage` is set, render the backdrop layer + "Based on" header; when absent, render exactly as today (Builder unaffected until wired).
+- **Layering inside `.result-container`** (already `position: relative`-able): an absolutely-positioned blurred `<img>` (or background div) at low opacity, `filter: blur(40px)`, masked with a `linear-gradient` so it fades downward, under a dark scrim, with content above via `z-index`. Container gets `overflow: hidden` and keeps its border-radius.
+- **Readability:** scrim is a semi-opaque `--surface-1`/black gradient over the blur, independent of cover brightness — no per-image logic needed.
+
+## Milestones
+| # | Milestone | Description | Dependencies |
+|---|-----------|-------------|--------------|
+| C1 | Thread cover through selection | Carry `image` in explore-chain payload + `onExploreSong`; confirm search path; `$selectedSong.image` reliable | — |
+| C2 | Cover backdrop in PlaylistResult | Optional cover props; blurred backdrop + scrim + mask; crisp "Based on" header; no-image fallback | C1 |
+| C3 | Wire Explore results | Pass `coverImage`/title/subtitle from `$selectedSong`; reconcile with existing "Similar Songs" header | C1, C2 |
+
+## Task Breakdown
+
+### C1 — Thread cover through selection
+- `SongCard.svelte`: explore button payload → add `image: song.spotify.image`
+- `+page.svelte onExploreSong`: include `image: song.image` when setting `$selectedSong`
+- Verify `onSongSelect` (search) already carries `image` (it does post-`search.py` change)
+- No change needed to persistence — `$selectedSong` already persisted
+
+### C2 — Cover backdrop in PlaylistResult
+- Add props: `export let coverImage = null; export let coverTitle = ''; export let coverSubtitle = '';`
+- `.result-container`: `position: relative; overflow: hidden`
+- Backdrop layer (only `{#if coverImage}`): absolutely-positioned blurred image, low opacity, `mask-image`/gradient fade top→down, dark scrim overlay
+- Header layer (only `{#if coverImage}`): crisp thumbnail + `coverTitle` / `coverSubtitle` ("Based on …"), above the song list, `z-index` over backdrop
+- Ensure song list + action bar sit above the backdrop (`position: relative; z-index`)
+- Fallback: `coverImage` null → no backdrop/header, current layout intact
+
+### C3 — Wire Explore results
+- `+page.svelte`: pass `coverImage={$selectedSong.image}`, `coverTitle="Based on {$selectedSong.title}"`, `coverSubtitle={artist}` to `PlaylistResult`
+- Decide the existing "Similar Songs" `discovery-header`: replace with the in-card "Based on" header, or keep as a section label above — lean: move "Based on" into the card, drop the separate header
+- Manual check: bright cover readability, no-image selection fallback, nav-away/return still shows backdrop (persisted)
+
+## Risks & Mitigations
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Bright/busy cover hurts text contrast | Med | Med | Fixed dark scrim gradient over the blur, independent of image |
+| Older persisted `$selectedSong` lacks `image` | Med | Low | `{#if coverImage}` fallback → renders today's layout, no error |
+| Blur/large image causes layout shift or jank | Low | Low | Absolute positioning out of flow; fixed container height behavior unchanged; `overflow: hidden` |
+| Spotify image CORS when blurred via CSS | Low | Low | CSS `filter` on `<img>`/background doesn't taint or need CORS (no canvas); fine |
+| Builder accidentally shows a cover | Low | Low | Props optional + unset on Builder until explicitly wired |
+
+## Dependencies
+- `search.py` returning `image` (already shipped)
+- `$selectedSong` persisted store (already shipped)
+
+## Open Questions
+- "Similar Songs" header: fold into the in-card "Based on" header (lean yes) or keep both?
+- Backdrop intensity (blur radius / opacity) — tune visually during C2
+- Builder source image when later adopted (first-song vs mosaic) — deferred
+
+## Decisions Log
+| Decision | Choice | Reasoning | Date |
+|----------|--------|-----------|------|
+| Source image | Selected/reference song's cover | Semantically anchors "similar songs"; user choice | 2026-06-23 |
+| Treatment | Blurred ambient backdrop + crisp "Based on" header | Aesthetic + immersive + readable; user delegated the call | 2026-06-23 |
+| Scrim approach | Fixed neutral dark scrim (no color extraction) | Readable on any cover without canvas/CORS complexity in v1 | 2026-06-23 |
+| Scope | Explore results now; Builder later via optional props | User direction; gated API keeps Builder unaffected | 2026-06-23 |
+| Backend | No changes | image already available end-to-end | 2026-06-23 |

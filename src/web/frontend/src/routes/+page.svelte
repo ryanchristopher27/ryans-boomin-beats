@@ -56,7 +56,7 @@
 
 	// Exploration chain: clicking a discovery result loads that song's profile
 	function onExploreSong(song) {
-		$selectedSong = { title: song.title, artists: song.artists, id: song.id };
+		$selectedSong = { title: song.title, artists: song.artists, id: song.id, image: song.image };
 		$discoveryPlaylist = [];
 		$discoveryRequested = 0;
 		discoverError = '';
@@ -91,12 +91,16 @@
 		{/if}
 
 		{#if $discoveryPlaylist.length > 0}
-			<div class="discovery-header">Similar Songs</div>
-			<PlaylistResult
-				playlist={$discoveryPlaylist}
-				requested={$discoveryRequested}
-				onSongExplore={onExploreSong}
-			/>
+			<div class="discovery-results">
+				<PlaylistResult
+					playlist={$discoveryPlaylist}
+					requested={$discoveryRequested}
+					onSongExplore={onExploreSong}
+					coverImage={$selectedSong.image}
+					coverSubtitle="Similar songs based on"
+					coverTitle={`${$selectedSong.title} · ${$selectedSong.artists?.[0] ?? $selectedSong.artist ?? ''}`}
+				/>
+			</div>
 		{/if}
 	{/if}
 </div>
@@ -155,13 +159,7 @@
 		margin-top: 12px;
 	}
 
-	.discovery-header {
-		font-size: 0.72rem;
-		font-weight: 700;
-		color: var(--text-subtle);
-		text-transform: uppercase;
-		letter-spacing: 0.12em;
+	.discovery-results {
 		margin-top: 28px;
-		margin-bottom: 10px;
 	}
 </style>

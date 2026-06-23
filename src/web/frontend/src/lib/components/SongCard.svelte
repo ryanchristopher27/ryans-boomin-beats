@@ -43,7 +43,7 @@
 			</button>
 		{/if}
 		{#if onExplore}
-			<button class="explore-btn" on:click={() => onExplore({ title: song.spotify.title, artists: song.spotify.artists, id: song.spotify.id })} title="Explore this song">
+			<button class="explore-btn" on:click={() => onExplore({ title: song.spotify.title, artists: song.spotify.artists, id: song.spotify.id, image: song.spotify.image })} title="Explore this song">
 				Explore →
 			</button>
 		{/if}

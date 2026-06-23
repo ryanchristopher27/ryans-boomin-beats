@@ -367,3 +367,62 @@ Go with **Direction C**, tuned by the confirmed decisions below:
 3. Inventory every component + page that needs a pass
 4. Decide the legacy `styles.css` cleanup approach
 5. Set acceptance criteria for "sleek" (consistency checklist: radius, spacing, hover, type scale)
+
+---
+
+# Cover Art on Playlist Results (2026-06-23)
+
+## Problem / Opportunity
+The discovery results (and later the Playlist Builder results) are a plain list of song rows on a flat surface. Album art is available per song but unused at the playlist level. Adding the cover art as a larger visual element would make the results feel richer, more immersive, and more on-brand — without changing the underlying functionality.
+
+## Goals
+- Make the playlist/discovery results visually richer using album cover art
+- Keep it aesthetically pleasing and cohesive with the sleek dark theme (priority: looks)
+- Tie the results visually + semantically to their source (the selected song)
+- Stay readable — album art is unpredictable (bright/busy), text must remain legible
+
+## Audience
+Personal project; the bar is "something that looks polished enough to show off."
+
+## Constraints
+- A generated playlist has **no single cover** — it's many songs with many covers. The chosen anchor is the **selected/reference song's** cover, not the playlist's.
+- `PlaylistResult` is shared by Explore discovery results AND the Playlist Builder — changes must be gated/optional so Explore can adopt first.
+- **Key prerequisite:** the selected song's cover image is not reliably available today. The search-select path provides `image` (after the recent `search.py` change), but the Explore→ chain rebuilds the next song as `{title, artists, id}` and drops the image, and `/song/profile/` returns no image. The image must be threaded through both selection paths.
+- Dark scrim / gradient mask required for text contrast over arbitrary covers.
+
+## Ideas & Directions
+
+### Source image (which cover anchors the visual)
+- **Selected/reference song's cover [CHOSEN]** — on Explore, the song you explored from; semantically perfect as the anchor for "similar songs"
+- First/top result's cover — simplest, used as the Builder fallback later
+- 2×2 mosaic of 4 covers — Spotify-style auto-cover; busier as a background
+- Dominant color extracted from art — sleekest ambient look, but needs canvas + CORS work
+
+### Treatment (how it appears)
+- **Ambient blurred backdrop + "Based on" band [CHOSEN]** — selected song's cover, heavily blurred at low opacity, bleeding from the top of the results container and fading into `--surface-1` via a gradient mask, dark scrim for readability. Layered on top: a crisp cover thumbnail + "Based on *Song* by Artist" replacing the current "Similar Songs" header.
+- Hero header only — crisp cover + meta, no wash (cleanest, less immersive)
+- Blurred backdrop only — no crisp header (simplest)
+
+## Recommendations
+Build the **ambient blurred backdrop + "Based on" header**, anchored to the **selected song's cover**, scoped to **Explore discovery results** first, with `PlaylistResult` taking an optional cover prop so the Builder can adopt it later (first-song cover).
+
+Rationale: matches the user's "large with opacity in the background" instinct, ties results to their source, stays immersive but readable, and avoids the cost/complexity of color extraction or per-row art treatments. The gradient-masked fade + scrim keeps it tasteful on any cover.
+
+## Suggested Decisions (confirmed)
+- [x] Source = selected/reference song's cover
+- [x] Treatment = ambient blurred backdrop + crisp "Based on" thumbnail header (aesthetic call delegated to assistant)
+- [x] Scope = Explore discovery results now; extend to Playlist Builder later
+- [x] Enabling change = thread the selected song's image through search-select + explore-chain paths
+
+## Open Questions (for /plan)
+- Builder's later source image: first-song cover vs 2×2 mosaic (defer; note it)
+- Backdrop tint: neutral dark scrim (simpler) vs subtle tint toward the cover's dominant color (nicer, more work) — lean neutral for v1
+- Exact placement of the "Based on" header: inside `PlaylistResult` vs the Explore page's existing "Similar Songs" header slot
+- Fallback when no cover image is available (e.g., older selections): graceful no-backdrop state
+
+## Next Steps (what /plan needs)
+1. Define how the selected song's `image` is propagated (SongSearch already; SongCard explore button + `onExploreSong` need to carry it; consider persisting on `selectedSong`)
+2. Decide `PlaylistResult` API: optional `coverImage` + `coverLabel`/`coverSubtitle` props
+3. Spec the backdrop layering (absolute blurred img, gradient mask, scrim, z-index) within the existing `.result-container`
+4. Map the "Based on" header markup + where it lives
+5. Acceptance criteria: readable on bright covers, graceful no-image fallback, no layout shift
