@@ -1,18 +1,28 @@
 <script>
+	import { onMount } from 'svelte';
 	import Header from './Header.svelte';
+	import PlaylistsPanel from '$lib/components/PlaylistsPanel.svelte';
+	import { hydrateToken } from '$lib/spotifyAuth.js';
+	import { playlistsPanelOpen } from '../stores.js';
 	import './styles.css';
+
+	// Load the Spotify session app-wide so account actions work on every page,
+	// not just Profile. Skips the OAuth callback (handled by the Profile page).
+	onMount(() => {
+		if (!new URLSearchParams(window.location.search).has('code')) {
+			hydrateToken();
+		}
+	});
 </script>
 
-<div class="app">
+<div class="app" class:panel-open={$playlistsPanelOpen}>
 	<Header />
 
 	<main>
 		<slot />
 	</main>
 
-	<!-- <footer>
-		<p>visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> to learn SvelteKit</p>
-	</footer> -->
+	<PlaylistsPanel />
 </div>
 
 <style>
@@ -28,10 +38,14 @@
 		display: flex;
 		flex-direction: column;
 		padding: var(--primary-spacing);
-		width: 100%;
-		margin: 0 auto;
 		box-sizing: border-box;
 		background-color: var(--surface-0);
+		transition: margin-right 0.2s ease;
+	}
+
+	/* Make room for the docked Playlists panel (width + its right margin). */
+	.app.panel-open main {
+		margin-right: calc(var(--panel-width) + var(--primary-spacing));
 	}
 
 	/* footer {

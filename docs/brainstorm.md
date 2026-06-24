@@ -426,3 +426,77 @@ Rationale: matches the user's "large with opacity in the background" instinct, t
 3. Spec the backdrop layering (absolute blurred img, gradient mask, scrim, z-index) within the existing `.result-container`
 4. Map the "Based on" header markup + where it lives
 5. Acceptance criteria: readable on bright covers, graceful no-image fallback, no layout shift
+
+---
+
+# Deeper Spotify Account Integration (2026-06-23)
+
+## Problem / Opportunity
+The app authenticates with Spotify but barely uses the account beyond reading the profile and creating brand-new playlists / queueing. There's a lot of untapped value in the user's actual library: existing playlists, Liked Songs, and top tracks. The throughline for this round is **doing more with the connected account**, led by the top-requested feature: adding songs to *existing* playlists.
+
+## Goals
+- Add discovered/explored songs to the user's **existing** playlists (not just new ones)
+- Support both **bulk** (discovery results) and **per-song** (individual card) adds
+- Let users **save songs to Liked Songs** from the app
+- Use the user's **top tracks as discovery seeds** ("explore from what you already love")
+- Surface the **Last.fm wiki summary** (already fetched, currently discarded) + basic metadata
+
+## Audience
+The signed-in user (personal project); bar is "feels like a first-class Spotify companion."
+
+## Constraints
+- **New scopes required** for Liked Songs: `user-library-modify` (write) and `user-library-read` (saved-state indicators). The current PKCE scope set lacks these → **one re-auth (log out / log in)** needed.
+- **Enabling prerequisite — global token hydration.** The Spotify `access_token` only loads into the app on the **Profile page** mount. Account actions from Explore/Builder would silently fail until the token hydrates **app-wide on load** (from the localStorage it's already persisted in, with the existing refresh logic). Must be done first.
+- **Playlist filtering.** `GET /me/playlists` returns followed playlists the user can't edit. The picker must filter to **owned or collaborative** (owner.id === current user, or collaborative === true), else adds fail.
+- Adds use the existing `access_token`-in-body pattern to the FastAPI backend.
+- Spotify allows duplicate tracks in a playlist — may want a soft "already added" awareness later (not blocking).
+
+## Ideas & Directions
+
+### Direction 1 — Add to existing playlists [PRIMARY]
+- **Backend:** `GET /spotify/playlists/` (list owned/collaborative playlists: id, name, image, track count) and `POST /spotify/add-to-playlist/` (playlist_id, track_ids, access_token → `POST /playlists/{id}/tracks`).
+- **Frontend:** a **playlist picker** (modal/popover) listing the user's playlists with cover + name, plus a "New playlist" option (reuses existing create flow). Used by both the bulk action bar and a per-song "add" control on `SongCard`.
+- Confirmation + "Open in Spotify" link on success.
+
+### Direction 2 — Save to Liked Songs
+- **Scope:** add `user-library-modify` (+ `user-library-read` for indicators) → re-auth.
+- **Backend:** `POST /spotify/save-track/` (`PUT /me/tracks`); optional `GET /spotify/saved-contains/` (`GET /me/tracks/contains`, batched) for heart state.
+- **Frontend:** heart/save toggle on `SongCard` and the profile header.
+
+### Direction 3 — Explore from your top tracks
+- Profile already fetches top tracks. Surface them as **discovery seeds**: on the Explore **idle state** (empty search), show "Your top tracks" as clickable chips/cards that load that song's profile. (Alt: deep-link from the Profile page's top-tracks list into Explore.)
+- Requires the top-tracks fetch with the (now global) token.
+
+### Direction 4 — Wiki + metadata
+- Display `profile.wiki_summary` (already returned by `/song/profile/`) in a "About" block on the profile.
+- Add album + release year (album already on the selected song from search; year needs a track-details call) and optionally **similar artists** (Last.fm `track.getSimilar` / `artist.getSimilar`) — the latter is an extra call, can defer.
+
+## Recommendations
+Sequence by dependency + value:
+1. **M0 — Enabling:** global token hydration (app-wide) + add `user-library-read`/`user-library-modify` to the auth scopes (triggers re-auth). Prereq for everything else.
+2. **M1 — Add to existing playlists** (bulk + per-song) — the primary ask.
+3. **M2 — Save to Liked Songs** (+ saved indicators).
+4. **M3 — Explore from your top tracks** (idle-state seeds).
+5. **M4 — Wiki + metadata** display (wiki is nearly free; metadata depth optional).
+
+Rationale: M0 unblocks all account actions outside Profile; M1 delivers the headline feature; M2–M4 layer on once the token + scopes are in place.
+
+## Suggested Decisions (confirmed)
+- [x] Add-to-playlist supports **both bulk + per-song**
+- [x] This round includes **all four**: existing-playlist adds, Liked Songs, top-track seeds, wiki/metadata
+- [x] Accept **one re-auth** for the new library scopes
+
+## Open Questions (for /plan)
+- Playlist picker UX: modal with search/filter (for users with many playlists) vs simple scrollable list
+- "Explore from top tracks" placement: Explore idle-state seeds vs Profile→Explore deep-link (or both)
+- Metadata depth in v1: wiki + album/year only, or also similar artists (extra Last.fm call)
+- Saved-state indicators: include now (needs batched `/me/tracks/contains` + `user-library-read`) or defer the read side
+- Re-auth handling: detect missing scope and prompt "reconnect Spotify," or just instruct a manual log out / log in
+- Global token: hydrate in `+layout.svelte` vs a dedicated store initializer; reconcile with the Profile page's existing load/refresh logic to avoid double-handling
+
+## Next Steps (what /plan needs)
+1. Define the global token-hydration approach and how it reconciles with the Profile page's existing PKCE load/refresh
+2. Specify the new scope set + the re-auth UX
+3. Backend endpoints: list playlists, add-to-playlist, save-track, (optional) saved-contains
+4. Frontend: playlist picker component, per-song add + heart controls on SongCard, idle-state top-track seeds, wiki/metadata block
+5. Acceptance criteria: add-to-playlist works from Explore without visiting Profile first; owned/collaborative filtering correct; graceful handling when token/scope missing

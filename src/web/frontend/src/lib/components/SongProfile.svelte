@@ -89,7 +89,7 @@
 				<div class="song-title">{profile.title}</div>
 				<div class="song-artist">{profile.artist}</div>
 				{#if profile.listeners > 0}
-					<div class="listeners">{profile.listeners.toLocaleString()} listeners on Last.fm</div>
+					<div class="listeners">{profile.listeners.toLocaleString()} listeners{#if profile.play_count > 0} · {profile.play_count.toLocaleString()} plays{/if} on Last.fm</div>
 				{/if}
 			</div>
 		</div>
@@ -138,6 +138,13 @@
 				</div>
 			{/if}
 		</div>
+
+		{#if profile.wiki_summary}
+			<div class="section about-section">
+				<div class="section-label">About</div>
+				<p class="wiki">{profile.wiki_summary}</p>
+			</div>
+		{/if}
 
 		<button
 			class="discover-btn"
@@ -329,6 +336,18 @@
 
 	.field-value {
 		color: var(--text-muted);
+	}
+
+	.about-section {
+		margin-bottom: 28px;
+	}
+
+	.wiki {
+		font-size: 0.85rem;
+		line-height: 1.6;
+		color: var(--text-muted);
+		margin: 0;
+		white-space: pre-line;
 	}
 
 	.discover-hint {

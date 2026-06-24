@@ -898,3 +898,167 @@ Add the selected song's album cover as an immersive visual on the Explore discov
 | Scrim approach | Fixed neutral dark scrim (no color extraction) | Readable on any cover without canvas/CORS complexity in v1 | 2026-06-23 |
 | Scope | Explore results now; Builder later via optional props | User direction; gated API keeps Builder unaffected | 2026-06-23 |
 | Backend | No changes | image already available end-to-end | 2026-06-23 |
+
+---
+
+# Plan — Add to Existing Playlists (Playlist Picker)
+Date: 2026-06-23
+Status: Draft
+Brainstorm: docs/brainstorm.md (Deeper Spotify Account Integration, 2026-06-23)
+
+## Overview
+Let users add songs to their **existing** Spotify playlists — both in bulk (discovery/builder results) and per-song (individual cards) — via a reusable **playlist picker** modal. The picker lists the user's editable playlists with cover + name, includes a "New playlist" escape hatch (reusing the existing create flow), and appends the chosen tracks. Focus of this plan is the picker UX; the app-wide token hydration it depends on is carried as a prerequisite (M0).
+
+## Goals & Success Criteria
+- A reusable **PlaylistPicker** that opens from the results action bar (bulk) and from a song card (per-song)
+- Lists only **editable** playlists (owned or collaborative) with cover thumbnail, name, track count
+- **Search/filter** field for users with many playlists
+- "New playlist" option preserves the current create-new flow
+- Adds tracks via Spotify; clear success ("Added to *Playlist*" + open link) and failure states
+- **Success = from the Explore page (without visiting Profile first), I can add all/selected discovery songs OR a single song to an existing playlist, and see it reflected in Spotify**
+
+## Scope
+### In Scope
+- **M0 (prerequisite):** hydrate the Spotify `access_token` app-wide on load (currently Profile-only)
+- Backend: list editable playlists; add tracks to a playlist
+- `PlaylistPicker.svelte` modal (search, list, new-playlist, states)
+- Wire bulk add (PlaylistResult action bar) + per-song add (SongCard) to the picker
+- Reuse `PlaylistNameModal` for the "New playlist" path
+
+### Out of Scope
+- Save to Liked Songs / saved indicators (M2 — needs new scopes)
+- Explore-from-top-tracks (M3), wiki/metadata (M4)
+- Removing/reordering tracks in playlists; playlist management
+- Duplicate-detection / "already in playlist" warnings (note as future nicety)
+
+## Tech Stack & Architecture
+- **No new deps.** Reuses the existing `access_token`-in-body pattern to FastAPI + spotipy.
+- **M0 — global token (prerequisite).** Move the localStorage token load (`spotify_access_token` / `spotify_refresh_token` / `spotify_expires_at`) + refresh-if-expired logic out of the Profile page into an app-wide init (`+layout.svelte onMount`, writing the `access_token` store). The Profile page keeps owning the *login/PKCE exchange*; the layout just hydrates/refreshes an existing session so `$access_token` is populated everywhere. Avoid double-handling by having Profile call the same shared helper.
+- **Backend endpoints (`spotify_actions.py`):**
+  - `GET /spotify/playlists/?access_token=…` → fetch `/me` (id) + paginate `/me/playlists`, filter to `owner.id === me.id || collaborative`, return `[{id, name, image, track_count}]`.
+  - `POST /spotify/add-to-playlist/` `{playlist_id, track_ids, access_token}` → `playlist_add_items(playlist_id, [spotify:track:…])`. 401 when token missing/expired.
+- **PlaylistPicker component (reusable):** props `trackIds: string[]`, `contextLabel: string` (e.g. "12 songs" or "Flashing Lights"), `onClose`, `onAdded`. Owns: fetch playlists on open, search filter, row click → add, "New playlist" → existing `PlaylistNameModal` → create. Lives at the `PlaylistResult` level (which already holds the playlist + `access_token`); `SongCard` fires `onAddToPlaylist(trackId)` up to open it for one song.
+- **Picker UX (recommended):** centered modal, dark surface; header "Add to playlist" + context subtitle; sticky **search input**; a pinned **"+ New playlist"** row at top; scrollable list of playlist rows (cover, name, track count); loading / empty ("No editable playlists") / error / not-connected states. Chosen over an inline dropdown because users can have many playlists and need search + clear affordance for the new-playlist path.
+
+## Milestones
+| # | Milestone | Description | Dependencies |
+|---|-----------|-------------|--------------|
+| M0 | Global token hydration | Load/refresh Spotify token app-wide so account actions work off the Profile page | — |
+| M1a | Backend endpoints | List editable playlists + add-to-playlist | M0 |
+| M1b | PlaylistPicker component | Modal: search, list, new-playlist, states | M1a |
+| M1c | Wire bulk + per-song | Action-bar adds + SongCard add button open the picker | M1b |
+
+## Task Breakdown
+
+### M0 — Global token hydration
+- Extract token load + refresh into a shared helper (e.g., `lib/spotifyAuth.js`): `hydrateToken()` reads localStorage, refreshes if expired, sets `$access_token`.
+- Call it in `+layout.svelte onMount`.
+- Refactor Profile page to use the shared helper (keep PKCE code-exchange there).
+- Verify `$access_token` is set on Explore without visiting Profile.
+
+### M1a — Backend
+- `GET /spotify/playlists/`: `me = sp.me()`, paginate `sp.current_user_playlists()`, filter editable, map to `{id, name, image, track_count}`.
+- `POST /spotify/add-to-playlist/`: validate token (401 if absent), `sp.playlist_add_items(playlist_id, uris)`; return `{added, playlist_url}`.
+
+### M1b — PlaylistPicker.svelte
+- On open: GET playlists (loading → list / empty / error).
+- Search filter (client-side on name).
+- Pinned "+ New playlist" → `PlaylistNameModal` → `POST /spotify/create-playlist/` (existing).
+- Row click → `POST /spotify/add-to-playlist/` → success state ("Added to *Name*" + open link) → `onAdded`.
+- States: not-connected (no token) → prompt to log in on Profile.
+
+### M1c — Integration
+- `PlaylistResult`: action bar "Add All as Playlist" / "Add Selected as Playlist" → open picker with the relevant ids (replaces direct create-new; create still reachable via picker's New-playlist).
+- `SongCard`: add a "+"/"Add to playlist" control → fires `onAddToPlaylist(song.spotify.id)`; `PlaylistResult` opens the picker for that single id.
+- Keep "Queue All" and "Clear" as-is.
+
+## Risks & Mitigations
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Token not present off Profile page | High (today) | High | M0 makes it global — hard prerequisite, sequenced first |
+| `/me/playlists` includes uneditable followed playlists | High | Med | Filter to `owner.id === me.id || collaborative` server-side |
+| Many playlists → long list / pagination | Med | Low | Paginate server-side; client search filter |
+| Expired token mid-action | Med | Med | M0 refresh-on-load; 401 → "reconnect on Profile" message |
+| Duplicate track added | Med | Low | Allowed by Spotify; defer dedupe warning (note as future) |
+
+## Dependencies
+- Existing PKCE auth + persisted Spotify token (Profile page)
+- `playlist-read-private`, `playlist-modify-public/private` scopes (already granted)
+- spotipy `current_user_playlists`, `playlist_add_items`
+
+## Open Questions
+- Picker success: close immediately with a toast, or stay open to add to multiple playlists?
+- Per-song add control icon/placement on `SongCard` (next to Explore →?)
+- Should the selected song on the **profile** also get an add control, or cards only this round?
+- Pagination UX if a user has >50 playlists (load-more vs fetch-all server-side)
+
+## Decisions Log
+| Decision | Choice | Reasoning | Date |
+|----------|--------|-----------|------|
+| Picker UX | Modal with search + pinned "New playlist" | Scales to many playlists; clear create escape hatch | 2026-06-23 |
+| Token hydration | App-wide in layout, shared helper | Account actions must work off Profile; avoid double-handling | 2026-06-23 |
+| Picker ownership | Lives in PlaylistResult; SongCard fires callback up | PlaylistResult already holds playlist + token; avoids global state | 2026-06-23 |
+| New-playlist path | Reuse existing PlaylistNameModal + create endpoint | No duplication; create stays reachable | 2026-06-23 |
+
+### Revision 1 — Persistent right-side Playlists panel + drag-and-drop (2026-06-23)
+
+**Overrides the "modal picker" decision.** Instead of a modal, the add-to-playlist surface is a **toggleable, persistent panel docked to the right edge of the screen**, available on every page, with drag-and-drop as the primary add mechanism.
+
+**Design:**
+- **Toggle ("Playlists Mode"):** a button in the header (alongside the ⚙ gear). Toggling it opens/closes the right panel. State lives in a **persisted store** (`playlistsPanelOpen`) so it stays open across navigation and reloads.
+- **Placement & persistence:** the panel + toggle live in **`+layout.svelte`** so they persist no matter which page (Explore / Builder / Profile) is active.
+- **Layout behavior:** panel is **fixed to the right edge**; when open, the main content area gets a `margin-right` equal to the panel width so songs and tiles are both visible (required for drag-and-drop). Slim width (~260–300px).
+- **Tile grid:** playlists shown as a **2-column (or 3-col) grid flowing top→bottom**, vertically scrollable. Each tile = **cover image** (`playlist.images[0]` — Spotify's custom or auto 4-song mosaic), **name** (truncated), **track count**.
+- **Drag-and-drop add:** song elements (discovery `SongCard`s and the profile's selected song) are `draggable`; dropping one on a playlist tile appends that track (native HTML5 DnD via `dataTransfer` carrying the track id; tiles are drop targets with drag-over highlight). DnD works across component boundaries since it's DOM-level. Desktop-only (app is min-width 800) — acceptable.
+- **Per-song "+" icon (retained):** a "+"/add control on each `SongCard` as a non-drag path. Recommended behavior: clicking "+" opens the panel (if closed) and enters a brief "pick a playlist for *this song*" mode where a tile click adds it. (Exact interaction = open question.)
+- **New-playlist path:** a "+ New playlist" tile/button at the top of the grid → reuses existing `PlaylistNameModal` + create endpoint.
+
+**State / data:**
+- `playlistsPanelOpen` (persisted store) — toggle state.
+- `userPlaylists` (store) — fetched once on first open / login, cached; refetch on demand (e.g., after creating a playlist). Lives app-wide (layout-driven).
+- Adds use the global `$access_token` (M0) — reinforces M0 as prerequisite.
+
+**Revised milestones (supersede M1b/M1c):**
+| # | Milestone | Description |
+|---|-----------|-------------|
+| M0 | Global token hydration | Unchanged prerequisite |
+| M1a | Backend endpoints | List editable playlists (with images) + add-to-playlist — unchanged |
+| M1b' | Playlists panel | Header toggle + persisted store + layout-docked slim panel + tile grid + content-shift |
+| M1c' | Drag-and-drop + per-song add | Draggable songs, tile drop targets, add-on-drop; "+" icon fallback path; new-playlist tile |
+
+**Decisions Log additions:**
+| Decision | Choice | Reasoning | Date |
+|----------|--------|-----------|------|
+| Add surface (override) | Persistent right-side panel, not a modal | User vision; always-available, supports drag-and-drop, scales as a workspace | 2026-06-23 |
+| Persistence/placement | Panel + toggle in `+layout.svelte`, persisted open state | Must persist across all pages and reloads | 2026-06-23 |
+| Open-panel layout | Shift main content left (margin-right), not pure overlay | Drag-and-drop needs songs + tiles visible simultaneously | 2026-06-23 |
+| Tile cover | Use `playlist.images[0]` | Spotify already returns custom image or 4-song mosaic | 2026-06-23 |
+| Primary add UX | Drag song → drop on tile; "+" icon as fallback | Matches user's drag vision; keeps a click path | 2026-06-23 |
+
+**New open questions (for /scaffold or deeper plan):**
+- Per-song "+" interaction: open panel + "pick a playlist for this song" mode, vs a small anchored popover list, vs just opening the panel for manual drag
+- Grid columns: fixed 2, fixed 3, or responsive to panel width
+- Panel width + whether it's user-resizable (likely fixed for v1)
+- Drag affordance on the profile's selected song (drag the cover thumbnail?) vs cards-only in v1
+- Refetch strategy for `userPlaylists` after an add (update track_count optimistically?) 
+- Mobile/touch: out of scope (desktop min-width 800) — confirm
+
+### Revision 2 — "+" interaction + grid columns locked (2026-06-23)
+
+**Per-song "+" behavior is toggle-state-dependent:**
+
+| Playlists Mode toggle | Click "+" on a song |
+|---|---|
+| ON (panel open) | **Anchored popover** at the card — compact quick-picker; click a playlist → added; panel unaffected |
+| OFF (panel closed) | **Panel opens** (transient "peek") in "pick a playlist for *this song*" mode → click a tile → added → **panel auto-closes again** |
+
+Rule of thumb: **the toggle is the single source of "stay open" intent.** "+" with the toggle off is a temporary peek that closes after the add (also closes on Esc / click-away if nothing is picked). Drag-and-drop applies only while the panel is open.
+
+**Tile grid:** start with **2 columns** (fixed) for v1.
+
+**Decisions Log additions:**
+| Decision | Choice | Reasoning | Date |
+|----------|--------|-----------|------|
+| "+" when toggle ON | Anchored popover quick-picker at the card | Panel's already a workspace; in-place add is fastest, no mode | 2026-06-23 |
+| "+" when toggle OFF | Transient panel open ("pick a playlist for this song"), auto-close after add | Toggle is the only "stay open" control; "+" is a just-in-time peek | 2026-06-23 |
+| Tile grid columns | Fixed 2 columns (v1) | Slim panel; simple to start; can revisit | 2026-06-23 |

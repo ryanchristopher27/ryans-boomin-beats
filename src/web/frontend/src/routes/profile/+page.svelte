@@ -4,6 +4,7 @@
     import { BoominBeatsLogo } from "$lib";
 
     import { page, user, access_token} from '../../stores.js'
+    import { beginLogin, logoutSpotify, hydrateToken, exchangeCodeForToken, saveTokens } from '$lib/spotifyAuth.js';
 
     let token = $access_token;
 
@@ -20,86 +21,16 @@
 
     let logged_in = false;
 
-    const CLIENT_ID = 'a700071d47504ba68082a5a59d2b0bc0';
-    const SPOTIFY_AUTHORIZE_ENDPOINT = 'https://accounts.spotify.com/authorize';
-    const REDIRECT_URI = 'http://127.0.0.1:5173/profile';
-    const SCOPES = 'user-top-read playlist-read-private playlist-modify-private playlist-modify-public user-modify-playback-state';
-
-    // PKCE helpers
-    function generateCodeVerifier(length = 128) {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-        const array = new Uint8Array(length);
-        crypto.getRandomValues(array);
-        return Array.from(array).map(b => chars[b % chars.length]).join('');
-    }
-
-    async function generateCodeChallenge(verifier) {
-        const data = new TextEncoder().encode(verifier);
-        const digest = await crypto.subtle.digest('SHA-256', data);
-        return btoa(String.fromCharCode(...new Uint8Array(digest)))
-            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-
-    // Token storage helpers
-    function saveTokens(tokenData) {
-        localStorage.setItem('spotify_access_token', tokenData.access_token);
-        localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
-        localStorage.setItem('spotify_expires_at', Date.now() + tokenData.expires_in * 1000);
-    }
-
-    function loadStoredToken() {
-        const accessToken = localStorage.getItem('spotify_access_token');
-        const refreshToken = localStorage.getItem('spotify_refresh_token');
-        const expiresAt = parseInt(localStorage.getItem('spotify_expires_at') || '0');
-        if (!accessToken) return null;
-        return { accessToken, refreshToken, expiresAt };
-    }
-
-    function clearStoredTokens() {
-        localStorage.removeItem('spotify_access_token');
-        localStorage.removeItem('spotify_refresh_token');
-        localStorage.removeItem('spotify_expires_at');
-    }
-
     function handleLogout() {
-        clearStoredTokens();
-        $access_token = '';
+        logoutSpotify();
         token = '';
         logged_in = false;
-    }
-
-    async function exchangeCodeForToken(code, verifier) {
-        const res = await fetch('https://accounts.spotify.com/api/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                grant_type: 'authorization_code',
-                code,
-                redirect_uri: REDIRECT_URI,
-                client_id: CLIENT_ID,
-                code_verifier: verifier,
-            }),
-        });
-        return res.json();
-    }
-
-    async function refreshAccessToken(refreshToken) {
-        const res = await fetch('https://accounts.spotify.com/api/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                grant_type: 'refresh_token',
-                refresh_token: refreshToken,
-                client_id: CLIENT_ID,
-            }),
-        });
-        return res.json();
     }
 
     onMount(async () => {
         $page = 'Profile';
 
-        // Check if returning from Spotify OAuth
+        // Returning from the Spotify OAuth redirect.
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
         if (code) {
@@ -118,48 +49,15 @@
             return;
         }
 
-        // Check localStorage for a stored session
-        const stored = loadStoredToken();
-        if (stored) {
-            if (Date.now() < stored.expiresAt) {
-                // Token still valid
-                token = stored.accessToken;
-                $access_token = token;
-                getProfile();
-            } else if (stored.refreshToken) {
-                // Token expired — refresh silently
-                const tokenData = await refreshAccessToken(stored.refreshToken);
-                if (tokenData.access_token) {
-                    saveTokens(tokenData);
-                    token = tokenData.access_token;
-                    $access_token = token;
-                    getProfile();
-                } else {
-                    // Refresh failed — clear stored tokens and show login
-                    clearStoredTokens();
-                }
-            } else {
-                clearStoredTokens();
-            }
+        // Otherwise hydrate from a stored session (shared app-wide helper).
+        const ok = await hydrateToken();
+        if (ok) {
+            token = $access_token;
+            getProfile();
         }
     });
 
-    const handleLogin = async () => {
-        if (typeof window === 'undefined') return;
-        const verifier = generateCodeVerifier();
-        const challenge = await generateCodeChallenge(verifier);
-        sessionStorage.setItem('spotify_pkce_verifier', verifier);
-        const params = new URLSearchParams({
-            client_id: CLIENT_ID,
-            response_type: 'code',
-            redirect_uri: REDIRECT_URI,
-            scope: SCOPES,
-            code_challenge_method: 'S256',
-            code_challenge: challenge,
-            show_dialog: 'true',
-        });
-        window.location = `${SPOTIFY_AUTHORIZE_ENDPOINT}?${params}`;
-    };
+    const handleLogin = () => beginLogin();
 
     async function getProfile() {
         console.log('Get Profile Test 1')

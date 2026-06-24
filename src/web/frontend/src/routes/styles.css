@@ -33,6 +33,7 @@
 	--radius-sm: 8px;
 	--radius-lg: 20px;
 	--transition: 0.15s ease;
+	--panel-width: 340px;
 
 	--color-text: var(--text-primary);
 

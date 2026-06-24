@@ -5,6 +5,7 @@
 	import SongSearch from '$lib/components/SongSearch.svelte';
 	import SongProfile from '$lib/components/SongProfile.svelte';
 	import PlaylistResult from '$lib/components/PlaylistResult.svelte';
+	import TopTrackSeeds from '$lib/components/TopTrackSeeds.svelte';
 
 	let discoveringLoading = false;
 	let discoverError = '';
@@ -15,6 +16,13 @@
 
 	function onSongSelect(song) {
 		$selectedSong = song;
+		$discoveryPlaylist = [];
+		$discoveryRequested = 0;
+		discoverError = '';
+	}
+
+	function clearSelection() {
+		$selectedSong = null;
 		$discoveryPlaylist = [];
 		$discoveryRequested = 0;
 		discoverError = '';
@@ -74,9 +82,17 @@
 		{#if !$selectedSong}
 			<div class="idle-heading">What are you in the mood for?</div>
 		{/if}
-		<div class="search-wrap">
-			<SongSearch onSelect={onSongSelect} />
+		<div class="search-line">
+			<div class="search-wrap">
+				<SongSearch onSelect={onSongSelect} />
+			</div>
+			{#if $selectedSong}
+				<button class="clear-selection" on:click={clearSelection} title="Clear selection">✕</button>
+			{/if}
 		</div>
+		{#if !$selectedSong}
+			<TopTrackSeeds onSelect={onSongSelect} />
+		{/if}
 	</div>
 
 	{#if $selectedSong}
@@ -109,7 +125,7 @@
 	.body-div {
 		min-height: 100vh;
 		width: 100%;
-		min-width: 800px;
+		min-width: 0;
 		margin-top: 88px;
 		display: flex;
 		flex-direction: column;
@@ -140,9 +156,35 @@
 		text-align: center;
 	}
 
+	.search-line {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		width: 100%;
+	}
+
 	.search-wrap {
 		width: 60%;
-		min-width: 500px;
+		min-width: 320px;
+	}
+
+	.clear-selection {
+		flex-shrink: 0;
+		width: 48px;
+		height: 48px;
+		background-color: var(--surface-1);
+		color: var(--text-muted);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius);
+		font-size: 1rem;
+		cursor: pointer;
+		transition: border-color var(--transition), color var(--transition);
+	}
+
+	.clear-selection:hover {
+		border-color: var(--accent);
+		color: var(--accent);
 	}
 
 	.status-notice {

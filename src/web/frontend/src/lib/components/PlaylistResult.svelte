@@ -1,8 +1,8 @@
 <script>
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import SongCard from './SongCard.svelte';
-	import PlaylistNameModal from './PlaylistNameModal.svelte';
-	import { access_token } from '../../stores.js';
+	import { access_token, pendingAdd, playlistsPanelOpen } from '../../stores.js';
+	import { getSavedStates, setTrackSaved } from '$lib/playlistActions.js';
 
 	export let playlist = [];
 	export let requested = 0;
@@ -13,16 +13,16 @@
 	export let coverSubtitle = '';
 
 	let checkedIds = new Set();
-	let showModal = false;
-	let modalMode = 'all'; // 'all' | 'selected'
-	let savedPlaylistUrl = '';
 	let actionError = '';
 	let queueSuccess = false;
+	let savedMap = {};
+	let savedKey = '';
 
 	$: dedupedPlaylist = playlist.filter((s, i, arr) => arr.findIndex(x => x.spotify.id === s.spotify.id) === i);
 	$: hasChecked = checkedIds.size > 0;
 	$: allIds = dedupedPlaylist.map(s => s.spotify.id);
 	$: selectedIds = allIds.filter(id => checkedIds.has(id));
+	$: maybeCheckSaved(allIds);
 
 	function onToggle(id, checked) {
 		const next = new Set(checkedIds);
@@ -30,32 +30,36 @@
 		checkedIds = next;
 	}
 
-	function openModal(mode) {
-		modalMode = mode;
-		showModal = true;
+	async function maybeCheckSaved(ids) {
+		const key = ids.join(',');
+		if (key === savedKey || ids.length === 0) return;
+		savedKey = key;
+		savedMap = await getSavedStates(ids);
 	}
 
-	async function savePlaylist(name) {
-		showModal = false;
-		actionError = '';
-		const ids = modalMode === 'all' ? allIds : selectedIds;
-		try {
-			const res = await fetch(`${PUBLIC_API_URL}/spotify/create-playlist/`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name, track_ids: ids, access_token: $access_token }),
-			});
-			const data = await res.json();
-			if (res.status === 401) {
-				actionError = 'Log in to Spotify on the Profile page to save playlists.';
-			} else if (data.playlist_url) {
-				savedPlaylistUrl = data.playlist_url;
-			} else {
-				actionError = data.detail || 'Failed to create playlist.';
-			}
-		} catch (e) {
-			actionError = 'Could not reach the server.';
+	async function handleSaveToggle(id, newSaved) {
+		savedMap = { ...savedMap, [id]: newSaved };
+		const r = await setTrackSaved(id, newSaved);
+		if (r.error) {
+			savedMap = { ...savedMap, [id]: !newSaved };
+			actionError =
+				r.error === 'reconnect'
+					? 'Reconnect Spotify on the Profile page to enable saving.'
+					: 'Could not update Liked Songs.';
 		}
+	}
+
+	// Route bulk adds through the Playlists panel ("pick a playlist" mode), where
+	// the user can choose an existing playlist or the "New playlist" tile.
+	function addBulk(ids) {
+		if (!ids.length) return;
+		const wasOpen = $playlistsPanelOpen;
+		$pendingAdd = {
+			trackIds: ids,
+			label: `${ids.length} song${ids.length > 1 ? 's' : ''}`,
+			transient: !wasOpen,
+		};
+		$playlistsPanelOpen = true;
 	}
 
 	async function queueAll() {
@@ -80,10 +84,6 @@
 		}
 	}
 </script>
-
-{#if showModal}
-	<PlaylistNameModal onSave={savePlaylist} onCancel={() => showModal = false} />
-{/if}
 
 {#if playlist.length > 0}
 	<div class="result-container" class:has-cover={coverImage}>
@@ -116,20 +116,22 @@
 					checked={checkedIds.has(song.spotify.id)}
 					onToggle={onToggle}
 					onExplore={onSongExplore}
+					saved={savedMap[song.spotify.id] || false}
+					onSaveToggle={handleSaveToggle}
 				/>
 				<hr class="divider" />
 			{/each}
 		</div>
 
 		<div class="action-bar">
-			<button class="action-btn" on:click={() => openModal('all')}>
-				Add All as Playlist
+			<button class="action-btn" on:click={() => addBulk(allIds)}>
+				Add All to Playlist
 			</button>
 			<button class="action-btn" on:click={queueAll}>
 				Queue All
 			</button>
-			<button class="action-btn" on:click={() => openModal('selected')} disabled={!hasChecked}>
-				Add Selected as Playlist
+			<button class="action-btn" on:click={() => addBulk(selectedIds)} disabled={!hasChecked}>
+				Add Selected to Playlist
 			</button>
 			{#if onClear}
 				<button class="action-btn clear-btn" on:click={onClear}>
@@ -146,11 +148,6 @@
 			<div class="action-success">Queued! Open Spotify to hear your playlist.</div>
 		{/if}
 
-		{#if savedPlaylistUrl}
-			<div class="action-success">
-				Playlist saved! <a href={savedPlaylistUrl} target="_blank" rel="noreferrer">Open in Spotify →</a>
-			</div>
-		{/if}
 		</div>
 	</div>
 {/if}

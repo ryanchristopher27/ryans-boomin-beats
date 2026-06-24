@@ -1,5 +1,5 @@
 <script>
-	import { page, llmConfig } from '../stores.js';
+	import { page, llmConfig, playlistsPanelOpen } from '../stores.js';
 	import { BoominBeatsLogo } from '$lib';
 	import LLMSettingsPanel from '$lib/components/LLMSettingsPanel.svelte';
 
@@ -28,6 +28,14 @@
 
 		<div class="header-actions">
 			<button
+				class="playlists-toggle"
+				class:active={$playlistsPanelOpen}
+				on:click={() => ($playlistsPanelOpen = !$playlistsPanelOpen)}
+				title="Playlists"
+			>
+				Playlists
+			</button>
+			<button
 				class="settings-toggle"
 				class:connected={$llmConfig.connected}
 				on:click={() => (settingsOpen = !settingsOpen)}
@@ -54,7 +62,7 @@
 		top: 0;
 		left: 0;
 		width: 100%;
-		z-index: 40;
+		z-index: 50;
 		display: flex;
 		justify-content: center;
 		padding: 12px var(--primary-spacing);
@@ -129,7 +137,35 @@
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
+		gap: 10px;
 		min-width: 50px;
+	}
+
+	.playlists-toggle {
+		height: 34px;
+		padding: 0 14px;
+		background: none;
+		border: 1px solid var(--border-subtle);
+		border-radius: 17px;
+		color: var(--text-muted);
+		font-weight: 600;
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		cursor: pointer;
+		white-space: nowrap;
+		transition: color var(--transition), background-color var(--transition), border-color var(--transition);
+	}
+
+	.playlists-toggle:hover {
+		color: var(--text-primary);
+		border-color: var(--accent);
+	}
+
+	.playlists-toggle.active {
+		background: var(--brand-gradient);
+		color: var(--surface-0);
+		border-color: transparent;
 	}
 
 	.settings-toggle {

@@ -34,7 +34,7 @@
 	.body-div {
 		min-height: 100vh;
 		width: 100%;
-		min-width: 800px;
+		min-width: 0;
 		margin-top: 88px;
 	}
 </style>

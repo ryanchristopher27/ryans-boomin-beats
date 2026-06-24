@@ -61,6 +61,14 @@ export const selectedSong = persisted('selectedSong', null);
 export const discoveryPlaylist = persisted('discoveryPlaylist', []);
 export const discoveryRequested = persisted('discoveryRequested', 0);
 
+// Playlists side panel
+export const playlistsPanelOpen = persisted('playlistsPanelOpen', false);
+export const userPlaylists = writable([]);
+// Holds songs queued to be added to a playlist via the panel's "pick a
+// playlist" mode (from a song's "+" or a bulk action).
+// Shape: { trackIds: string[], label: string, transient: boolean } | null
+export const pendingAdd = writable(null);
+
 // Cached song profile + selections, keyed to the song so returning to the same
 // song does NOT re-query Last.fm / the LLM.
 // NOTE: bump the storage key suffix (_vN) whenever the profile shape changes so
