@@ -29,12 +29,17 @@ def get_profile(
 
     top_tracks_objects = []
     for track in top_tracks['items']:
+        # Spotify usually returns 3 image sizes but does not guarantee it; the
+        # rest of the codebase guards this and an unguarded [2] is a 500 waiting
+        # for the first album art with fewer sizes.
+        images = track['album'].get('images') or []
+        thumb = images[2] if len(images) > 2 else (images[-1] if images else {})
         top_tracks_objects.append({
             'title': track['name'],
             'artists': [a['name'] for a in track['artists']],
             'id': track['id'],
-            'image': track['album']['images'][2]['url'],
-            'image_size': track['album']['images'][2]['height'],
+            'image': thumb.get('url', ''),
+            'image_size': thumb.get('height', 0),
             'duration_ms': track['duration_ms'],
             'explicit': track['explicit'],
             'track_url': track['external_urls']['spotify'],

@@ -192,6 +192,33 @@ def recently_played(access_token: Optional[str] = Query(default=None)):
     return {'played_at': played_at, 'count': len(played_at)}
 
 
+# Spotify's February 2026 migration consolidated the per-type save/remove/contains
+# endpoints into PUT/DELETE /me/library and GET /me/library/contains, all keyed by
+# Spotify URIs rather than bare ids. spotipy >= 2.26 already targets the new
+# endpoints, so use its helpers — do NOT "fix" them back to /me/tracks/*, which
+# the migration removed (those now return 403).
+_SAVED_TRACKS_LIMIT = 50  # per-request cap; the profile view already sits at 50
+
+
+def _id_chunks(ids: list[str], size: int = _SAVED_TRACKS_LIMIT):
+    for i in range(0, len(ids), size):
+        yield ids[i:i + size]
+
+
+def _saved_tracks_contains(spotify: Spotify, ids: list[str]) -> list[bool]:
+    flags: list[bool] = []
+    for chunk in _id_chunks(ids):
+        flags.extend(spotify.current_user_saved_tracks_contains(tracks=chunk))
+    return flags
+
+
+def _saved_tracks_modify(spotify: Spotify, ids: list[str], remove: bool) -> None:
+    call = (spotify.current_user_saved_tracks_delete if remove
+            else spotify.current_user_saved_tracks_add)
+    for chunk in _id_chunks(ids):
+        call(tracks=chunk)
+
+
 @router.post("/spotify/save-track/")
 def save_track(body: SaveTrackRequest):
     if not body.access_token:
@@ -200,10 +227,7 @@ def save_track(body: SaveTrackRequest):
         return {'ok': True, 'saved': not body.remove}
     spotify = Spotify(auth=body.access_token)
     try:
-        if body.remove:
-            spotify.current_user_saved_tracks_delete(tracks=body.track_ids)
-        else:
-            spotify.current_user_saved_tracks_add(tracks=body.track_ids)
+        _saved_tracks_modify(spotify, body.track_ids, body.remove)
     except SpotifyException as e:
         if e.http_status in (401, 403):
             raise HTTPException(status_code=403, detail="reconnect")
@@ -220,7 +244,7 @@ def saved_contains(access_token: Optional[str] = Query(default=None), ids: str =
         return {'saved': {}}
     spotify = Spotify(auth=access_token)
     try:
-        flags = spotify.current_user_saved_tracks_contains(tracks=id_list)
+        flags = _saved_tracks_contains(spotify, id_list)
     except SpotifyException as e:
         if e.http_status in (401, 403):
             raise HTTPException(status_code=403, detail="reconnect")

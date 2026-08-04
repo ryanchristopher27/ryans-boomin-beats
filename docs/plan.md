@@ -1680,3 +1680,76 @@ in the 2026-08-03 plan).
 
 **Remaining in P0:** H1 (account integration — needs a browser session), D1 (hosted deploy + device key),
 C1 (dead-code sweep, expanded by the V1 findings). K1.5 folds into whichever session next has a key to hand.
+
+### Spotify February 2026 migration audit (2026-08-03)
+
+Triggered mid-H1 by repeated 403s on Liked Songs. Root cause was Spotify's
+[February 2026 Web API migration](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide),
+which applies to **Development Mode apps**. Every endpoint below was probed against the live API with a
+real user token — this table is measured, not inferred from the docs.
+
+**Result: the backend was already migration-clean.** spotipy 2.26.0 had migrated ahead of us.
+
+| Endpoint | Probe | App uses it? |
+|---|---|---|
+| `GET /me/library/contains` | 200 | ✅ via spotipy — the new saved-check |
+| `PUT` / `DELETE /me/library` | 200 | ✅ via spotipy — the new save/unsave |
+| `POST /playlists/{id}/items` | 400 (route exists) | ✅ spotipy's `playlist_add_items` targets `/items` |
+| `POST /me/playlists` | 400 (route exists) | ✅ our `_post("me/playlists")` |
+| `POST /me/player/queue` | 400 (route exists) | ✅ |
+| `/me`, `/me/top/{artists,tracks}`, `/me/playlists`, `/me/player/recently-played` | 200 | ✅ |
+| `GET /me/tracks/contains` | **403 removed** | not used |
+| `PUT` / `DELETE /me/tracks` | **403 removed** | not used |
+| `GET` / `POST /playlists/{id}/tracks` | **403 removed** | not used |
+| `POST /users/{id}/playlists` | **403 removed** | not used — we use `me/playlists` |
+| `GET /tracks?ids=` (batch) | **403 removed** | not used |
+| `GET /search?limit=50` | **400 Invalid limit** (cap is now 10) | not used — default 10 / `limit=1` |
+| `GET /audio-features` | **403** | used in `taste-over-time`; already degrades to `None` |
+| `GET /me/library?limit=1` | 405 | write-only path; library reads still use `GET /me/tracks` (200) |
+
+Response-shape changes were already absorbed: `p.get('items') or p.get('tracks')` covers the playlist
+`tracks`→`items` rename, and `artist.get('popularity', 0)` absorbs the removed field.
+
+**Correction to the record.** Mid-investigation this session, `current_user_saved_tracks_*` was
+misdiagnosed as a spotipy bug (its `me/library` path looked wrong against pre-migration docs) and
+"fixed" to `me/tracks/*` — which the migration *removed*. That change was the only thing that broke
+Liked Songs; the resulting 403 was then misread a second time as stale OAuth scopes. Both wrong.
+`user-library-read` was provably granted the whole time (`GET /me/tracks` returned 200 with the same
+token). The revert is in place with a comment warning against re-applying the same "fix".
+
+**The new library API, for reference** — keyed by Spotify **URIs**, passed as a **query parameter**:
+
+```
+GET    /v1/me/library/contains?uris=spotify:track:<id>[,...]   -> [true,false,...]
+PUT    /v1/me/library?uris=spotify:track:<id>[,...]            -> 200
+DELETE /v1/me/library?uris=spotify:track:<id>[,...]            -> 200
+```
+
+A JSON body is rejected: `PUT /me/library` with `{"uris": [...]}` returns
+`400 Missing required field: uris`.
+
+**Defect found and fixed (not migration-related).** `profile.py` indexed
+`track['album']['images'][2]` unguarded — a 500 waiting for the first album art with fewer than three
+sizes, and inconsistent with the guarded indexing everywhere else in the codebase. Now falls back to
+the smallest available image. Verified 50/50 top tracks still resolve an image; 35 tests pass.
+
+**Chunking retained** at 50 ids per saved-tracks request. The profile view sends exactly 50, so it sat
+one track from the cap.
+
+**Closes TA0.** `popularity` is removed API-wide by this migration, so there is no popularity signal to
+recover for any app. The mainstream-ness module (TA1) stays dropped for a documented reason rather than
+an observed-empty field.
+
+**Premium requirement — confirmed satisfied.** The migration requires the app owner to hold active
+Spotify Premium or a Development Mode app stops working. Owner has Premium (confirmed 2026-08-03). This
+is also a hard prerequisite for P6 (Spotify iOS SDK playback control).
+
+**Other constraints noted, not currently binding:** new Development Mode apps are capped at 5 users
+(existing apps grandfathered); browse endpoints, artist top-tracks, other users' data, and `/markets`
+are removed — none are used here.
+
+**Implication for the iOS plan.** P2's Explore work was already replanned around this in the V1 block;
+this audit confirms nothing further is at risk. The iOS client should call the same endpoints through
+the backend rather than hitting Spotify directly, so it inherits spotipy's migration handling for free
+— one more argument against the "no backend, iOS talks to Spotify directly" option rejected in the
+brainstorm.
