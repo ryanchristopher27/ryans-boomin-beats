@@ -39,6 +39,7 @@ def get_profile(
             'explicit': track['explicit'],
             'track_url': track['external_urls']['spotify'],
             'album': track['album']['name'],
+            'release_date': track['album'].get('release_date', ''),
         })
 
     return {

@@ -500,3 +500,314 @@ Rationale: M0 unblocks all account actions outside Profile; M1 delivers the head
 3. Backend endpoints: list playlists, add-to-playlist, save-track, (optional) saved-contains
 4. Frontend: playlist picker component, per-song add + heart controls on SongCard, idle-state top-track seeds, wiki/metadata block
 5. Acceptance criteria: add-to-playlist works from Explore without visiting Profile first; owned/collaborative filtering correct; graceful handling when token/scope missing
+
+---
+
+# Profile Page Revamp — Taste Dashboard (2026-06-24)
+Source ideas: docs/ideas.md
+
+## Problem / Opportunity
+The profile page is a static stats view: a header card, a standalone controls bar (num-tops + time-period), and two Spotify-style list cards (Top Artists, Top Tracks). The opportunity is to evolve it into a modular "taste dashboard" — integrated controls, consistent song rows, more visualizations, and expandable/independently-scrollable modules.
+
+## Goals
+- Integrate the num-tops + time-period controls (not a separate section above the lists)
+- Make the tracks list consistent with the rest of the app (reuse SongCard)
+- Add visualizations: genre radar, and "taste over time" charts
+- Modular layout: minimized summary modules that expand to fill the page (others hide when one is maximized); per-module scroll instead of whole-page scroll
+
+## Audience
+The signed-in user exploring their own listening taste (personal project).
+
+## Constraints
+- **Genre data is artist-level only** — Spotify tags genres on artists, not tracks. The genre radar is "genres of your top artists, weighted by rank." Label it honestly.
+- **LLM-generated scores are expensive at scale** — the radar dimensions are produced per-song by the analysis LLM. Aggregating across top tracks × 3 timeframes = 30–150 LLM calls. Not viable as the default source.
+- **Spotify Audio Features API is the ideal source but likely deprecated** — `GET /audio-features?ids=` returns energy/danceability/valence/acousticness/instrumentalness/tempo/etc., batched 100/call. Deprecated for apps created after 2024-11-27; this app is new, so access is uncertain. **Must be tested before designing around it** (this app has already hit deprecation walls: recommendations dead, `/me/playlists` tracks→items rename).
+- Existing `/get-profile/` already returns top_artists (with genres) + top_tracks; SongCard expects a `song.spotify.{…}` shape (flat top_tracks need an adapter).
+
+## Ideas & Directions
+
+### A — Integrate the controls
+Move num-tops + time-period inline. **Key fork:** global vs per-module timeframe. List/genre modules want one timeframe *filter*; the over-time charts use timeframe as an *axis*. Resolution: a global default timeframe for filter-style modules; the over-time module owns its own axis.
+
+### B — Reuse SongCard for the tracks list
+Consistency + free functionality: SongCard already has like / add-to-playlist / explore, so profile top-tracks inherit all the account-integration powers just built. Needs a small adapter from flat top_tracks → `song.spotify` shape.
+
+### C — Modular dashboard
+Each section = a module: minimized summary by default, expandable to fill the page (others hide when maximized), per-module internal scroll. This is the structural core and the biggest build — phase it.
+
+### D — Visualizations (Spotify-native first, LLM last)
+- **Genre radar** — from top artists' genres, weighted by rank. No extra calls. (cheap)
+- **Taste over time** — reframed to use Spotify-native attributes instead of LLM:
+  - **Audio features** (energy/danceability/valence/…) *if the app has access* — ideal, one batched call per timeframe.
+  - **Popularity** over time — "how mainstream is your taste." (cheap)
+  - **Release era** over time — avg track release year per timeframe. (cheap, distinctive)
+  - LLM scores only as a last-resort fallback (cached per song, capped at ~top 10) if audio-features is unavailable and the native metrics aren't enough.
+
+## Recommendations
+Phase it:
+- **P1 — Quick wins:** integrate controls (global timeframe for lists) + reuse SongCard for tracks (+ adapter) + genre radar (artist genres). All cheap, high consistency payoff.
+- **P2 — Modular dashboard:** module wrapper with minimize/expand (maximize hides others) + per-module scroll. Convert P1 sections into modules.
+- **P3 — Taste over time:** Spotify-native charts (popularity, release era; audio-features if available). LLM fallback only if needed.
+
+**Verify first (gates P3 design):** does this app have **audio-features** access? A single test call decides whether the score/audio radar is cheap (native) or must fall back to popularity/era + optional LLM.
+
+## Suggested Decisions (confirmed)
+- [x] Phase the revamp (P1 → P2 → P3)
+- [x] Prefer Spotify-native data over LLM for taste charts; LLM is last-resort
+- [ ] Global-timeframe-for-lists + over-time-owns-its-axis (proposed; confirm in /plan)
+
+## Open Questions (for /plan)
+- **Does the app have audio-features access?** (test before P3) — determines the over-time chart's data source
+- Genre radar: count by artist frequency, or rank-weighted? Top how many genres (6 for a clean hexagon)?
+- Module layout: fixed 2-col grid of modules? Which modules ship in P2 (Top Tracks, Top Artists, Genre radar, + over-time)?
+- Expand interaction: maximize-in-place vs modal-like overlay; how the others "go away"
+- Does the genre radar / over-time respect the global timeframe, or always span all?
+
+## Next Steps (what /plan needs)
+1. Test audio-features availability for the app (gates P3)
+2. Define the SongCard adapter for profile top_tracks (flat → `song.spotify` shape)
+3. Spec the genre-aggregation (rank-weighted counts → top 6)
+4. Spec the module wrapper (summary/expanded states, hide-others, internal scroll)
+5. Decide control placement + global-vs-per-module timeframe
+
+---
+
+# Taste Analytics Expansion (2026-06-24)
+Context: leveraging more of the Spotify API within what a post-2024-11-27 app can actually access (see the brain `spotify` domain). Builds on the P2 modular dashboard.
+
+## Problem / Opportunity
+The profile dashboard has genres, taste-over-time, and top lists. There's a lot more analytical signal in the data the app *can* read (release dates, artist popularity, genres, recently-played timestamps) — none of it needing the deprecated endpoints. Adding modules is cheap now that the dashboard is modular.
+
+## Goals
+- Add four taste-analytics modules: **decade distribution**, **mainstream-ness**, **genre depth + diversity**, **listening clock**
+- Stay entirely within available Spotify data (no audio-features / recommendations / related-artists)
+- Reuse the P2 module system; keep each module self-contained and scrollable/expandable
+
+## Audience
+The signed-in user exploring their own taste (Premium available, but playback is out of scope this round).
+
+## Constraints
+- **Track popularity is stripped** for new apps → compute "mainstream-ness" from **artist** popularity (which *is* available).
+- **Recently-played needs a new scope** (`user-read-recently-played` → one re-auth) and is capped at the **50 most-recent plays** (a rolling window, not full history) — the listening clock is a "recent snapshot," label it honestly.
+- **Genres are artist-level** — genre modules derive from top artists, weighted by rank.
+- **Deprecation guardrail:** nothing here uses audio-features, recommendations, or related-artists.
+- `/get-profile` top_tracks currently omit `release_date` — must add it for the decade module.
+
+## Ideas & Directions (the four chosen modules)
+
+### 1 — Mainstream-ness (artist popularity)
+- Recovers the metric lost in P3 (track popularity is dead) using **avg top-artist popularity** per timeframe → a real line for the taste-over-time chart. Plus a "most obscure / most popular artist" callout for the current timeframe.
+- **Data:** top_artists already include `popularity`. Add artist-popularity to the `taste-over-time` endpoint (3 timeframes). No new scope.
+
+### 2 — Decade distribution
+- Histogram of the eras your top tracks come from (e.g., 1980s … 2020s) for the selected timeframe.
+- **Data:** track `album.release_date` → year → decade bucket. Add `release_date` to `/get-profile` top_tracks. No new scope. Needs a small bar/histogram viz.
+
+### 3 — Genre depth + diversity
+- Beyond the radar: a ranked genre breakdown (top N with weights) and a **diversity index** ("how varied is your taste").
+- **Data:** top_artists `genres`, rank-weighted (reuse the existing aggregation). No new scope. Could live alongside the genre radar in one module.
+
+### 4 — Listening clock
+- Hour-of-day (and/or day-of-week) heatmap of *when* you listen, from recently-played timestamps.
+- **Data:** new `GET /spotify/recently-played/` (`user-read-recently-played`, 50-item cap) → aggregate `played_at` into hour/day buckets. **New scope (re-auth).** Needs a heatmap viz.
+- Bonus the scope unlocks: "explore from what you just heard" (recently-played as a discovery seed) — note for later, not in scope now.
+
+## Recommendations
+Phase by scope cost:
+- **TA1 — Mainstream-ness:** extend `taste-over-time` with artist popularity; show as the chart line + obscure/popular callout. (No new scope; also un-flattens the existing taste chart.)
+- **TA2 — Decade distribution:** add `release_date` to `/get-profile`; new module with a bar histogram. (No new scope.)
+- **TA3 — Genre depth + diversity:** ranked genre bars + diversity index from existing genre aggregation. (No new scope.)
+- **TA4 — Listening clock:** add `user-read-recently-played` scope (re-auth) + recently-played endpoint + heatmap module. (New scope — do last.)
+
+Rationale: TA1–TA3 ship without re-auth and reuse existing data/aggregations; TA4 is the one requiring the scope change, so it's sequenced last.
+
+## Suggested Decisions (confirmed)
+- [x] Build all four modules
+- [x] Accept one re-auth to add `user-read-recently-played` (for TA4)
+- [x] Mainstream-ness via artist popularity (track popularity unavailable)
+- [x] Stay within available data — no deprecated endpoints
+- [x] Premium noted as available, but playback is out of scope this round
+
+## Open Questions (for /plan)
+- Decade bucket granularity (decades vs 5-year) and scope (current timeframe vs all-time)
+- Genre diversity index formula (unique-count vs normalized entropy of genre weights)
+- Listening clock viz: hour-of-day heatmap, day-of-week, or both; how to message the 50-play limit
+- Mainstream-ness: fold into the existing taste-over-time chart, or a separate module?
+- Chart components: build small BarChart + Heatmap components (reuse TrendChart only for lines)
+
+## Next Steps (what /plan needs)
+1. Backend: extend `taste-over-time` (artist popularity), add `release_date` to `/get-profile`, new `recently-played` endpoint
+2. Auth: add `user-read-recently-played` to SCOPES (re-auth)
+3. Frontend: new dashboard modules (decade, genre-depth, listening-clock) + small bar/heatmap chart components
+4. Decide module placement in the 2-col dashboard grid
+5. Acceptance: each module renders from real data, degrades gracefully when empty, no deprecated-endpoint calls
+
+---
+
+# Native iOS App (2026-08-03)
+
+## Problem / Opportunity
+
+Boomin Beats is desktop-only by explicit decision, not by neglect — the 2026-06-24 reflect logged
+*"no touch support (acceptable, app is min-width 800)"* when choosing HTML5 drag-and-drop for the
+Playlists panel. There is no responsive layer to build on. Meanwhile the app's most-used moments
+(what am I listening to, build me something for this drive) happen away from a desk.
+
+The opportunity is larger than access. The backend is *accidentally already a mobile API*:
+`profile.py`, `song_profile.py`, `llm_playlist.py`, and all of `spotify_actions.py` take the Spotify
+access token as a query param or body field and return plain JSON. They are stateless passthroughs.
+A native client can call them today with no server changes beyond hosting and one auth fix.
+
+Native also unlocks the things a browser structurally cannot do: a now-playing lock-screen widget,
+Siri/Shortcuts playlist generation, and the Spotify iOS SDK's real playback control instead of the
+Web API's queue-only surface.
+
+## Goals
+
+- Full functional parity with the web app, on iPhone, from anywhere
+- Keep the web app able to run against a **local** model (Ollama) on the Mac
+- Native-only capabilities: home/lock-screen widget, App Intents (Siri + Shortcuts), Spotify iOS SDK playback
+- Serve as a genuine SwiftUI learning vehicle — rebuild cost is partly the point, not purely waste
+- Harden the existing API before a second client depends on it
+
+## Audience
+
+Single user (owner), on personal devices. No App Store release planned; distribution via a paid
+Apple Developer account and TestFlight or direct device install. Spotify stays in development mode
+(25-user allowlist), which is ample.
+
+## Constraints
+
+**Inherited from the current codebase:**
+- Spotify PKCE is client-side with `REDIRECT_URI = 'http://127.0.0.1:5173/profile'` (`spotifyAuth.js:11`) — unusable from iOS
+- `PUBLIC_API_URL=http://127.0.0.1:8005` — meaningless on a phone; also blocked by App Transport Security as cleartext
+- The BYOK LLM key lives in a Starlette session cookie (`llm_connect.py:36`, read in `llm_playlist.py:30`), relying on `credentials: 'include'` and a CORS allowlist of one origin. Native clients have no origin. `plan.md` already flagged this as Medium-confidence and due for revisit.
+- `search.py` and `recommendations.py` use `SpotifyClientCredentials` — the client **secret** can never ship in an iOS binary, so these must stay server-side
+- Every chart (`Radar`, `AxisRadar`, `FeatureRadar`, `SongRadar`, `TrendChart`, `BarChart`, `ColumnChart`, `Heatmap`) is layercake + d3 emitting SVG — no port path
+- All cross-page state uses the `persisted()` localStorage helper in `stores.js`
+- Two areas the last reflect flagged as least-tested: account integration end-to-end, and AI analysis JSON parsing across Groq/Claude/OpenAI
+
+**New constraints introduced by going native + hosted:**
+- A publicly reachable backend needs *some* access control; today anything on the internet could burn the Spotify client-credentials quota
+- Reuse the **existing Spotify client ID** — audio-features, `/recommendations`, and related-artists access is grandfathered per client ID. Registering a new app for iOS likely loses it.
+- iOS cannot do reliable 15-minute background polling (`BGAppRefreshTask` is opportunistic); any scheduled sync must be server-side
+- Adding OAuth scopes forces full re-auth — a known recurring gotcha in this project
+
+## Ideas & Directions
+
+### D1 — Backend: one codebase, two deployments
+
+The stated need is "app from anywhere, *and* a local model on the web app." Rather than a hosted
+backend tunnelling back to the Mac's Ollama (fragile, and the tunnel becomes a hard dependency of
+every LLM request), run **the same FastAPI code in two places**:
+
+| Instance | Serves | LLM providers |
+|---|---|---|
+| Local (Mac, `:8005`, today's setup) | The web app, unchanged | Ollama / local models, plus remote |
+| Hosted (Fly / Render / Railway) | The iOS app | Remote only (Claude / OpenAI / Groq) |
+
+This works because **the backend holds no state** — no DB, no user records; all state is client-side
+in `localStorage`. Two stateless instances cannot drift. Selection is a `LLM_BACKEND=local|remote`
+config flag, which `ROADMAP.md` Phase 9 already anticipated.
+
+Cost: a second secret store, and the hosted instance needs device auth.
+
+### D2 — Auth: custom-scheme PKCE, shared client ID
+
+iOS runs its own PKCE via `ASWebAuthenticationSession` against a `boominbeats://callback` scheme
+registered as an *additional* redirect URI on the existing client ID. Verifier/challenge move from
+`crypto.subtle` to CryptoKit; tokens move from `localStorage` to Keychain. Drop `show_dialog: 'true'`
+— through `ASWebAuthenticationSession` it forces an extra system prompt on every login.
+
+### D3 — LLM key transport: retire the session cookie
+
+Replace `request.session['llm_api_key']` with an explicit `X-LLM-Provider` / `X-LLM-Key` header pair
+read per-request. The web app stores the key in localStorage (it already does, in `llmConfig`); iOS
+stores it in Keychain. This removes the cookie/CORS coupling entirely, works identically for both
+clients, and stops shipping the key in a signed-but-unencrypted cookie. Do this **before** the
+hosted deployment exists.
+
+### D4 — Charts as the SwiftUI learning curve, not a tax
+
+Four radar components are the largest single rewrite, and Swift Charts has no polar chart — they
+become hand-drawn `Path` + `GeometryReader` geometry. Framed as cost that's the worst item on the
+list; framed as SwiftUI education it's close to the ideal exercise (custom shapes, coordinate math,
+animation, `@ViewBuilder` composition). `TrendChart`/`BarChart`/`ColumnChart`/`Heatmap` map cleanly
+onto Swift Charts and are the gentle warm-up.
+
+### D5 — The Playlists panel gets *better* on iOS
+
+The panel's touch gap is a limitation of **HTML5** drag-and-drop specifically. SwiftUI's
+`.draggable` / `.dropDestination` are touch-native and first-class. Full parity here means parity of
+*capability*, not of interaction — the drag-to-playlist workspace should be redesigned for touch
+(long-press to lift, drop targets sized for thumbs), and can plausibly feel better than the web
+original.
+
+### D6 — Sequencing the native payoff earlier
+
+A now-playing widget depends only on auth plus the Spotify Web API — not on the rest of the app. It
+can land immediately after the auth milestone rather than waiting for parity, which puts a
+native-only win early instead of at the end of a long rebuild.
+
+## Recommendations
+
+1. **Harden before extending.** Close the two open items from the 2026-06-24 reflect (account
+   integration end-to-end; AI JSON parsing across all three providers) before any Swift is written.
+   Debugging those through a simulator costs materially more than through a browser console.
+2. **Two deployments of one codebase** (D1) — it satisfies "anywhere" and "local model" without a
+   tunnel, and the stateless design makes it nearly free.
+3. **Header-based LLM key** (D3) as the first code change, landed on the web app first so it's
+   proven before iOS depends on it.
+4. **Reuse the existing Spotify client ID.** Verify grandfathered endpoint access in the dashboard
+   before planning around the radar/recommendations features.
+5. **Add a device key to the hosted instance** — a long random secret in `X-Device-Key`, held in
+   Keychain, checked by middleware. Not real auth; appropriate for a single-user personal tool, and
+   it stops an open endpoint from burning your Spotify and LLM quota.
+6. **Pull the widget forward** (D6) so native value arrives before full parity does.
+7. **Establish the screenshot loop on day one.** The last two reflects both name visual iteration
+   without a feedback loop as the dominant time sink. Simulator screenshots via `xcrun simctl` +
+   SwiftUI previews should be set up before the first view is styled.
+
+### Suggested milestone order
+
+| # | Milestone | Notes |
+|---|---|---|
+| P0 | API hardening + `X-LLM-Key` migration + hosted deploy + device key | Backend only; web app keeps working throughout |
+| P1 | SwiftUI shell, Keychain, PKCE via custom scheme, Profile screen | Simplest real surface — learn SwiftUI here |
+| P1.5 | Now-playing widget + first App Intent | Early native payoff; depends only on P1 |
+| P2 | Search + Explore + song profile + radar chart | The custom `Path` work |
+| P3 | Playlist builder: chat, generation, save, queue | Reuses `/llm/generate-playlist/` unchanged |
+| P4 | Playlists panel with native drag-and-drop | Touch redesign, not a port |
+| P5 | Taste analytics dashboard | Swift Charts |
+| P6 | Spotify iOS SDK playback + full Siri/Shortcuts surface | The remaining native-only motivations |
+
+## Suggested Decisions
+
+- **Confirmed:** native SwiftUI (not PWA/wrapper); full functional parity as the end state; harden the API first
+- **Recommended, pending confirmation:**
+  - Two deployments of one codebase; `LLM_BACKEND=local|remote` flag
+  - Header-based LLM key, replacing session cookies, shipped to the web app first
+  - Existing Spotify client ID reused with an added `boominbeats://` redirect URI
+  - `X-Device-Key` shared secret guarding the hosted instance
+  - Widget pulled forward to P1.5
+  - Delete the dead code now rather than porting it: `sverdle/`, `Counter.svelte`, `recommendations.svelte`, `backend_server/`, `db.sqlite3`, `/account-analysis/` (returns `{"status": "coming soon"}` behind a live route)
+
+## Open Questions
+
+- Does the existing client ID still have working `/recommendations` and audio-features access? (Test before P2 — `ROADMAP.md` and the analytics brainstorm both already assume some endpoints are deprecated.)
+- Spotify iOS SDK auth: can it share the Web API token from the PKCE flow, or does it require its own session? Affects whether P6 is additive or a second auth path.
+- Minimum iOS target — 17 vs 18 — gates which SwiftUI and WidgetKit APIs are available.
+- Does the web app also become responsive eventually, or does it stay explicitly desktop-only now that a phone client exists? (Recommend: stays desktop-only; the decision is now deliberate rather than a gap.)
+- Where does the hosted instance live, and is the free tier's cold-start acceptable for LLM requests that already take seconds?
+- Offline behavior: cache last-known profile and playlists, or require connectivity?
+
+## Next Steps (what /plan needs)
+
+1. Scope and sequence **P0** concretely — the two hardening items, the `X-LLM-Key` migration across
+   `llm_connect.py` / `llm_playlist.py` / `song_profile.py` / `LLMSettingsPanel.svelte`, hosting
+   choice, and the device-key middleware
+2. Resolve the Spotify dashboard questions (grandfathered endpoints, added redirect URI) — these are
+   verification tasks, not design tasks, and they gate P2 and P6
+3. Decide the Xcode project shape: separate repo or a `src/ios/` directory alongside `src/web/`
+4. Pick the iOS minimum target and the networking approach (hand-rolled `URLSession` client vs. generating one from the FastAPI OpenAPI schema — the latter is already exported)
+5. Define acceptance for P1: PKCE login completes, token persists in Keychain across launches, Profile renders real top artists/tracks, and a simulator screenshot loop is in place

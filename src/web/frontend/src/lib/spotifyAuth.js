@@ -8,7 +8,7 @@ export const AUTHORIZE_ENDPOINT = 'https://accounts.spotify.com/authorize';
 export const TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
 export const REDIRECT_URI = 'http://127.0.0.1:5173/profile';
 export const SCOPES =
-	'user-top-read playlist-read-private playlist-modify-private playlist-modify-public user-modify-playback-state user-library-read user-library-modify';
+	'user-top-read playlist-read-private playlist-modify-private playlist-modify-public user-modify-playback-state user-library-read user-library-modify user-read-recently-played';
 
 // --- PKCE helpers (login only) ---
 function generateCodeVerifier(length = 128) {

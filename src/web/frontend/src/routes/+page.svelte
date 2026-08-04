@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { page, selectedSong, discoveryPlaylist, discoveryRequested } from '../stores.js';
+	import { llmHeaders } from '$lib/llmHeaders.js';
 	import SongSearch from '$lib/components/SongSearch.svelte';
 	import SongProfile from '$lib/components/SongProfile.svelte';
 	import PlaylistResult from '$lib/components/PlaylistResult.svelte';
@@ -42,8 +43,7 @@
 		try {
 			const res = await fetch(`${PUBLIC_API_URL}/llm/generate-playlist/`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
+				headers: { 'Content-Type': 'application/json', ...llmHeaders() },
 				body: JSON.stringify({ prompt, messages: [], count: 12 }),
 			});
 

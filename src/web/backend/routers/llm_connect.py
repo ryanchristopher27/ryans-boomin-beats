@@ -1,5 +1,17 @@
-from fastapi import APIRouter, Request
+"""Validate a BYOK LLM key.
+
+Stateless: the key is checked against the provider and discarded. Callers hold
+the key themselves (localStorage in the web app, Keychain on iOS) and send it
+per request via X-LLM-Provider / X-LLM-Key — see services/llm_auth.py.
+"""
+import logging
+
+from fastapi import APIRouter
 from pydantic import BaseModel
+
+from services.llm_auth import SUPPORTED_PROVIDERS
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -10,36 +22,30 @@ class ConnectRequest(BaseModel):
 
 
 @router.post("/llm/connect/")
-async def llm_connect(body: ConnectRequest, request: Request):
+async def llm_connect(body: ConnectRequest):
+    provider = body.provider.strip().lower()
+    if provider not in SUPPORTED_PROVIDERS:
+        return {'error': f'Unknown provider: {body.provider}'}
+
     try:
-        if body.provider == 'claude':
+        if provider == 'claude':
             import anthropic
             client = anthropic.Anthropic(api_key=body.api_key)
             client.messages.create(
-                model='claude-haiku-4-5-20251001',
+                model='claude-haiku-4-5',
                 max_tokens=1,
                 messages=[{'role': 'user', 'content': 'hi'}],
             )
-        elif body.provider == 'openai':
+        elif provider == 'openai':
             import openai
             client = openai.OpenAI(api_key=body.api_key)
             client.models.list()
-        elif body.provider == 'groq':
+        elif provider == 'groq':
             from groq import Groq
             client = Groq(api_key=body.api_key)
             client.models.list()
-        else:
-            return {'error': f'Unknown provider: {body.provider}'}
-
-        request.session['llm_provider'] = body.provider
-        request.session['llm_api_key'] = body.api_key
-        return {'connected': True}
-
     except Exception as e:
+        log.info('[llm-connect] %s validation failed: %s', provider, e)
         return {'error': str(e)}
 
-
-@router.get("/llm/status/")
-def llm_status(request: Request):
-    provider = request.session.get('llm_provider')
-    return {'connected': provider is not None, 'provider': provider}
+    return {'connected': True, 'provider': provider}

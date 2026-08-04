@@ -1,6 +1,7 @@
 <script>
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { chatMessages, generatedPlaylist, llmConfig } from '../../stores.js';
+	import { llmHeaders } from '../llmHeaders.js';
 
 	export let onResult = (data) => {};
 
@@ -24,8 +25,7 @@
 		try {
 			const res = await fetch(`${PUBLIC_API_URL}/llm/generate-playlist/`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
+				headers: { 'Content-Type': 'application/json', ...llmHeaders() },
 				body: JSON.stringify({
 					prompt: currentPrompt,
 					messages: $chatMessages.slice(0, -1),

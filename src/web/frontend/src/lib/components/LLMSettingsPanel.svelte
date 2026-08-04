@@ -13,10 +13,11 @@
 		loading = true;
 		errorMsg = '';
 		try {
+			// /llm/connect/ only validates the key against the provider and
+			// discards it; nothing is stored server-side any more.
 			const res = await fetch(`${PUBLIC_API_URL}/llm/connect/`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				credentials: 'include',
 				body: JSON.stringify({ provider, api_key: apiKey }),
 			});
 			const data = await res.json();

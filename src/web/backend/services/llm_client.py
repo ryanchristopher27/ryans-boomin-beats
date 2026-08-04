@@ -20,7 +20,7 @@ class LLMClient:
         client = anthropic.Anthropic(api_key=self.api_key)
         response = await asyncio.to_thread(
             client.messages.create,
-            model='claude-sonnet-4-6',
+            model='claude-sonnet-5',
             max_tokens=2048,
             system=system_prompt,
             messages=messages,

@@ -118,6 +118,80 @@ def top_tracks(
     return {'tracks': tracks}
 
 
+@router.get("/spotify/taste-over-time/")
+def taste_over_time(access_token: Optional[str] = Query(default=None)):
+    """Aggregate listening metrics across the three timeframes. Uses cheap
+    Spotify-native data (popularity, release year) and tries audio-features
+    (deprecated for new apps) — degrading to audio_features=None if unavailable."""
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
+    spotify = Spotify(auth=access_token)
+
+    ranges = [('short_term', '1 Month'), ('medium_term', '6 Months'), ('long_term', 'All Time')]
+    af_dims = {'Energy': 'energy', 'Danceability': 'danceability', 'Positivity': 'valence', 'Acousticness': 'acousticness'}
+
+    timeframes, release_year, avg_duration_ms, explicit_pct = [], [], [], []
+    audio = {k: [] for k in af_dims}
+    audio_available = True
+
+    for rng, label in ranges:
+        timeframes.append(label)
+        tracks = spotify.current_user_top_tracks(limit=20, time_range=rng).get('items', [])
+
+        years, durations, expl = [], [], 0
+        for t in tracks:
+            rd = t.get('album', {}).get('release_date', '') or ''
+            if rd[:4].isdigit():
+                years.append(int(rd[:4]))
+            if t.get('duration_ms'):
+                durations.append(t['duration_ms'])
+            if t.get('explicit'):
+                expl += 1
+        release_year.append(round(sum(years) / len(years)) if years else 0)
+        avg_duration_ms.append(round(sum(durations) / len(durations)) if durations else 0)
+        explicit_pct.append(round(100 * expl / len(tracks)) if tracks else 0)
+
+        # Audio features are deprecated for apps created after 2024-11-27; this
+        # degrades to audio_features=None when unavailable.
+        if audio_available:
+            try:
+                ids = [t['id'] for t in tracks if t.get('id')]
+                feats = [f for f in (spotify.audio_features(ids) if ids else []) if f]
+                if feats:
+                    for k, sk in af_dims.items():
+                        vals = [f[sk] for f in feats if sk in f]
+                        audio[k].append(round(100 * sum(vals) / len(vals)) if vals else 0)
+                else:
+                    audio_available = False
+            except Exception:
+                audio_available = False
+
+    return {
+        'timeframes': timeframes,
+        'release_year': release_year,
+        'avg_duration_ms': avg_duration_ms,
+        'explicit_pct': explicit_pct,
+        'audio_features': audio if audio_available else None,
+    }
+
+
+@router.get("/spotify/recently-played/")
+def recently_played(access_token: Optional[str] = Query(default=None)):
+    """Return play timestamps for the listening clock. Spotify caps this at the
+    50 most-recent plays. Needs the user-read-recently-played scope."""
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
+    spotify = Spotify(auth=access_token)
+    try:
+        res = spotify.current_user_recently_played(limit=50)
+    except SpotifyException as e:
+        if e.http_status in (401, 403):
+            raise HTTPException(status_code=403, detail="reconnect")
+        raise HTTPException(status_code=500, detail=str(e))
+    played_at = [it['played_at'] for it in res.get('items', []) if it.get('played_at')]
+    return {'played_at': played_at, 'count': len(played_at)}
+
+
 @router.post("/spotify/save-track/")
 def save_track(body: SaveTrackRequest):
     if not body.access_token:

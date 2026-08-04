@@ -1,6 +1,9 @@
+import logging
 import re
 import httpx
 from config import LASTFM_API_KEY
+
+log = logging.getLogger(__name__)
 
 BASE_URL = 'http://ws.audioscrobbler.com/2.0/'
 
@@ -14,14 +17,26 @@ async def track_info(title: str, artist: str) -> dict:
         'format': 'json',
         'autocorrect': 1,
     }
+    if not LASTFM_API_KEY:
+        log.warning('[lastfm] LASTFM_API_KEY is unset — tags and play counts unavailable')
+        return _empty()
+
     try:
         async with httpx.AsyncClient() as client:
             res = await client.get(BASE_URL, params=params, timeout=5.0)
             data = res.json()
-    except Exception:
+    except Exception as e:
+        log.warning('[lastfm] request failed for %r by %r: %s', title, artist, e)
         return _empty()
 
-    if 'error' in data or 'track' not in data:
+    # Error 10 is an invalid API key — a config problem, not a missing track,
+    # and it silently degraded every profile to zero tags before this log.
+    if 'error' in data:
+        log.warning('[lastfm] API error %s: %s', data.get('error'), data.get('message'))
+        return _empty()
+
+    if 'track' not in data:
+        log.info('[lastfm] no track match for %r by %r', title, artist)
         return _empty()
 
     track = data['track']

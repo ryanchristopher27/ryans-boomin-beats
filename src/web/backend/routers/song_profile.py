@@ -1,8 +1,12 @@
-import json
 import asyncio
-from fastapi import APIRouter, Query, Request
+import logging
+from fastapi import APIRouter, Depends, Query
 from services import lastfm_client
+from services.llm_auth import LLMCredentials, get_optional_llm_credentials
 from services.llm_client import LLMClient
+from services.llm_json import LLMParseError, extract_json
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -37,17 +41,34 @@ Guidance:
 """
 
 
-def _empty_analysis() -> dict:
-    return {'analysis_text': None, 'scores': None, 'tags': []}
+def _empty_analysis(error: str | None = None) -> dict:
+    return {'analysis_text': None, 'scores': None, 'tags': [], 'error': error}
+
+
+def _coerce_score(val) -> int | None:
+    """Accept 85, 85.0, or "85"; reject bools and anything else. Clamp to 0-100."""
+    if isinstance(val, bool):  # bool is a subclass of int — would read True as 1
+        return None
+    if isinstance(val, (int, float)):
+        return max(0, min(100, int(val)))
+    if isinstance(val, str):
+        try:
+            return max(0, min(100, int(float(val.strip()))))
+        except ValueError:
+            return None
+    return None
 
 
 def _parse_analysis(raw: str) -> dict:
     """Parse the LLM's JSON response into analysis text, scores, and tags."""
     try:
-        cleaned = raw.strip().removeprefix('```json').removeprefix('```').removesuffix('```').strip()
-        data = json.loads(cleaned)
-    except Exception:
-        return _empty_analysis()
+        data = extract_json(raw, context='song-profile')
+    except LLMParseError as e:
+        return _empty_analysis(f'Model did not return valid JSON: {e.snippet}')
+
+    if not isinstance(data, dict):
+        log.warning('[song-profile] expected a JSON object, got %s', type(data).__name__)
+        return _empty_analysis(f'Model returned a JSON {type(data).__name__}, expected an object.')
 
     # Rebuild the labeled-lines analysis string the frontend already understands.
     analysis_obj = data.get('analysis', {})
@@ -56,22 +77,41 @@ def _parse_analysis(raw: str) -> dict:
     else:
         analysis_text = None
 
-    # Validate + clamp scores.
+    # Validate + clamp scores. Keys are matched case-insensitively — models
+    # regularly return "energy" instead of "Energy", which previously dropped
+    # the whole radar.
     raw_scores = data.get('scores', {}) or {}
     scores = None
+    missing: list[str] = []
     if isinstance(raw_scores, dict):
+        lowered = {str(k).strip().lower(): v for k, v in raw_scores.items()}
         parsed_scores = {}
         for key in SCORE_KEYS:
-            val = raw_scores.get(key)
-            if isinstance(val, (int, float)):
-                parsed_scores[key] = max(0, min(100, int(val)))
-        if len(parsed_scores) == len(SCORE_KEYS):
+            coerced = _coerce_score(lowered.get(key.lower()))
+            if coerced is None:
+                missing.append(key)
+            else:
+                parsed_scores[key] = coerced
+        # The radar needs all six axes; a partial set would render a misleading shape.
+        if not missing:
             scores = parsed_scores
+    else:
+        missing = list(SCORE_KEYS)
+
+    error = None
+    if analysis_text is None:
+        error = 'Model response had no "analysis" section.'
+        log.warning('[song-profile] missing analysis section in model output')
+    elif missing:
+        error = f'Model omitted scores: {", ".join(missing)}. Radar hidden.'
+        log.warning('[song-profile] missing scores: %s', missing)
 
     tags = data.get('tags', []) or []
+    if not isinstance(tags, list):
+        tags = []
     tags = [str(t).strip().lower() for t in tags if str(t).strip()]
 
-    return {'analysis_text': analysis_text, 'scores': scores, 'tags': tags}
+    return {'analysis_text': analysis_text, 'scores': scores, 'tags': tags, 'error': error}
 
 
 async def _llm_analysis(title: str, artist: str, tags: list, provider: str, api_key: str) -> dict:
@@ -101,9 +141,13 @@ def _merge_tags(lastfm_tags: list, ai_tags: list) -> list:
 
 
 @router.get('/song/profile/')
-async def song_profile(request: Request, title: str = Query(...), artist: str = Query(...)):
-    provider = request.session.get('llm_provider')
-    api_key = request.session.get('llm_api_key')
+async def song_profile(
+    title: str = Query(...),
+    artist: str = Query(...),
+    creds: LLMCredentials | None = Depends(get_optional_llm_credentials),
+):
+    provider = creds.provider if creds else None
+    api_key = creds.api_key if creds else None
 
     if provider and api_key:
         lastfm_data, analysis = await asyncio.gather(
@@ -112,15 +156,20 @@ async def song_profile(request: Request, title: str = Query(...), artist: str = 
             return_exceptions=True,
         )
         if isinstance(lastfm_data, Exception):
+            log.warning('[song-profile] Last.fm lookup failed: %s', lastfm_data)
             lastfm_data = lastfm_client._empty()
         if isinstance(analysis, Exception):
-            analysis = _empty_analysis()
+            log.warning('[song-profile] %s call failed: %s', provider, analysis)
+            analysis = _empty_analysis(f'{provider} request failed: {analysis}')
         # Re-run analysis grounded in the actual tags if Last.fm returned them.
-        if not isinstance(lastfm_data, Exception) and lastfm_data['tags']:
+        if lastfm_data['tags']:
             try:
                 analysis = await _llm_analysis(title, artist, lastfm_data['tags'], provider, api_key)
-            except Exception:
-                pass
+            except Exception as e:
+                # Keep the untagged analysis from the first call if it succeeded.
+                log.warning('[song-profile] tag-grounded retry failed: %s', e)
+                if analysis['analysis_text'] is None:
+                    analysis = _empty_analysis(f'{provider} request failed: {e}')
     else:
         lastfm_data = await lastfm_client.track_info(title, artist)
         analysis = _empty_analysis()
@@ -137,4 +186,7 @@ async def song_profile(request: Request, title: str = Query(...), artist: str = 
         'analysis': analysis['analysis_text'],
         'scores': analysis['scores'],
         'has_llm': analysis['analysis_text'] is not None,
+        # Distinguishes "no LLM connected" (null) from "LLM connected but the
+        # call or the parse failed" (a message) — previously indistinguishable.
+        'analysis_error': analysis.get('error'),
     }

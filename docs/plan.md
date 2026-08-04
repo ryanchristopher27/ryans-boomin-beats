@@ -1062,3 +1062,621 @@ Rule of thumb: **the toggle is the single source of "stay open" intent.** "+" wi
 | "+" when toggle ON | Anchored popover quick-picker at the card | Panel's already a workspace; in-place add is fastest, no mode | 2026-06-23 |
 | "+" when toggle OFF | Transient panel open ("pick a playlist for this song"), auto-close after add | Toggle is the only "stay open" control; "+" is a just-in-time peek | 2026-06-23 |
 | Tile grid columns | Fixed 2 columns (v1) | Slim panel; simple to start; can revisit | 2026-06-23 |
+
+---
+
+# Plan — Profile Page Revamp (Taste Dashboard)
+Date: 2026-06-24
+Status: Draft
+Brainstorm: docs/brainstorm.md (Profile Page Revamp — Taste Dashboard, 2026-06-24)
+
+## Overview
+Evolve the profile page from a static stats view into a modular taste dashboard. Phased: **P1** delivers the quick, high-consistency wins (integrated controls, SongCard-based track list, genre radar); **P2** adds the modular layout (expand/collapse, hide-others, per-module scroll); **P3** adds taste-over-time charts from Spotify-native data (gated on an audio-features availability test). This plan details P1; P2/P3 are scoped at a high level.
+
+## Goals & Success Criteria
+- Controls (num-tops + time-period) integrated into a compact inline toolbar, not a standalone section
+- Top-tracks list reuses **SongCard**, inheriting like / add-to-playlist (and explore)
+- A **genre radar** showing the user's most-listened genres (from top artists, rank-weighted)
+- **Success (P1) = profile shows SongCard-based tracks with working like/add, a genre radar reflecting top artists, and inline controls that re-fetch on change — visually consistent with the rest of the app**
+
+## Scope
+### In Scope (P1)
+- Generalize `SongRadar` into a reusable axes-driven radar; migrate the song-profile usage
+- Adapter: profile `top_tracks` (flat) → SongCard's `{ spotify: {…} }` shape; render tracks via SongCard
+- Genre aggregation (client-side, from `top_artists[].genres`, rank-weighted) → top 6 → genre radar
+- Replace the standalone controls bar with a compact inline toolbar (global timeframe + num-tops)
+
+### Out of Scope (P1 — later phases)
+- **P2:** module wrapper (summary/expanded states, maximize-hides-others, per-module scroll)
+- **P3:** taste-over-time charts; the audio-features availability test
+- LLM-based aggregate scoring (last-resort fallback only, P3)
+- Changes to `/get-profile/` beyond what's already returned
+
+## Tech Stack & Architecture
+- **No backend changes for P1.** `/get-profile/` already returns `top_artists` (with `genres`, `popularity`, `images`, `url`) and `top_tracks` (`title, artists, id, image, duration_ms, explicit, track_url, album`).
+- **Generalize `SongRadar`** → accept `axes: [{label, value}]` + optional `max` (defaults to 100 or the max value). The current 6 fixed dimensions become a caller-provided array. The song-profile passes its 6 score axes; the genre radar passes top-6 genre axes (max = top genre's weight). One component, two uses. Keeps the existing visual (gradient fill, tight viewBox, label+value).
+- **SongCard adapter** — map each `top_track` to `{ spotify: { id, title, artists, album, image, track_url, duration_ms } }` (no `reason`). SongCard's like (`onSaveToggle`) and add (`pendingAdd`/drag) already work app-wide via the global token. `onExplore` wires to navigate to Explore with that song selected (`$selectedSong = {…}; goto('/')`).
+- **Genre aggregation** (client-side): for each top artist at rank `i` (0-based), add weight `(N - i)` to each of its genres; sum per genre; take top 6 by weight. Rank-weighting approximates "how much you listen," not raw frequency. Render via the generalized radar (max = top genre weight).
+- **Controls** — a slim inline toolbar (right-aligned in a header row) holding the time-period + num-tops selectors; **global** (drives the lists + genre radar via the existing `getProfile()` re-fetch). The over-time charts (P3) will own their own axis.
+
+## Milestones
+| # | Milestone | Description | Dependencies |
+|---|-----------|-------------|--------------|
+| PR1 | Generalize radar | `SongRadar` → axes-driven; migrate song-profile (no visual regression) | — |
+| PR2 | Tracks as SongCard | Adapter + render top_tracks via SongCard; like/add/explore | — |
+| PR3 | Genre radar | Aggregate top artists' genres (rank-weighted, top 6); render via PR1 | PR1 |
+| PR4 | Integrate controls | Compact inline toolbar (global timeframe + num-tops); remove standalone bar | PR2 |
+| P2 | Modular dashboard | Module wrapper: summary/expand, maximize-hides-others, per-module scroll | PR1–PR4 |
+| P3 | Taste over time | Native-data charts (popularity, era; audio-features if available) | audio-features test |
+
+## Task Breakdown (P1)
+
+### PR1 — Generalize the radar
+- Change `SongRadar` props to `axes: [{label, value}]`, optional `max`
+- Compute geometry from `axes.length` (already parameterized by `order.length` — generalize to the passed array); scale by `value / max`
+- Update `SongProfile` to pass its 6 score fields as `axes`
+- Verify the song profile radar looks identical
+
+### PR2 — Top tracks as SongCard
+- `toSongCardShape(track)` adapter → `{ spotify: { id, title, artists, album, image, track_url, duration_ms } }`
+- Replace the profile's `top_tracks` list-row markup with `{#each}` of `SongCard`
+- Wire `onSaveToggle` (batch saved-state check like PlaylistResult) and add (default works)
+- `onExplore` → set `$selectedSong` + `goto('/')`
+- Keep Top Artists as list rows for now (no SongCard equiv for artists)
+
+### PR3 — Genre radar
+- `aggregateGenres(top_artists)` → rank-weighted counts → top 6 `{label, value}`
+- Handle sparse data: if < 3 distinct genres, hide the radar (a radar needs ≥3 axes) and show a small note
+- Render `<SongRadar axes={genreAxes} max={topWeight} />` in a "Top genres" section
+
+### PR4 — Integrate controls
+- Build a compact toolbar component (or inline) with the time-period + num-tops selectors styled like the panel's sort controls
+- Place it in a header row (e.g., above the lists, right-aligned, slim) — not the full-width standalone bar
+- Keep the existing `setNumberOfTops`/`setTimePeriod` → `getProfile()` re-fetch wiring
+- Remove the old `.top-parameters-div` bar
+
+## Risks & Mitigations
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Radar generalization regresses the song profile radar | Med | Med | Keep visuals identical; verify song profile after refactor |
+| Sparse/empty genres for some artists/users | Med | Low | Rank-weighted sum tolerates gaps; hide radar if < 3 genres |
+| SongCard adapter shape mismatch | Low | Med | top_tracks already has all needed fields; `reason` optional |
+| Explore-from-profile cross-page nav state | Low | Low | Reuse `$selectedSong` store + `goto('/')`; it's already persisted |
+| Global timeframe vs over-time axis confusion (P3) | Low | Low | Decided: global drives filter-modules; over-time owns its axis |
+
+## Dependencies
+- Existing `/get-profile/`, global token (M0), SongCard with like/add (M1–M2), `$selectedSong` store
+- P3 only: a valid audio-features test result
+
+## Open Questions
+- Genre aggregation: rank-weighted (planned) vs raw frequency — confirm the weighting feels right once rendered
+- Exact toolbar placement (per-list header vs one page-level toolbar)
+- Whether Top Artists should also become card-style rows (no current artist-card component)
+- **P3 gate:** does the app have audio-features access? (test before planning P3 in detail)
+
+## Decisions Log
+| Decision | Choice | Reasoning | Date |
+|----------|--------|-----------|------|
+| Phasing | P1 quick wins → P2 modular → P3 over-time | Brainstorm; de-risks the expensive part | 2026-06-24 |
+| Radar reuse | Generalize SongRadar to axes-driven | One component for song + genre radars; DRY | 2026-06-24 |
+| Track rows | Reuse SongCard via adapter | Consistency + free like/add/explore | 2026-06-24 |
+| Genre weighting | Rank-weighted sum, top 6 | Approximates listening share better than raw count | 2026-06-24 |
+| Timeframe control | Global for filter-modules; over-time owns its axis | Resolves the filter-vs-axis tension | 2026-06-24 |
+| Taste-chart data | Spotify-native first, LLM last-resort | Sidesteps the LLM cost problem | 2026-06-24 |
+
+---
+
+# Plan — Taste Analytics Expansion
+Date: 2026-06-24
+Status: Draft
+Brainstorm: docs/brainstorm.md (Taste Analytics Expansion, 2026-06-24)
+
+## Overview
+Add four taste-analytics modules to the profile dashboard — **mainstream-ness**, **decade distribution**, **genre depth + diversity**, **listening clock** — using only data a post-2024-11-27 Spotify app can read. Reuses the P2 modular dashboard. TA1–TA3 ship with no new scope; TA4 adds `user-read-recently-played` (one re-auth).
+
+## Goals & Success Criteria
+- Four modules rendering from real Spotify-native data, no deprecated endpoints
+- Recover the "mainstream-ness" metric (lost in P3) via artist popularity
+- **Success = each module shows real, non-empty data for a logged-in user; the dashboard stays modular/scrollable; nothing calls audio-features/recommendations/related-artists**
+
+## Scope
+### In Scope
+- TA1: artist-popularity "mainstream-ness" (extend taste-over-time) + obscure/popular artist callout
+- TA2: decade distribution (add `release_date` to `/get-profile`; new Eras module + BarChart)
+- TA3: genre depth + diversity (ranked bars + diversity index, folded into the Genres module)
+- TA4: listening clock (new scope + `recently-played` endpoint + Heatmap module)
+- Small reusable chart components: `BarChart`, `Heatmap`
+
+### Out of Scope
+- Playback / Web Playback SDK (deferred; Premium available but not this round)
+- Recently-played as a discovery seed (TA4 scope unlocks it; not built here)
+- Full listening history (Spotify caps recently-played at 50)
+- Anything via deprecated endpoints
+
+## Tech Stack & Architecture
+- Reuses the P2 `DashboardModule` system and the existing per-timeframe `/get-profile` + all-timeframe `/spotify/taste-over-time` data flow.
+- **TA1 — Mainstream-ness:** extend `taste-over-time` to also fetch top **artists** per timeframe and return `artist_popularity: [p1,p2,p3]`. Frontend adds it as the taste chart's 0–100 line (folds into the existing "Taste over time" module; era drops to a stat). "Most obscure / most popular artist" comes from the current-timeframe `/get-profile` top_artists.
+- **TA2 — Decade distribution:** add `release_date` to `/get-profile` top_tracks; client buckets years into decades for the selected timeframe; render via a new `BarChart`.
+- **TA3 — Genre depth + diversity:** reuse the existing rank-weighted genre aggregation (full list, not just top 6) → ranked `BarChart` + a **diversity index** (normalized entropy of genre weights → 0–100). Folds into the Genres module alongside the radar.
+- **TA4 — Listening clock:** add `user-read-recently-played` to SCOPES (re-auth). New `GET /spotify/recently-played/` → `/me/player/recently-played?limit=50` → aggregate `played_at` into hour-of-day (0–23) and day-of-week buckets. Render via a new `Heatmap`. Label "based on your last 50 plays."
+- **New components:** `BarChart.svelte` (reused by TA2 + TA3), `Heatmap.svelte` (TA4). `TrendChart` stays line-only.
+
+## Milestones
+| # | Milestone | Description | Dependencies |
+|---|-----------|-------------|--------------|
+| TA0 | Verify artist popularity | Confirm `artist.popularity` is NOT stripped (one check) — gates TA1 | — |
+| TA1 | Mainstream-ness | Artist popularity in taste-over-time + chart line + obscure/popular callout | TA0 |
+| TA2 | Decade distribution | `release_date` in get-profile; Eras module + BarChart | — |
+| TA3 | Genre depth + diversity | Ranked genre bars + diversity index in Genres module | — |
+| TA4 | Listening clock | New scope + recently-played endpoint + Heatmap module | re-auth |
+
+## Task Breakdown
+
+### TA0 — Verify artist popularity (gate)
+- Hit `/get-profile` (or the extended endpoint) and confirm top_artists `popularity` is non-zero. We proved *track* popularity is stripped but never confirmed *artist* popularity. If it's also 0 → drop TA1's mainstream line and use a different proxy (or cut it).
+
+### TA1 — Mainstream-ness
+- `taste-over-time`: per timeframe, `current_user_top_artists(limit=20, time_range)`, avg `popularity` → `artist_popularity[]`.
+- Frontend: taste chart series = artist popularity (0–100) line; keep era + length + explicit as stat trends.
+- Callout: most obscure (min popularity) / most popular (max) artist from current top_artists.
+
+### TA2 — Decade distribution
+- Backend: add `release_date` to `/get-profile` top_tracks mapping.
+- Frontend: `decadeBuckets(top_tracks)` → {1980s: n, …}; render `BarChart`. Respects the global timeframe.
+
+### TA3 — Genre depth + diversity
+- Reuse `aggregateGenres` but return the full ranked list + total weight.
+- Diversity index: normalized Shannon entropy of genre weights → 0–100 ("varied" vs "focused").
+- Render ranked `BarChart` (top ~8) + the index inside the Genres module (with the radar).
+
+### TA4 — Listening clock
+- `spotifyAuth.js`: add `user-read-recently-played` to SCOPES (note: re-auth required).
+- Backend: `GET /spotify/recently-played/` → fetch 50, bucket `played_at` (parse ISO → local hour/day), return `by_hour[24]` + `by_day[7]`.
+- Frontend: `Heatmap` (hour-of-day primary; day-of-week secondary) in a new "Listening clock" module; label the 50-play window.
+
+## Risks & Mitigations
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| **Artist popularity also stripped** (like track popularity) | Med | High for TA1 | TA0 verifies first; if gone, drop the mainstream line / use a proxy |
+| recently-played 50-cap → sparse/empty clock | Med | Med | Honest labeling; hide module if <~10 plays |
+| `played_at` timezone (UTC vs local) skews the clock | Med | Low | Parse to the user's local time on the client |
+| Genres sparse → weak diversity index | Low | Low | Index handles small N; hide if <3 genres |
+| Dashboard gets crowded (6 modules) | Low | Low | 2-col grid + expand/collapse already handles it |
+
+## Dependencies
+- P2 dashboard, `/get-profile`, `/spotify/taste-over-time`, global token, existing genre aggregation
+- TA4: `user-read-recently-played` scope (re-auth)
+
+## Open Questions
+- Listening clock viz: hour-of-day bars + separate day-of-week, or a single day×hour grid heatmap?
+- Diversity index formula: normalized entropy (planned) vs simple distinct-genre count
+- Decade granularity: decades (planned) vs 5-year buckets; current timeframe (planned) vs all-time
+- Mainstream-ness: confirmed folding into the taste module (vs its own) — OK?
+
+## Decisions Log
+| Decision | Choice | Reasoning | Date |
+|----------|--------|-----------|------|
+| Mainstream metric | Artist popularity (not track) | Track popularity stripped; artist may be available (TA0 gate) | 2026-06-24 |
+| Mainstream placement | Fold into taste-over-time module | It's a time series; recovers that chart's line | 2026-06-24 |
+| Genre depth placement | Fold into the Genres module | Radar + breakdown + diversity in one place | 2026-06-24 |
+| Diversity index | Normalized Shannon entropy → 0–100 | Captures spread better than a raw count | 2026-06-24 |
+| Decade buckets | Decades, current timeframe | Cleanest histogram; respects the controls | 2026-06-24 |
+| New components | BarChart (TA2+TA3), Heatmap (TA4) | TrendChart is line-only; bars/heatmap are distinct | 2026-06-24 |
+| Scope sequencing | TA1–TA3 (no scope) before TA4 (re-auth) | Defer the re-auth to last | 2026-06-24 |
+
+### TA0 result — artist popularity is stripped (2026-06-24)
+**Verified:** `/get-profile` top_artists `popularity` → `[0,0,0,…]`. Artist popularity is stripped for this app, just like track popularity. There is no popularity signal available.
+
+**Decision: drop TA1 (mainstream-ness).** No viable popularity proxy to ship. The taste-over-time chart stays as the **release-year (era)** line + stat trends (its current state). Possible future probe: artist `followers.total` as a mainstream proxy — but that's a separate verification, not in scope now.
+
+**Revised milestone set:** TA2 (decade distribution) → TA3 (genre depth + diversity) → TA4 (listening clock). TA2/TA3 carry no new scope; TA4 needs the re-auth.
+
+**Brain skill updated:** `domains/spotify/rules.md` + `cursor-rule.mdc` now note popularity is stripped from BOTH track and artist objects (re-run `install/install.sh` to propagate the Cursor rule).
+
+---
+
+# Plan — Native iOS App
+Date: 2026-08-03
+Status: Active
+Brainstorm: `docs/brainstorm.md` → "Native iOS App (2026-08-03)"
+Depth: high-level for P1–P6; **P0 at task level** (it is the immediate next work)
+
+---
+
+## Overview
+
+Add a native SwiftUI iOS app with full functional parity to the web app, reachable from anywhere,
+while the web app keeps the ability to run against a local model on the Mac. The backend is already
+an accidental mobile API — `profile.py`, `song_profile.py`, `llm_playlist.py`, and `spotify_actions.py`
+take the Spotify token per request and return plain JSON — so the server work is small relative to
+the client rebuild.
+
+**P0 is backend-only and ships before any Swift is written.** It closes the two open items from the
+2026-06-24 reflect, migrates the LLM key off session cookies, and stands up the hosted instance. The
+web app keeps working throughout.
+
+---
+
+## Goals & Success Criteria
+
+| Goal | Success Criteria |
+|------|-----------------|
+| Harden before extending | Account integration and AI-analysis paths exercised end-to-end; failures fixed, not just observed |
+| Decouple the LLM key from cookies | `/llm/*`, `/song/profile/`, `/llm/generate-playlist/` work from a client with no cookie jar and no origin |
+| App works from anywhere | Hosted FastAPI instance reachable over TLS, guarded by a device key |
+| Web app keeps a local-model path | Local instance still serves `:5173`; `ENABLE_LOCAL_LLM` gates Ollama-backed providers |
+| Full iOS parity (end state) | Profile, Explore, Builder, Playlists panel, analytics — all native |
+| Native-only payoff | Now-playing widget, App Intents/Siri, Spotify iOS SDK playback |
+| SwiftUI learning value | Charts rebuilt by hand rather than wrapped in a WebView |
+
+---
+
+## Scope
+
+### In Scope
+- P0: API hardening, `X-LLM-Key` migration, hosted deployment, device-key middleware, dead-code removal
+- P1–P6: native SwiftUI client to full functional parity, plus widget / App Intents / iOS SDK playback
+- Spotify PKCE via `ASWebAuthenticationSession` + custom URL scheme, tokens in Keychain
+- Two deployments of one FastAPI codebase (local for web, hosted for iOS)
+
+### Out of Scope
+- Making the web app responsive. It stays deliberately desktop-only (min-width 800) — the phone is
+  now the mobile surface. Revisit only if the two clients diverge in an annoying way.
+- App Store release. Personal distribution via a paid developer account / TestFlight.
+- Adding Ollama itself. P0 only leaves the door open (`ENABLE_LOCAL_LLM`); wiring it is separate work.
+- Any database. The backend stays stateless — that property is what makes two deployments free.
+
+---
+
+## Tech Stack & Architecture
+
+**Backend: one codebase, two deployments.** Chosen over a hosted-backend-tunnelling-to-Ollama design
+because the tunnel would become a hard dependency of every LLM request, and over local-only because
+"from anywhere" was a stated goal. Works because there is no shared state to drift.
+
+| Instance | Serves | Guard | LLM providers |
+|---|---|---|---|
+| Local (Mac, `:8005`) | The web app | none (localhost) | Remote + local (Ollama, later) |
+| Hosted (Fly/Render/Railway) | The iOS app | `X-Device-Key` | Remote only |
+
+**LLM key transport.** `X-LLM-Provider` + `X-LLM-Key` headers, read per request via a FastAPI
+dependency. Replaces `request.session` in three routers and `credentials: 'include'` in four
+frontend files. Chosen over keeping cookies because a native client has no origin, and over a
+server-side keystore because that would introduce the state the two-deployment design depends on
+not having.
+
+**Hosted-instance auth.** A long random secret in `X-Device-Key`, checked by middleware, stored in
+iOS Keychain. Not real multi-user auth — appropriate for a single-user tool, and it stops an open
+endpoint from burning the Spotify client-credentials quota and inviting traffic against BYOK keys.
+Middleware is a no-op when `DEVICE_KEY` is unset, so local dev is unaffected.
+
+**iOS.** SwiftUI, minimum target TBD (17 vs 18 — gates WidgetKit and Charts APIs). Networking via
+`URLSession` with a hand-rolled thin client, or generated from the exported OpenAPI schema (decide
+in P1). Tokens and keys in Keychain; cross-screen state in SwiftData/UserDefaults, replacing the
+`persisted()` localStorage helper.
+
+**Charts.** Swift Charts for bar/column/trend/heatmap. The four radar components become hand-drawn
+`Path` + `GeometryReader` — Swift Charts has no polar chart. Treated as the SwiftUI learning
+centerpiece rather than as a cost to avoid.
+
+---
+
+## Milestones
+
+| # | Milestone | Description | Dependencies |
+|---|---|---|---|
+| P0 | Backend hardening + hosted deploy | Close reflect items, `X-LLM-Key` migration, hosted instance, device key, dead-code removal | — |
+| P1 | SwiftUI shell + auth + Profile | Xcode project, PKCE via custom scheme, Keychain, Profile screen, screenshot loop | P0 |
+| P1.5 | Now-playing widget + first App Intent | Early native payoff; needs only auth + Spotify Web API | P1 |
+| P2 | Search + Explore + song profile + radar | The custom `Path` chart work | P1, V1 |
+| P3 | Playlist builder | Chat, generation, save, queue — reuses `/llm/generate-playlist/` unchanged | P1 |
+| P4 | Playlists panel | Native `.draggable`/`.dropDestination`; touch redesign, not a port | P3 |
+| P5 | Taste analytics dashboard | Swift Charts rebuild of the profile modules | P2 |
+| P6 | Spotify iOS SDK playback + full Siri surface | The remaining native-only motivations | P1.5, V1 |
+
+---
+
+## Task Breakdown — P0 (backend only)
+
+### V1 — Spotify dashboard verification *(do first; gates P2 and P6)*
+These are verification tasks, not design tasks. Both can be answered in the developer dashboard and
+a couple of curl calls.
+
+- **V1.1** Confirm the existing client ID still returns data from `/recommendations` and audio-features.
+  Test `GET /get-recommendations/?trackId=<known id>` against the running local backend. If it 404s
+  or returns empty, P2's radar and `recommendations.py` need rescoping before they're planned.
+- **V1.2** Add `boominbeats://callback` as a second redirect URI on the **existing** client ID.
+  Do not register a new Spotify app — grandfathered endpoint access follows the client ID.
+- **V1.3** Note whether the Spotify iOS SDK can consume the Web API token from the PKCE flow or needs
+  its own session. Decides whether P6 is additive or a second auth path.
+
+### H1 — Account integration end-to-end *(reflect Next Step 1)*
+- **H1.1** Exercise the Playlists panel against an account with many playlists: drag-to-add, per-song
+  `+` in both modes, bulk add, panel search, liked-state indicators — on both Explore and Builder.
+- **H1.2** Walk the error paths: expired token, 403 from missing scope, empty `track_ids`
+  (`playlist_add_items` rejects an empty list — confirm the guard in `spotify_actions.py` holds),
+  full re-auth after logout.
+- **H1.3** Delete the empty test playlists the earlier create bug left in the Spotify account.
+- **H1.4** Fix what H1.1–H1.2 surface.
+
+### H2 — AI analysis pipeline *(reflect Next Step 2)*
+- **H2.1** Verify JSON parsing across all three providers (Claude, OpenAI, Groq) in both
+  `song_profile.py::_parse_analysis` and `llm_playlist.py`. The playlist loop currently swallows a
+  parse failure with a bare `continue` — confirm that degrades sensibly rather than silently
+  returning a short playlist.
+- **H2.2** Handle malformed output and missing `scores` explicitly rather than falling through to
+  `_empty_analysis()` with no signal to the user.
+- **H2.3** Refresh model IDs in `services/llm_client.py`: `claude-sonnet-4-6` → `claude-sonnet-5`.
+  In `routers/llm_connect.py`, `claude-haiku-4-5-20251001` → the `claude-haiku-4-5` alias. No other
+  changes needed — the call sites pass no `temperature` or `thinking`, so nothing else breaks.
+
+### K1 — `X-LLM-Key` migration *(the change iOS strictly requires)*
+Land this on the web app first so it's proven before a second client depends on it.
+
+- **K1.1** Add a `get_llm_credentials` FastAPI dependency reading `X-LLM-Provider` / `X-LLM-Key`,
+  raising 401 when absent.
+- **K1.2** Backend: `llm_connect.py` becomes stateless validation only (no `request.session` writes);
+  `llm_playlist.py:26-27` and `song_profile.py:105-106` take the dependency instead of session reads.
+  `/llm/status/` either drops or becomes a pure echo of the header.
+- **K1.3** Remove `SessionMiddleware` and `SESSION_SECRET_KEY` from `main.py` / `config.py` once no
+  router reads `request.session`.
+- **K1.4** Frontend: send the headers from `llmConfig` and drop `credentials: 'include'` in
+  `LLMSettingsPanel.svelte`, `ChatInterface.svelte`, `SongProfile.svelte`, `routes/+page.svelte`.
+- **K1.5** Verify the full BYOK flow still works from the browser after the change.
+
+### D1 — Hosted deployment + device key
+- **D1.1** `DEVICE_KEY` in config; middleware rejecting requests without a matching `X-Device-Key`.
+  No-op when `DEVICE_KEY` is unset, so the local instance is unaffected.
+- **D1.2** Widen CORS from the single hardcoded origin to a config-driven list (native clients send
+  no origin, but the hosted instance still serves nothing else — keep it tight).
+- **D1.3** Pick a host and deploy. Secrets: `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
+  `LASTFM_API_KEY`, `DEVICE_KEY`.
+- **D1.4** Confirm the hosted instance answers `/get-profile/` and `/search/` with a real token, over
+  TLS, from off the LAN.
+
+### C1 — Delete dead code *(reflect Next Step 5)*
+`sverdle/`, `Counter.svelte`, `recommendations.svelte`, the svelte-welcome images, `backend_server/`,
+`manage.py`, `db.sqlite3`, and the `/account-analysis/` route + `routes/account_analysis/` page
+(the endpoint returns `{"status": "coming soon"}`). Do this before P1 so none of it gets ported.
+
+---
+
+## Risks & Mitigations
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| `/recommendations` + audio-features already dead on this client ID | Medium | High — P2's radar and Explore depend on them | V1.1 tests it first; if dead, rescope P2 around Last.fm tags + LLM scores, which `song_profile.py` already produces |
+| A new Spotify app loses grandfathered endpoint access | Low (avoidable) | High | V1.2 — add a redirect URI to the existing client ID; never register a new app |
+| Hosted instance abused / quota burned | Medium | Medium | D1.1 device key; keep CORS tight; monitor Spotify quota |
+| Radar `Path` math eats the P2 schedule | Medium | Medium | Ship P2 with bar-style score meters first; radar as a follow-up within P2 |
+| SwiftUI visual iteration repeats the CSS feedback-loop problem | High | Medium | Simulator screenshots via `xcrun simctl` + previews set up in P1 before any styling |
+| Scope fatigue — parity is a months-long build | Medium | Medium | P1.5 front-loads a native-only win; each milestone ships something usable |
+| Spotify iOS SDK needs its own auth session | Medium | Low | V1.3 answers it; P6 is last either way |
+
+---
+
+## Dependencies
+
+- Existing Spotify client ID with an added `boominbeats://` redirect URI
+- Paid Apple Developer account (device install beyond the 7-day free-provisioning window)
+- A hosting account (Fly / Render / Railway)
+- Xcode 16+; iOS minimum target decision
+- Unchanged: `spotipy`, `anthropic` / `openai` / `groq` SDKs, Last.fm API key
+
+---
+
+## Open Questions
+
+- iOS minimum target: 17 or 18? Gates WidgetKit and Swift Charts APIs.
+- Xcode project location: `src/ios/` alongside `src/web/`, or a separate repo?
+- Networking layer: hand-rolled `URLSession` client, or generated from the exported OpenAPI schema?
+- Which host, and is free-tier cold start acceptable for LLM requests that already take seconds?
+- Offline behavior: cache last-known profile/playlists, or require connectivity?
+- Does `/llm/status/` survive the K1 migration, or get deleted?
+
+---
+
+## Decisions Log
+
+| Decision | Choice | Reasoning | Date |
+|---|---|---|---|
+| Native vs responsive PWA | Native SwiftUI | All four motivations present — widgets/Siri, iOS SDK playback, SwiftUI learning, phone access. Any one alone would have favored the PWA | 2026-08-03 |
+| Backend location | One codebase, two deployments | Satisfies "anywhere" + "local model on web" without a tunnel; free because the backend is stateless | 2026-08-03 |
+| LLM key transport | `X-LLM-Provider` / `X-LLM-Key` headers | Native clients have no origin; also retires a signed-not-encrypted cookie holding an API key. Revisits the Medium-confidence call in the 2026-06-04 plan | 2026-08-03 |
+| Hosted auth | `X-Device-Key` shared secret | Single-user tool; real auth is unjustified, but an open endpoint is not acceptable | 2026-08-03 |
+| Spotify app registration | Reuse existing client ID | Grandfathered endpoint access follows the client ID | 2026-08-03 |
+| Sequencing | Harden before building the client | Both least-tested layers are ones an iOS client would depend on; simulator debugging costs more than browser debugging | 2026-08-03 |
+| Widget position | P1.5, not P6 | Depends only on auth; front-loads native payoff ahead of full parity | 2026-08-03 |
+| Web app responsiveness | Stays desktop-only | The 2026-06-24 min-width-800 decision becomes deliberate rather than a gap | 2026-08-03 |
+| Playlists panel on iOS | Redesign for touch, not port | HTML5 DnD lacks touch; SwiftUI `.draggable` is touch-native and can be better than the original | 2026-08-03 |
+| Model IDs | `claude-sonnet-5`, `claude-haiku-4-5` | Call sites pass no `temperature`/`thinking`, so it's a pure ID swap | 2026-08-03 |
+
+### V1 result — deprecated endpoints confirmed dead, but nothing live depends on them (2026-08-03)
+
+**V1.1 — probed the existing client ID (`a70007…0bc0`) directly via client-credentials:**
+
+| Endpoint | Status | Notes |
+|---|---|---|
+| `/v1/search` | **200** | Works — `search.py` is fine |
+| `/v1/tracks/{id}` | **200** | Works, but `popularity: None` and `preview_url: None` (matches the TA0 finding) |
+| `/v1/recommendations` | **404** | Dead |
+| `/v1/audio-features/{id}` | **403** | Dead |
+| `/v1/artists/{id}/related-artists` | **403** | Dead |
+
+**Live impact: none.** Two reasons —
+
+1. `/get-recommendations/` is called by exactly one file, `lib/components/recommendations.svelte`, which is
+   imported only by the unused `lib/index.js` barrel. It is dead demo code already on C1's delete list.
+2. Audio features were already defended: `spotify_actions.py:154-174` comments the deprecation and degrades
+   to `audio_features=None`. The profile page's `audioSeries` renders empty rather than breaking.
+
+So the 404/403s describe endpoints the running app does not depend on. **No rescoping needed.**
+
+**Correction to the brainstorm and to this plan's risk table.** Two claims were wrong, and both reduce scope:
+
+- *"Every chart is built on layercake + d3 emitting SVG."* Only the **dead** components are. `layercake`,
+  `d3-scale`, and `d3-shape` are imported by exactly two files — `FeatureRadar.svelte` and `Radar.svelte` —
+  both of which are layercake's own demo example, still rendering baseball pitch data (`radarScores.js`
+  exports `{name: 'Allison', fastball: 10, change: 0, slider: 4, …}`). Every **live** chart — `SongRadar`,
+  `TrendChart`, `BarChart`, `ColumnChart`, `Heatmap` — is hand-rolled dependency-free SVG/CSS.
+- *"P2's radar and Explore depend on audio-features."* They don't. The live radar is `SongRadar.svelte`,
+  fed by the **LLM-generated** 0–100 scores from `song_profile.py` (Energy, Danceability, Positivity,
+  Acousticness, Intensity, Tempo) and by genre counts on the profile page. It is unaffected by any Spotify
+  deprecation.
+
+**Consequences:**
+
+- **Risk "recommendations + audio-features already dead" — retired.** Confirmed dead, confirmed harmless.
+- **Risk "radar `Path` math eats the P2 schedule" — downgraded.** `SongRadar.svelte` is a single component
+  with its geometry already solved in explicit constants (`cx=170, cy=145, maxR=84, levels=[.25,.5,.75,1]`).
+  That is close to a direct transcription into a SwiftUI `Path`, not a from-scratch derivation. The
+  bar/column/trend/heatmap components are likewise plain SVG/CSS, so P5 maps onto Swift Charts cleanly.
+- **C1's delete list grows** — add `FeatureRadar.svelte`, `Radar.svelte`, `AxisRadar.svelte`,
+  `radarScores.js`, and the now-unused `lib/index.js` barrel; then drop `layercake`, `d3-scale`, and
+  `d3-shape` from `package.json`. This removes the frontend's only three runtime dependencies.
+- **New P0 task — H2.4:** `recommendations.py` is a live router whose upstream endpoint returns 404. Delete
+  the router alongside `recommendations.svelte` rather than leaving a broken route registered in `main.py`.
+
+**V1.3 — Spotify iOS SDK auth:** `SPTAppRemote` accepts an externally obtained token — the documented
+pattern is `appRemote.connectionParameters.accessToken = <token>`, and nothing requires that token to come
+from `SPTSessionManager`. So **P6 is additive**: the app's own PKCE session feeds playback control, with no
+second auth path. Still to verify at P6 time: whether app-remote requires the Spotify app installed and a
+Premium account (the auth doc doesn't cover it; both are likely).
+
+**V1.2 — still open, and it's yours to do:** add `boominbeats://callback` as a second redirect URI on the
+**existing** client ID at developer.spotify.com. Do not register a new app.
+
+### H2 result — parsing hardened; two live bugs found (2026-08-03)
+
+**Done:** H2.1, H2.2, H2.3, H2.4. Verified by 35 synthetic tests (`python -m unittest discover tests`
+from `src/web/backend`) plus a live reload + route check. Nothing committed.
+
+**New `services/llm_json.py`.** Single `extract_json()` shared by the playlist and song-profile paths.
+The previous inline `removeprefix('```json').removeprefix('```').removesuffix('```')` handled fenced
+output only; it fell through to a silent empty result on the most common real failure — prose wrapped
+around the JSON (`Here is the analysis:\n{...}`), which Groq/Llama emits constantly. The replacement
+strips fences (```` ``` ````/`~~~`, with or without a language tag), then falls back to scanning for the
+first balanced `{...}`/`[...]`, tracking string state and escapes so braces inside `"reason"` text don't
+break the scan. Raises `LLMParseError` carrying a 300-char snippet of the offending output.
+
+**`routers/song_profile.py`:**
+- Score keys now matched **case-insensitively** — a model returning `"energy"` for `"Energy"` previously
+  produced a partial dict, failed the `len(parsed_scores) == len(SCORE_KEYS)` check, and silently killed
+  the entire radar.
+- `_coerce_score()` accepts `85`, `85.0`, and `"85"`, and **rejects `bool`** — `isinstance(True, int)` is
+  `True`, so `"Energy": true` used to be stored as `1`.
+- Still requires all six axes before rendering (a partial set draws a misleading shape), but now reports
+  *which* are missing instead of failing silently.
+- New response field **`analysis_error`**. Previously "no LLM connected" and "LLM connected but the call
+  or the parse failed" were both `has_llm: false` and indistinguishable to the frontend and to the user.
+  `null` = not connected; a string = connected and something went wrong.
+- Failures log to uvicorn (`[song-profile] …`) rather than vanishing.
+
+**`routers/llm_playlist.py`:**
+- The bare `except Exception: continue` swallowed provider errors, JSON errors, and network failures
+  identically. Now separated, each logged, and the last one retained.
+- New `_normalize_suggestions()` guards `validate_songs()`, which indexes `suggestion['title']` directly
+  and would raise mid-request on a malformed entry. It also unwraps `{"playlist": [...]}` /
+  `{"songs": [...]}` / `tracks` / `results` / `items`, and a bare single-song object — all shapes models
+  return when they ignore "respond ONLY with a valid JSON array".
+- New response field **`error`**, non-null when the run ends short. An all-attempts-failed run previously
+  returned an empty playlist with HTTP 200 and no explanation.
+
+**Bug 1 — malformed retry prompt (fixed).** If attempt 0 failed to parse, `failed` was still `[]`, so
+attempt 1 sent `The following songs could not be found on Spotify: . Suggest 12 different replacement
+songs…` — an empty list interpolated into the prompt. A parse/call failure now re-asks the original
+request with a JSON-format reminder; only a genuine Spotify miss produces the "not found" prompt.
+
+**Bug 2 — the Last.fm API key is invalid (NOT fixed — needs a new key).**
+
+```
+GET ws.audioscrobbler.com/2.0/ → HTTP 403
+{"message":"Invalid API key - You must be granted a valid key by last.fm","error":10}
+```
+
+The key in `backend/.env` is **19 characters; Last.fm keys are 32**. Every song profile has been silently
+returning zero tags, zero listeners, zero play count, and no wiki summary — `if 'error' in data: return
+_empty()` swallowed it whole. `lastfm_client.py` now logs the API error code, an unset key, and request
+failures separately. **Action: regenerate the key at last.fm/api/accounts and replace `LASTFM_API_KEY`.**
+This invalidates the "wiki summary + play count display" line in the 2026-06-24 reflect — that feature is
+currently dead in the running app.
+
+**Flagged, deliberately not changed — `song_profile.py` calls the LLM twice.** `asyncio.gather` runs
+Last.fm and a tag-less analysis concurrently; if Last.fm returns tags, the analysis is re-run grounded in
+them and the first result is discarded. Today this costs nothing *because Last.fm is dead* and the second
+call never fires. **Fixing the Last.fm key will silently double per-profile token spend.** The tradeoff is
+latency (one sequential call after Last.fm resolves) vs. cost (two parallel calls, one wasted) — a product
+decision, so it was left alone. Revisit at the same time as the key.
+
+**H2.3 model IDs:** `claude-sonnet-4-6` → `claude-sonnet-5` (`services/llm_client.py`);
+`claude-haiku-4-5-20251001` → `claude-haiku-4-5` (`routers/llm_connect.py`). Pure ID swaps — the call
+sites pass no `temperature` or `thinking`, so no breaking changes applied. OpenAI (`gpt-4o`) and Groq
+(`llama-3.3-70b-versatile`) left as-is.
+
+**H2.4:** deleted `routers/recommendations.py` and its `main.py` registration; `/get-recommendations/` is
+gone from the route table. `recommendations.svelte` and `lib/index.js` remain for C1 to remove as a set.
+
+**Testing note.** The BYOK design means the server never holds provider keys, so cross-provider coverage
+is synthetic — `tests/test_llm_parsing.py` encodes the malformed shapes (fenced, prose-wrapped, wrapped in
+an object, lowercase score keys, string scores, `true` as a score, missing axes, array-instead-of-object,
+entries missing title/artist). Uses stdlib `unittest`; no new dependency.
+
+**Still open in H2:** one live pass per provider (Claude / OpenAI / Groq) with real keys, confirming each
+round-trips a song profile and a playlist generation. A few minutes in the browser once connected to each.
+
+### K1 result — session cookie retired, LLM key moved to headers (2026-08-03)
+
+**Done:** K1.1–K1.4. K1.5 (browser BYOK round-trip) needs a real key and is the only step left.
+Verified against the running local instance; nothing committed.
+
+**New `services/llm_auth.py`.** Two FastAPI dependencies over `X-LLM-Provider` / `X-LLM-Key`:
+
+- `get_llm_credentials` — required; raises 401 with an actionable message. Used by `/llm/generate-playlist/`.
+- `get_optional_llm_credentials` — returns `None` when absent, so `/song/profile/` keeps degrading to
+  Last.fm-only data instead of failing.
+
+Both normalise the provider to lowercase and reject anything outside `claude|openai|groq` with a 400 that
+names the valid values (previously an unknown provider reached `LLMClient.generate` and surfaced as a
+generic `ValueError`).
+
+**`routers/llm_connect.py` — rewritten as pure validation.** It checks the key against the provider and
+discards it; the `request.session['llm_api_key']` write is gone. Returns `{connected, provider}`.
+
+**`/llm/status/` deleted.** It only reported whether the server session held a provider. With no session
+there is nothing to report, and the client already knows — `grep` confirmed nothing in the frontend called
+it. Restorable as a pure header echo if the iOS client ever wants a connectivity ping.
+
+**`main.py` / `config.py`.** `SessionMiddleware` and `SESSION_SECRET_KEY` removed (also from
+`.env.example`; an existing `.env` can drop the line, nothing reads it). `allow_credentials=True` dropped
+from CORS — no cookies cross the boundary now.
+
+**Frontend — new `lib/llmHeaders.js`.** Reads the existing `llmConfig` store and returns the two headers,
+or `{}` when nothing is connected. Applied in `ChatInterface.svelte`, `SongProfile.svelte`, and
+`routes/+page.svelte`; `LLMSettingsPanel.svelte` drops `credentials: 'include'` from the connect call.
+Needs the `@returns {Record<string, string>}` JSDoc — without it TypeScript infers the empty branch as
+`{'X-LLM-Provider'?: undefined}`, which is not a valid `HeadersInit`, and svelte-check errors at all three
+call sites.
+
+**Verification:**
+
+| Check | Result |
+|---|---|
+| No headers → `/llm/generate-playlist/` | 401, actionable detail |
+| `X-LLM-Provider: gemini` | 400, lists valid providers |
+| No headers → `/song/profile/` | 200, degrades, `analysis_error: null` |
+| Valid provider + syntactically-valid bogus key | `authentication_error: API key is invalid` **from Anthropic** |
+| `python -m unittest discover tests` | 35 pass |
+| `npm run check` | 25 → 22 errors; zero mention `llmHeaders` (22 is the pre-existing baseline) |
+
+The bogus-key row is the load-bearing one: a 401 raised by Anthropic rather than by our own dependency
+proves the header travels end to end. It also demonstrated H2's error surfacing in the same response —
+`returned: 0` with a populated `error` field rather than a silent empty playlist.
+
+**Consequence for users:** the old session cookie is meaningless, so the LLM key must be re-entered once
+in the settings panel. There is no migration path and none is needed — the key was always client-held.
+
+**Open question resolved:** `/llm/status/` does not survive the migration (was listed under Open Questions
+in the 2026-08-03 plan).
+
+**Remaining in P0:** H1 (account integration — needs a browser session), D1 (hosted deploy + device key),
+C1 (dead-code sweep, expanded by the V1 findings). K1.5 folds into whichever session next has a key to hand.

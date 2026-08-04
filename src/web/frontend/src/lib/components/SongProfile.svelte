@@ -3,6 +3,9 @@
 	import TagPill from './TagPill.svelte';
 	import SongRadar from './SongRadar.svelte';
 	import { exploreSession } from '../../stores.js';
+	import { llmHeaders } from '../llmHeaders.js';
+
+	const SCORE_ORDER = ['Energy', 'Danceability', 'Positivity', 'Acousticness', 'Intensity', 'Tempo'];
 
 	export let song = null;
 	export let onDiscover = (selection) => {};
@@ -14,6 +17,9 @@
 
 	$: profile = $exploreSession.profile;
 	$: analysisFields = profile ? parseAnalysis(profile.analysis) : [];
+	$: scoreAxes = profile?.scores
+		? SCORE_ORDER.map((k) => ({ label: k, value: profile.scores[k] ?? 0 }))
+		: [];
 	$: selectedTags = new Set($exploreSession.selectedTags);
 	$: selectedAspects = new Set($exploreSession.selectedAspects);
 	$: totalSelected = selectedTags.size + selectedAspects.size;
@@ -26,7 +32,7 @@
 		try {
 			const artist = s.artists?.[0] ?? s.artist ?? '';
 			const params = new URLSearchParams({ title: s.title, artist });
-			const res = await fetch(`${PUBLIC_API_URL}/song/profile/?${params}`, { credentials: 'include' });
+			const res = await fetch(`${PUBLIC_API_URL}/song/profile/?${params}`, { headers: llmHeaders() });
 			const data = await res.json();
 			$exploreSession = { key, profile: data, selectedTags: [], selectedAspects: [] };
 		} catch {
@@ -134,7 +140,7 @@
 			{#if profile.scores}
 				<div class="profile-body-radar">
 					<div class="section-label">Sound profile</div>
-					<SongRadar scores={profile.scores} />
+					<SongRadar axes={scoreAxes} max={100} ariaLabel="Song characteristics" />
 				</div>
 			{/if}
 		</div>
