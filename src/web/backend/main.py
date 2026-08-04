@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import ALLOWED_ORIGINS, DEVICE_KEY
-from routers import search, profile, account_analysis
+from routers import search, profile
 from routers import llm_connect, llm_playlist, spotify_actions, song_profile
 
 log = logging.getLogger(__name__)
@@ -81,7 +81,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(search.router)
 app.include_router(profile.router)
-app.include_router(account_analysis.router)
 app.include_router(llm_connect.router)
 app.include_router(llm_playlist.router)
 app.include_router(spotify_actions.router)

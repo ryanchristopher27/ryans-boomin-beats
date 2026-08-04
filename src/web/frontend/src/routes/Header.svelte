@@ -1,6 +1,6 @@
 <script>
 	import { page, llmConfig, playlistsPanelOpen } from '../stores.js';
-	import { BoominBeatsLogo } from '$lib';
+	import BoominBeatsLogo from '$lib/images/BoominBeatsLogo.jpg';
 	import LLMSettingsPanel from '$lib/components/LLMSettingsPanel.svelte';
 
 	const navLinks = [

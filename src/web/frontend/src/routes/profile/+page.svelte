@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     import { PUBLIC_API_URL } from '$env/static/public';
-    import { BoominBeatsLogo } from "$lib";
+    import BoominBeatsLogo from '$lib/images/BoominBeatsLogo.jpg';
     import SongCard from '$lib/components/SongCard.svelte';
     import SongRadar from '$lib/components/SongRadar.svelte';
     import DashboardModule from '$lib/components/DashboardModule.svelte';
