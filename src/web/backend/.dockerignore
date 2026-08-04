@@ -1,0 +1,17 @@
+# Secrets never enter the image — the host injects them as environment variables.
+.env
+.cache
+
+__pycache__/
+*.pyc
+*.pyo
+
+# Dead Django scaffold + its DB (C1 removes these from the repo entirely).
+backend_server/
+manage.py
+db.sqlite3
+
+# Not needed at runtime.
+tests/
+Dockerfile
+.dockerignore
