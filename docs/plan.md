@@ -1831,3 +1831,75 @@ sequential calls. The fix would be concurrency, not batching.
 
 H1 steps 1–7 pass. **Step 8 (deleting the leftover empty test playlists) is outstanding.** P0 is otherwise
 complete apart from the deferred deploy (D1.3/D1.4).
+
+### V1.2 closed — iOS redirect URI registered (2026-08-04)
+
+`boominbeats://callback` added as a second redirect URI on the **existing** Spotify client ID
+(`a700071d…0bc0`); the web app's `http://127.0.0.1:5173/profile` was left in place. Verified by issuing a
+real PKCE authorize request against that redirect — Spotify rendered the consent screen rather than
+`INVALID_CLIENT: Invalid redirect URI`. No new app was registered, so grandfathered endpoint access is
+preserved.
+
+This value must stay byte-identical in three places: Spotify's dashboard, `Config.redirectURI`
+(`src/ios/BoominBeats/Config.swift`), and `CFBundleURLSchemes` in `src/ios/Info.plist`. Spotify does not
+normalise case or trailing slashes.
+
+**V1 is now fully closed.** V1.3 (Spotify iOS SDK accepts an externally obtained token) was answered in the
+V1 result block; P6 remains additive rather than a second auth path.
+
+### P1 result — iOS app running against the live backend (2026-08-04)
+
+All P1 acceptance criteria met. Verified in the Simulator (iPhone 17 Pro, iOS 26.3) against the local
+backend, not just compiled.
+
+| Criterion | Result |
+|---|---|
+| Project builds | ✅ zero errors/warnings |
+| PKCE login via `boominbeats://callback` | ✅ |
+| Token persists across launches | ✅ relaunch went straight to Profile, no re-login |
+| Profile renders real data | ✅ top artists + tracks |
+| Time-range switching re-fetches | ✅ `long_term` → `short_term` observed in the backend log |
+| Screenshot loop | ✅ `xcrun simctl io … screenshot` |
+
+**Toolchain.** Xcode 26.3, Swift 6.2.4, iOS 26 deployment target, no third-party dependencies.
+`project.pbxproj` is hand-written using a **file-system-synchronized root group**, so new files are picked
+up from disk and the project file doesn't churn — worth preserving; it's the main reason the pbxproj
+stayed reviewable without xcodegen.
+
+**Two build-system traps, both cost real time — do not rediscover them:**
+
+1. **Keychain needs the `keychain-access-groups` entitlement even in the Simulator.** Building with
+   `CODE_SIGNING_ALLOWED=NO` skips applying `CODE_SIGN_ENTITLEMENTS`, and every `SecItemAdd` then fails
+   `-34018 errSecMissingEntitlement`. Since `postToken()` writes the token, login fails at the last step.
+   Confirmed by A/B-ing signed vs unsigned builds against a startup self-test — not by reasoning.
+   Note `codesign -d --entitlements` shows an *empty dict* on a working Simulator build, so that dump is
+   not a reliable check; the functional test is.
+2. **`Info.plist` and the entitlements file must live outside the synchronized folder.** Inside it they
+   are also copied as bundle resources, producing `Multiple commands produce … Info.plist`.
+
+Also: a plain `-scheme` build fails with "iOS 26.2 is not installed" when only the SDK (not the runtime)
+is present. `-target … -sdk iphonesimulator26.2` compiles fine — useful for compile-only verification
+before a simulator runtime is available.
+
+**Diagnostics.** A `#if DEBUG` Keychain self-test runs at launch and logs a write/read/delete round-trip,
+readable from the host:
+
+```
+xcrun simctl spawn "iPhone 17 Pro" log show --last 1m --info --debug \
+  --predicate 'subsystem == "com.ryanchristopher.boominbeats"' --style compact
+```
+
+`log show` omits info-level entries without `--info --debug`. This is the text-driven path for verifying
+behaviour that can't be clicked, and it's what turned the Keychain failure into a one-line answer.
+
+**Error-message defect fixed along the way.** `Keychain.Error` had no `LocalizedError` conformance, so a
+failure surfaced as `"Keychain.Error error 0"` — the enum case index, not the `OSStatus`. It now reports
+the status and Apple's own description, with a specific hint for `-34018`.
+
+**Open question raised by the running app.** No genres render under any artist, and the view only hides
+that line when `artist.genres` is empty. If the February 2026 migration removed `genres` from the artist
+object — as it did `popularity` and `followers` — then the **web app's genre radar and genre-depth
+modules are silently empty too**, and P5 would inherit it. Unverified; needs one call to settle.
+
+**Not yet done in P1:** the Settings screen's LLM provider/key fields (deferred to P3, which is where
+they're first needed).
