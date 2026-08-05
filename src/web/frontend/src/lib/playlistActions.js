@@ -2,6 +2,7 @@
 import { get } from 'svelte/store';
 import { PUBLIC_API_URL } from '$env/static/public';
 import { access_token } from '../stores.js';
+import { bearer } from './spotifyHeaders.js';
 
 export async function addTracksToPlaylist(playlistId, trackIds) {
 	const token = get(access_token);
@@ -10,8 +11,8 @@ export async function addTracksToPlaylist(playlistId, trackIds) {
 	try {
 		const res = await fetch(`${PUBLIC_API_URL}/spotify/add-to-playlist/`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ playlist_id: playlistId, track_ids: trackIds, access_token: token }),
+			headers: { 'Content-Type': 'application/json', ...bearer(token) },
+			body: JSON.stringify({ playlist_id: playlistId, track_ids: trackIds }),
 		});
 		if (res.status === 401) return { error: 'auth' };
 		const data = await res.json();
@@ -28,8 +29,8 @@ export async function setTrackSaved(trackId, saved) {
 	try {
 		const res = await fetch(`${PUBLIC_API_URL}/spotify/save-track/`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ track_ids: [trackId], remove: !saved, access_token: token }),
+			headers: { 'Content-Type': 'application/json', ...bearer(token) },
+			body: JSON.stringify({ track_ids: [trackId], remove: !saved }),
 		});
 		if (res.status === 403) return { error: 'reconnect' };
 		if (res.status === 401) return { error: 'auth' };
@@ -46,7 +47,8 @@ export async function getSavedStates(trackIds) {
 	if (!token || !trackIds || trackIds.length === 0) return {};
 	try {
 		const res = await fetch(
-			`${PUBLIC_API_URL}/spotify/saved-contains/?access_token=${token}&ids=${trackIds.join(',')}`
+			`${PUBLIC_API_URL}/spotify/saved-contains/?ids=${trackIds.join(',')}`,
+			{ headers: bearer(token) }
 		);
 		if (!res.ok) return {};
 		const data = await res.json();

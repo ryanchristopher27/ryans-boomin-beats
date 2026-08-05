@@ -1,16 +1,18 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from spotipy import Spotify
+
+from services.spotify_auth import get_spotify_token
 
 router = APIRouter()
 
 
 @router.get("/get-profile/")
 def get_profile(
-    access_token: str = Query(...),
     num_tops: int = Query(10),
     time_period: str = Query('short_term'),
+    token: str = Depends(get_spotify_token),
 ):
-    spotify = Spotify(auth=access_token)
+    spotify = Spotify(auth=token)
 
     current_user = spotify.me()
     top_artists = spotify.current_user_top_artists(limit=num_tops, offset=0, time_range=time_period)

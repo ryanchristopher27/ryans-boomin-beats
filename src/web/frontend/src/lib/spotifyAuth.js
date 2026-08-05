@@ -7,8 +7,13 @@ export const CLIENT_ID = 'a700071d47504ba68082a5a59d2b0bc0';
 export const AUTHORIZE_ENDPOINT = 'https://accounts.spotify.com/authorize';
 export const TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
 export const REDIRECT_URI = 'http://127.0.0.1:5173/profile';
+// user-read-playback-state is required to list devices and read player state.
+// Without it /me/player and /me/player/devices return 401 "Permissions missing",
+// so queueing can only fail with an opaque 404 and never explain why.
+// NOTE: adding a scope requires a full logout/login — a refresh preserves the
+// scope set from the original grant.
 export const SCOPES =
-	'user-top-read playlist-read-private playlist-modify-private playlist-modify-public user-modify-playback-state user-library-read user-library-modify user-read-recently-played';
+	'user-top-read playlist-read-private playlist-modify-private playlist-modify-public user-modify-playback-state user-read-playback-state user-library-read user-library-modify user-read-recently-played';
 
 // --- PKCE helpers (login only) ---
 function generateCodeVerifier(length = 128) {

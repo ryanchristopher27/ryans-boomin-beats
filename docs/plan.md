@@ -1753,3 +1753,81 @@ this audit confirms nothing further is at risk. The iOS client should call the s
 the backend rather than hitting Spotify directly, so it inherits spotipy's migration handling for free
 — one more argument against the "no backend, iOS talks to Spotify directly" option rejected in the
 brainstorm.
+
+### H1 result — account integration exercised end to end (2026-08-04)
+
+Driven from the browser with the backend teed to a log the assistant tailed, so failures were diagnosed
+from server-side evidence rather than pasted console output. That setup is the reason this session found
+four defects instead of one — worth repeating.
+
+**Coverage (from the request log):**
+
+| Endpoint | Calls | Outcome |
+|---|---|---|
+| `/spotify/saved-contains/` | 16 | 15 × 200, 1 × 500 (pre-fix "Too many uris") |
+| `/spotify/queue/` | 12 | 200; final attempts genuinely queued |
+| `/get-profile/` | 11 | 200 |
+| `/spotify/playlists/` | 10 | 200 |
+| `/spotify/taste-over-time/`, `/spotify/recently-played/` | 5 each | 200 |
+| `/llm/generate-playlist/` | 2 | 200 |
+| `/spotify/add-to-playlist/`, `/create-playlist/`, `/save-track/` | 4 | 200 |
+| `/song/profile/` | 1 | 200, no warnings |
+
+**Zero app-level warnings across the whole session** — no JSON parse failures, no Last.fm errors, no
+unhandled exceptions. H2's parsing hardening handled a real provider response without needing any of its
+fallback paths, and the `&` in a song title round-tripped correctly.
+
+#### Bugs found and fixed
+
+**1. `saved-contains` chunk size (500).** `_SAVED_TRACKS_LIMIT` was 50, inherited from the pre-migration
+`/me/tracks` endpoints. The new `/me/library/contains` cap is lower — 50 URIs returns
+`400 Too many uris requested`. Only surfaced with the profile view's full 50-track payload; earlier
+8-id tests passed. The exact cap is undocumented and unprobeable (tokens no longer appear in the log),
+so `_batched()` starts at 20 and halves on rejection, **remembering the reduced size** for later chunks.
+Verified against simulated caps of 50/20/10/5/1 — always returns all results, order preserved, non-"too
+many" errors still propagate. Confirmed live: 15 clean calls after the fix, no halving needed, so the
+real cap is ≥ 20.
+
+**2. Queue error classified by message text (500).** `queue_songs` matched on `'NO_ACTIVE_DEVICE' in str(e)`
+or `'Player command failed' in str(e)`. Spotify returns **404 with at least two different messages** for
+the same condition — `"Player command failed: No active device found"` and a bare `"Not found."` — and the
+second fell through to a 500. Now branches on `e.http_status` (404 → `no_active_device`, 403 →
+`premium_required`). Same failure mode as reading strings instead of structure elsewhere this session.
+
+**3. Missing `user-read-playback-state` scope.** The app requested `user-modify-playback-state` (write)
+but never its read counterpart, so `/me/player` and `/me/player/devices` returned
+`401 "Permissions missing"`. Consequence: "Queue All" could never enumerate devices, target one via
+`device_id`, or explain *why* a queue failed — only an opaque 404. Present since playback control shipped.
+Added to `SCOPES`; **requires a full logout/login**, since a refresh preserves the original grant's scopes.
+With it granted, Spotify also began returning the structured `"reason": "NO_ACTIVE_DEVICE"` field it had
+been withholding.
+
+**4. Unguarded `images[2]` in `profile.py`.** A 500 waiting for the first album art with fewer than three
+sizes, inconsistent with the guarded indexing used elsewhere. Now falls back to the smallest available.
+
+**Also landed:** partial queue runs report how many tracks were queued before the device dropped, instead
+of reading as total failures, and the frontend surfaces that plus a distinct Premium message.
+
+#### Not a bug
+
+The original "Open Spotify on a device first" report was **correct behaviour**. The root cause was
+environmental: every device on the account is an Amazon Echo or FireTV, and Alexa-initiated playback does
+not register as an active Spotify Connect device the Web API can target. `GET /me/player` returned `204`
+(nothing playing) while music was audibly playing. Starting playback in the Spotify **desktop app or web
+player** registers an active device and queueing then succeeds — confirmed working.
+
+#### Follow-up worth scoping (not done)
+
+**Device picker for Queue All.** Now that devices are enumerable, "Queue All" could list them and pass an
+explicit `device_id` rather than depending on an implicit active device — likely transferring playback
+(`PUT /me/player`) first for an idle target. All seven of this account's devices report
+`is_restricted: false`, so targeting may work, but Echo behaviour is untested. This is a feature, not a
+fix; it would make the app usable with the speakers actually in the house.
+
+**Queue is N sequential round-trips.** Spotify has no batch queue endpoint, so a 12-track queue is 12
+sequential calls. The fix would be concurrency, not batching.
+
+#### Status
+
+H1 steps 1–7 pass. **Step 8 (deleting the leftover empty test playlists) is outstanding.** P0 is otherwise
+complete apart from the deferred deploy (D1.3/D1.4).

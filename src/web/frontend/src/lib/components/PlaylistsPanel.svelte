@@ -1,6 +1,7 @@
 <script>
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { playlistsPanelOpen, userPlaylists, access_token, pendingAdd } from '../../stores.js';
+	import { spotifyHeaders } from '../spotifyHeaders.js';
 	import { addTracksToPlaylist } from '$lib/playlistActions.js';
 	import PlaylistNameModal from './PlaylistNameModal.svelte';
 
@@ -40,7 +41,7 @@
 		loading = true;
 		error = '';
 		try {
-			const res = await fetch(`${PUBLIC_API_URL}/spotify/playlists/?access_token=${$access_token}`);
+			const res = await fetch(`${PUBLIC_API_URL}/spotify/playlists/`, { headers: spotifyHeaders() });
 			if (res.status === 401) {
 				error = 'auth';
 				return;
@@ -118,8 +119,8 @@
 		try {
 			const res = await fetch(`${PUBLIC_API_URL}/spotify/create-playlist/`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name, track_ids: trackIds, access_token: $access_token }),
+				headers: { 'Content-Type': 'application/json', ...spotifyHeaders() },
+				body: JSON.stringify({ name, track_ids: trackIds }),
 			});
 			const data = await res.json();
 			if (data.playlist_id) {

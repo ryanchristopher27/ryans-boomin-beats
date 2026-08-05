@@ -20,7 +20,7 @@
         if (tasteLoaded || !token) return;
         tasteLoaded = true;
         try {
-            const res = await fetch(`${PUBLIC_API_URL}/spotify/taste-over-time/?access_token=${token}`);
+            const res = await fetch(`${PUBLIC_API_URL}/spotify/taste-over-time/`, { headers: bearer(token) });
             if (res.ok) tasteData = await res.json();
         } catch { /* ignore */ }
     }
@@ -33,7 +33,7 @@
         if (recentLoaded || !token) return;
         recentLoaded = true;
         try {
-            const res = await fetch(`${PUBLIC_API_URL}/spotify/recently-played/?access_token=${token}`);
+            const res = await fetch(`${PUBLIC_API_URL}/spotify/recently-played/`, { headers: bearer(token) });
             if (res.status === 403) { recentNeedsReauth = true; return; }
             if (res.ok) recentData = await res.json();
         } catch { /* ignore */ }
@@ -72,6 +72,7 @@
     }
 
     import { page, user, access_token, selectedSong } from '../../stores.js'
+    import { bearer } from '$lib/spotifyHeaders.js';
     import { beginLogin, logoutSpotify, hydrateToken, exchangeCodeForToken, saveTokens } from '$lib/spotifyAuth.js';
     import { getSavedStates, setTrackSaved } from '$lib/playlistActions.js';
 
@@ -135,12 +136,13 @@
         try {
             console.log('Get Profile Test In Try')
 			// let url = `${PUBLIC_API_URL}/account-analysis/?access_token=${access_token}`
-			let url = `${PUBLIC_API_URL}/get-profile/?access_token=${token}&num_tops=${number_of_tops}&time_period=${time_period}`
+			let url = `${PUBLIC_API_URL}/get-profile/?num_tops=${number_of_tops}&time_period=${time_period}`
 
             console.log('Fetching User Profile')
 			const response = await fetch(url, {
                 method: 'GET',
                 mode: 'cors',
+                headers: bearer(token),
             })
 
 			if (!response.ok) {

@@ -1,6 +1,7 @@
 <script>
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { access_token } from '../../stores.js';
+	import { spotifyHeaders } from '../spotifyHeaders.js';
 
 	export let onSelect = () => {};
 
@@ -13,7 +14,7 @@
 	async function fetchTopTracks() {
 		loading = true;
 		try {
-			const res = await fetch(`${PUBLIC_API_URL}/spotify/top-tracks/?access_token=${$access_token}&limit=12`);
+			const res = await fetch(`${PUBLIC_API_URL}/spotify/top-tracks/?limit=12`, { headers: spotifyHeaders() });
 			if (!res.ok) return;
 			const data = await res.json();
 			tracks = data.tracks ?? [];

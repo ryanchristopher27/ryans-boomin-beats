@@ -2,6 +2,7 @@
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import SongCard from './SongCard.svelte';
 	import { access_token, pendingAdd, playlistsPanelOpen } from '../../stores.js';
+	import { spotifyHeaders } from '../spotifyHeaders.js';
 	import { getSavedStates, setTrackSaved } from '$lib/playlistActions.js';
 
 	export let playlist = [];
@@ -68,14 +69,20 @@
 		try {
 			const res = await fetch(`${PUBLIC_API_URL}/spotify/queue/`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ track_ids: allIds, access_token: $access_token }),
+				headers: { 'Content-Type': 'application/json', ...spotifyHeaders() },
+				body: JSON.stringify({ track_ids: allIds }),
 			});
 			const data = await res.json();
 			if (res.status === 401) {
 				actionError = 'Log in to Spotify on the Profile page to queue songs.';
 			} else if (data.error === 'no_active_device') {
-				actionError = 'Open Spotify on a device first, then try again.';
+				// The backend reports how many landed before the device dropped,
+				// so a partial queue doesn't read as a total failure.
+				actionError = data.queued
+					? `Queued ${data.queued} before Spotify lost the active device. Start playback, then try again.`
+					: 'Open Spotify on a device first, then try again.';
+			} else if (data.error === 'premium_required') {
+				actionError = 'Queueing requires Spotify Premium.';
 			} else {
 				queueSuccess = true;
 			}

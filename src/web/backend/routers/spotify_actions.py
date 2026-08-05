@@ -1,7 +1,12 @@
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from spotipy import Spotify, SpotifyException
+
+from services.spotify_auth import get_spotify_token
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -9,31 +14,25 @@ router = APIRouter()
 class CreatePlaylistRequest(BaseModel):
     name: str
     track_ids: list[str]
-    access_token: Optional[str] = None
 
 
 class QueueRequest(BaseModel):
     track_ids: list[str]
-    access_token: Optional[str] = None
 
 
 class AddToPlaylistRequest(BaseModel):
     playlist_id: str
     track_ids: list[str]
-    access_token: Optional[str] = None
 
 
 class SaveTrackRequest(BaseModel):
     track_ids: list[str]
     remove: bool = False
-    access_token: Optional[str] = None
 
 
 @router.post("/spotify/create-playlist/")
-def create_playlist(body: CreatePlaylistRequest):
-    if not body.access_token:
-        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
-    spotify = Spotify(auth=body.access_token)
+def create_playlist(body: CreatePlaylistRequest, token: str = Depends(get_spotify_token)):
+    spotify = Spotify(auth=token)
     playlist = spotify._post("me/playlists", payload={"name": body.name, "public": False, "description": "Created by Boomin Beats"})
     if body.track_ids:
         spotify.playlist_add_items(playlist['id'], body.track_ids)
@@ -44,11 +43,9 @@ def create_playlist(body: CreatePlaylistRequest):
 
 
 @router.get("/spotify/playlists/")
-def list_playlists(access_token: Optional[str] = Query(default=None)):
+def list_playlists(token: str = Depends(get_spotify_token)):
     """List the user's editable playlists (owned or collaborative)."""
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
-    spotify = Spotify(auth=access_token)
+    spotify = Spotify(auth=token)
     me_id = spotify.me()['id']
 
     playlists = []
@@ -82,12 +79,10 @@ def list_playlists(access_token: Optional[str] = Query(default=None)):
 
 
 @router.post("/spotify/add-to-playlist/")
-def add_to_playlist(body: AddToPlaylistRequest):
-    if not body.access_token:
-        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
+def add_to_playlist(body: AddToPlaylistRequest, token: str = Depends(get_spotify_token)):
     if not body.track_ids:
         return {'added': 0}
-    spotify = Spotify(auth=body.access_token)
+    spotify = Spotify(auth=token)
     spotify.playlist_add_items(body.playlist_id, body.track_ids)
     return {
         'added': len(body.track_ids),
@@ -97,13 +92,11 @@ def add_to_playlist(body: AddToPlaylistRequest):
 
 @router.get("/spotify/top-tracks/")
 def top_tracks(
-    access_token: Optional[str] = Query(default=None),
     limit: int = Query(default=12),
     time_range: str = Query(default='medium_term'),
+    token: str = Depends(get_spotify_token),
 ):
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
-    spotify = Spotify(auth=access_token)
+    spotify = Spotify(auth=token)
     result = spotify.current_user_top_tracks(limit=limit, time_range=time_range)
     tracks = []
     for t in result.get('items', []):
@@ -119,13 +112,11 @@ def top_tracks(
 
 
 @router.get("/spotify/taste-over-time/")
-def taste_over_time(access_token: Optional[str] = Query(default=None)):
+def taste_over_time(token: str = Depends(get_spotify_token)):
     """Aggregate listening metrics across the three timeframes. Uses cheap
     Spotify-native data (popularity, release year) and tries audio-features
     (deprecated for new apps) — degrading to audio_features=None if unavailable."""
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
-    spotify = Spotify(auth=access_token)
+    spotify = Spotify(auth=token)
 
     ranges = [('short_term', '1 Month'), ('medium_term', '6 Months'), ('long_term', 'All Time')]
     af_dims = {'Energy': 'energy', 'Danceability': 'danceability', 'Positivity': 'valence', 'Acousticness': 'acousticness'}
@@ -176,12 +167,10 @@ def taste_over_time(access_token: Optional[str] = Query(default=None)):
 
 
 @router.get("/spotify/recently-played/")
-def recently_played(access_token: Optional[str] = Query(default=None)):
+def recently_played(token: str = Depends(get_spotify_token)):
     """Return play timestamps for the listening clock. Spotify caps this at the
     50 most-recent plays. Needs the user-read-recently-played scope."""
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
-    spotify = Spotify(auth=access_token)
+    spotify = Spotify(auth=token)
     try:
         res = spotify.current_user_recently_played(limit=50)
     except SpotifyException as e:
@@ -197,35 +186,60 @@ def recently_played(access_token: Optional[str] = Query(default=None)):
 # Spotify URIs rather than bare ids. spotipy >= 2.26 already targets the new
 # endpoints, so use its helpers — do NOT "fix" them back to /me/tracks/*, which
 # the migration removed (those now return 403).
-_SAVED_TRACKS_LIMIT = 50  # per-request cap; the profile view already sits at 50
+# The /me/library endpoints cap how many URIs one request may carry, and the cap
+# is lower than the 50 the pre-migration /me/tracks endpoints allowed — 50 comes
+# back as "400 Too many uris requested". The exact ceiling isn't documented, so
+# start conservatively and halve on rejection rather than hard-coding a guess.
+_SAVED_TRACKS_LIMIT = 20
 
 
-def _id_chunks(ids: list[str], size: int = _SAVED_TRACKS_LIMIT):
+def _id_chunks(ids: list[str], size: int):
     for i in range(0, len(ids), size):
         yield ids[i:i + size]
 
 
+def _too_many_uris(e: SpotifyException) -> bool:
+    return e.http_status == 400 and 'too many' in str(e).lower()
+
+
+def _batched(ids: list[str], fn, size: int = _SAVED_TRACKS_LIMIT) -> list:
+    """Apply fn to ids in chunks, halving on "too many uris" and remembering the
+    smaller size for the remaining chunks so the cap is discovered once, not
+    per chunk. Returns concatenated results (empty for writes, which return None).
+    """
+    out: list = []
+    i = 0
+    while i < len(ids):
+        chunk = ids[i:i + size]
+        try:
+            result = fn(chunk)
+        except SpotifyException as e:
+            if not _too_many_uris(e) or len(chunk) == 1:
+                raise
+            size = max(1, len(chunk) // 2)
+            log.warning('[spotify] batch rejected as too many uris; retrying at %d', size)
+            continue  # same offset, smaller chunk
+        if result:
+            out.extend(result)
+        i += len(chunk)
+    return out
+
+
 def _saved_tracks_contains(spotify: Spotify, ids: list[str]) -> list[bool]:
-    flags: list[bool] = []
-    for chunk in _id_chunks(ids):
-        flags.extend(spotify.current_user_saved_tracks_contains(tracks=chunk))
-    return flags
+    return _batched(ids, lambda c: spotify.current_user_saved_tracks_contains(tracks=c))
 
 
 def _saved_tracks_modify(spotify: Spotify, ids: list[str], remove: bool) -> None:
     call = (spotify.current_user_saved_tracks_delete if remove
             else spotify.current_user_saved_tracks_add)
-    for chunk in _id_chunks(ids):
-        call(tracks=chunk)
+    _batched(ids, lambda c: call(tracks=c))
 
 
 @router.post("/spotify/save-track/")
-def save_track(body: SaveTrackRequest):
-    if not body.access_token:
-        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
+def save_track(body: SaveTrackRequest, token: str = Depends(get_spotify_token)):
     if not body.track_ids:
         return {'ok': True, 'saved': not body.remove}
-    spotify = Spotify(auth=body.access_token)
+    spotify = Spotify(auth=token)
     try:
         _saved_tracks_modify(spotify, body.track_ids, body.remove)
     except SpotifyException as e:
@@ -236,13 +250,11 @@ def save_track(body: SaveTrackRequest):
 
 
 @router.get("/spotify/saved-contains/")
-def saved_contains(access_token: Optional[str] = Query(default=None), ids: str = Query(default="")):
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
+def saved_contains(ids: str = Query(default=""), token: str = Depends(get_spotify_token)):
     id_list = [i for i in ids.split(',') if i]
     if not id_list:
         return {'saved': {}}
-    spotify = Spotify(auth=access_token)
+    spotify = Spotify(auth=token)
     try:
         flags = _saved_tracks_contains(spotify, id_list)
     except SpotifyException as e:
@@ -253,16 +265,24 @@ def saved_contains(access_token: Optional[str] = Query(default=None), ids: str =
 
 
 @router.post("/spotify/queue/")
-def queue_songs(body: QueueRequest):
-    if not body.access_token:
-        raise HTTPException(status_code=401, detail="Log in to Spotify on the Profile page first.")
-    spotify = Spotify(auth=body.access_token)
-    try:
-        for track_id in body.track_ids:
+def queue_songs(body: QueueRequest, token: str = Depends(get_spotify_token)):
+    spotify = Spotify(auth=token)
+    queued = 0
+    for track_id in body.track_ids:
+        try:
             spotify.add_to_queue(f'spotify:track:{track_id}')
-        return {'queued': len(body.track_ids)}
-    except Exception as e:
-        error_str = str(e)
-        if 'NO_ACTIVE_DEVICE' in error_str or 'Player command failed' in error_str:
-            return {'error': 'no_active_device'}
-        raise HTTPException(status_code=500, detail=error_str)
+        except SpotifyException as e:
+            # The player endpoints report device problems as 404 with an
+            # inconsistent message — "Player command failed: No active device
+            # found" on one call, a bare "Not found." on the next. Branch on the
+            # status, not the text; string matching missed the second phrasing
+            # and surfaced it as a 500.
+            if e.http_status == 404:
+                log.info('[spotify] queue stopped after %d: %s', queued, e)
+                return {'error': 'no_active_device', 'queued': queued}
+            if e.http_status == 403:
+                # Playback control requires Spotify Premium.
+                return {'error': 'premium_required', 'queued': queued}
+            raise HTTPException(status_code=500, detail=str(e))
+        queued += 1
+    return {'queued': queued}
