@@ -10,5 +10,18 @@ __pycache__/
 *.pyd
 .cache
 
+# Xcode / iOS
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
 # Misc
 .DS_Store

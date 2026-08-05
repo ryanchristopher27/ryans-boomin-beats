@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Required for any Keychain access. Without it SecItemAdd fails with
+	     -34018 errSecMissingEntitlement, including in the Simulator. Kept outside
+	     the file-system-synchronized BoominBeats/ folder so it isn't also copied
+	     in as a bundle resource (the same trap Info.plist hit). -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.ryanchristopher.boominbeats</string>
+	</array>
+</dict>
+</plist>
