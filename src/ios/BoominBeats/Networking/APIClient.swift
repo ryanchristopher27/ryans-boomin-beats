@@ -69,6 +69,11 @@ struct APIClient {
         if let deviceKey = Config.deviceKey, !deviceKey.isEmpty {
             request.setValue(deviceKey, forHTTPHeaderField: "X-Device-Key")
         }
+        // Harmless on non-LLM routes, which ignore them.
+        if let llmKey = Config.llmKey, !llmKey.isEmpty {
+            request.setValue(Config.llmProvider, forHTTPHeaderField: "X-LLM-Provider")
+            request.setValue(llmKey, forHTTPHeaderField: "X-LLM-Key")
+        }
 
         let data: Data
         let response: URLResponse

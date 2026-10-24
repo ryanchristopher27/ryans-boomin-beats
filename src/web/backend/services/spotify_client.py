@@ -12,8 +12,11 @@ resulting bare `TimeoutError` is NOT a SpotifyException, so it sailed past every
 """
 import logging
 
+import requests
+from requests.adapters import HTTPAdapter
 from spotipy import Spotify
 from spotipy.oauth2 import SpotifyClientCredentials
+from urllib3.util.retry import Retry
 
 from config import CLIENT_ID, CLIENT_SECRET
 
@@ -24,12 +27,39 @@ log = logging.getLogger(__name__)
 # whole request. Retries cover transient resets, including the stale-socket case.
 REQUEST_TIMEOUT = 10
 RETRIES = 3
+# Retry real 5xx only. Spotify answered a dev-mode search burst with 429 +
+# Retry-After: 82363 (~23h, DJ4 result), and urllib3 sleeps for Retry-After on
+# 429 even when 429 is NOT in status_forcelist (Retry.is_retry honours the
+# header independently). That parked worker threads for hours and hung every
+# request that searched. spotipy doesn't expose respect_retry_after_header, so
+# we hand it our own session: spotipy's policy, minus Retry-After.
+STATUS_FORCELIST = (500, 502, 503, 504)
+
+
+def _session() -> requests.Session:
+    retry = Retry(
+        total=RETRIES,
+        connect=None,
+        read=False,
+        allowed_methods=frozenset(['GET', 'POST', 'PUT', 'DELETE']),
+        status=RETRIES,
+        backoff_factor=0.3,
+        status_forcelist=STATUS_FORCELIST,
+        respect_retry_after_header=False,
+    )
+    session = requests.Session()
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('https://', adapter)
+    session.mount('http://', adapter)
+    return session
+
+
 def user_client(token: str) -> Spotify:
     """Client acting as the signed-in user."""
     return Spotify(
         auth=token,
+        requests_session=_session(),
         requests_timeout=REQUEST_TIMEOUT,
-        retries=RETRIES,
     )
 
 
@@ -44,6 +74,6 @@ def app_client() -> Spotify:
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
         ),
+        requests_session=_session(),
         requests_timeout=REQUEST_TIMEOUT,
-        retries=RETRIES,
     )

@@ -44,7 +44,12 @@ class LLMClient:
         all_messages = [{'role': 'system', 'content': system_prompt}] + messages
         response = await asyncio.to_thread(
             client.chat.completions.create,
-            model='llama-3.3-70b-versatile',
+            model='openai/gpt-oss-120b',
             messages=all_messages,
+            # gpt-oss is a reasoning model, and hidden reasoning counts against
+            # Groq's on-demand budget (8k tokens/min). At the default effort a DJ
+            # call spent 1,924 of 3,237 tokens reasoning and replies got cut off
+            # (DJ4 result in docs/plan.md); low cuts that to ~30 and halves latency.
+            reasoning_effort='low',
         )
         return response.choices[0].message.content

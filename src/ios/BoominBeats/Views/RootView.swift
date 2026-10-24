@@ -6,12 +6,64 @@ struct RootView: View {
     var body: some View {
         Group {
             if session.isLoggedIn {
-                ProfileView()
+                MainTabs()
             } else {
                 LoginView()
             }
         }
         .animation(.default, value: session.isLoggedIn)
+    }
+}
+
+/// Owns the DJ models, so playback polling and queue top-ups keep running whichever
+/// tab is showing — a tab's own `.task` is cancelled when the user switches away.
+struct MainTabs: View {
+    @Environment(SpotifySession.self) private var session
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var nowPlaying: NowPlayingModel?
+    @State private var queue: QueueStore?
+    @State private var suggestions: SuggestionStore?
+    @State private var djSettings = DJSettings()
+
+    var body: some View {
+        TabView {
+            Tab("Now Playing", systemImage: "play.circle") { NowPlayingView() }
+            Tab("Queue", systemImage: "list.bullet") { QueueView() }
+            Tab("Profile", systemImage: "person.crop.circle") { ProfileView() }
+        }
+        .environment(nowPlaying)
+        .environment(queue)
+        .environment(suggestions)
+        .environment(djSettings)
+        // Prefetch at this level, not in a tab, so suggestions are ready whichever
+        // tab is showing. Re-keyed on track change, which cancels a stale load.
+        .task(id: nowPlaying?.state?.track?.id) { await prefetch() }
+        // Switching into Autofill/Driver should act now, not at the next track.
+        .onChange(of: djSettings.mode) { Task { await prefetch() } }
+        // Restarts on every foreground/background flip; polling only runs while
+        // active, since iOS suspends the app in the background anyway.
+        .task(id: scenePhase == .active) {
+            if queue == nil {
+                let client = APIClient(session: session)
+                let q = QueueStore(client: client)
+                queue = q
+                nowPlaying = NowPlayingModel(client: client, queue: q)
+                suggestions = SuggestionStore(client: client)
+            }
+            guard scenePhase == .active, let nowPlaying else { return }
+            await nowPlaying.run()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background, let queue {
+                Task { await queue.prepareForBackground() }
+            }
+        }
+    }
+
+    private func prefetch() async {
+        guard let nowPlaying, let queue, let suggestions, let track = nowPlaying.state?.track else { return }
+        guard djSettings.mode != .whisper else { suggestions.reset(); return }
+        await suggestions.load(for: track, session: nowPlaying, queue: queue, settings: djSettings)
     }
 }
 

@@ -811,3 +811,161 @@ native-only win early instead of at the end of a long rebuild.
 3. Decide the Xcode project shape: separate repo or a `src/ios/` directory alongside `src/web/`
 4. Pick the iOS minimum target and the networking approach (hand-rolled `URLSession` client vs. generating one from the FastAPI OpenAPI schema — the latter is already exported)
 5. Define acceptance for P1: PKCE login completes, token persists in Keychain across launches, Profile renders real top artists/tracks, and a simulator screenshot loop is in place
+
+---
+
+# AI DJ Companion (2026-10-17)
+
+## Problem / Opportunity
+
+The music apps people already use have two queue modes, and neither one helps. Spotify DJ and
+autoplay take over the queue completely. Manual queueing gives no help at all. Nothing sits in
+between: an assistant that helps you **build** the queue, suggesting what plays next, while you stay
+in charge of what actually goes in.
+
+This is `ROADMAP.md` goal #4 (Natural-language DJ), reframed. The DJ is a companion that suggests
+and assists, and the user stays in control of the queue. A chat window that drives playback is not
+the goal.
+
+## Goals
+
+- A clean now-playing view with playback control, while music plays through the user's own provider
+  (Spotify)
+- Suggestions for what to play or queue next, offered as **moves**: some keep the current vibe,
+  others change it on purpose
+- An adjustable control level, from "only when asked" to "steers toward a goal"
+- Hosting as the main use, and equally usable for solo listening by anyone who wants to keep
+  control of the queue
+- Guest requests are in scope, at lower priority
+
+## Audience
+
+The host: the owner, on their iPhone, at a party, dinner or road trip. Guests never sign in to
+Boomin Beats. They interact only through the provider app (for example a Spotify Jam). The
+Development Mode user cap therefore doesn't constrain hosting.
+
+## Constraints
+
+- **iOS first.** Builds on the P1 iOS app (PKCE auth, Profile).
+- **No Spotify vibe data.** `/recommendations` returns 404 and `/audio-features` returns 403 on this
+  client ID (audits in `plan.md`, 2026-08-03). Vibe must come from LLM + Last.fm tags, following the
+  pattern `song_profile.py` already uses.
+- **Search is capped at 10 results** (February 2026 migration), which is enough to validate a
+  handful of suggestions.
+- **The Spotify queue is append-only**, both in the Web API and in the iOS SDK (App Remote). The
+  queue can be read and added to, but not reordered, removed from or inserted into. The 2026-08-03
+  iOS brainstorm expected the SDK to unlock "real" queue control, and it doesn't.
+- **iOS suspends backgrounded apps**, so the app cannot reliably send the next track at song end
+  while it is in the background.
+- **Playback control requires Premium**, which the owner has.
+- **The backend is stateless** (no DB). Anything that requires server-side state is a real
+  architectural step.
+- **BYOK LLM latency.** A party can't wait several seconds for every suggestion.
+
+## Ideas & Directions
+
+### Moves, not songs
+
+Each suggestion is a decision about where the set goes next. Songs fill it in.
+
+| Move | Meaning |
+|---|---|
+| Hold | Stay on the current vibe (energy, tempo feel, era) |
+| Lift / Drop | Raise or lower the energy |
+| Pivot | Keep one thread (mood, groove, decade) and change the genre |
+| Curveball | Unexpected, but still fits |
+| Bridge | One or two songs that get from here to a named destination ("end up in 90s R&B") |
+
+In hosting mode, Bridge grows into **arc planning** ("build to peak energy over the next 30 min").
+
+### Control dial
+
+1. **Whisper.** Suggests only when asked.
+2. **Co-pilot.** Always shows 3–5 picks, and the host approves each one.
+3. **Autofill.** Fills gaps when the queue runs low, and the host can veto.
+4. **Driver.** Builds toward a goal the host sets, and the host steers.
+
+An optional second setting is **adventurousness** (how far suggestions stray), kept separate from
+how often the AI acts.
+
+### App-owned queue (recommended)
+
+Boomin Beats holds the real, editable queue: reorder, remove, insert, AI slot-ins. Spotify only ever
+gets a **buffer of the next 2–3 tracks**, topped up as songs finish.
+
+- **Backgrounding:** the buffer keeps music playing while the app is suspended, and the app
+  reconciles on return. The tradeoff is that tracks already sent to Spotify can't be edited, so a
+  deeper buffer is more resilient but gives less control.
+- **Party mode:** keeps the screen awake while hosting, which avoids the backgrounding problem in
+  the main use case.
+- **Rejected for now: a backend worker** that advances the queue. It would work while backgrounded,
+  but it needs server-side refresh tokens, which ends the stateless design.
+
+### Guest requests by comparing queues
+
+Guests add songs through the provider app (Spotify Jam, or "Add to queue" on the host's device). The
+app knows exactly which tracks it sent to Spotify, so any track in `GET /me/player/queue` that it
+didn't send is treated as a guest request. Those go into a **Requests inbox** where the host can
+approve (place into the app-owned queue), reposition or dismiss them. This requires no guest
+accounts and no backend state.
+
+Fallback if the comparison isn't reliable: a link or QR code to a small web request page. That
+reopens the backend-state question.
+
+### Reading the room
+
+Skips and quick "too much / more of this" taps are cheap feedback that steers the next suggestions.
+They work for both hosting and solo listening.
+
+### Party safety
+
+A clean-lyrics toggle and a do-not-play list (the `do_not_play` field anticipated in the
+`ROADMAP.md` schema).
+
+### Transitions: vibe-level only
+
+Without audio features, BPM and key are LLM estimates. Transition advice stays at the level of "this
+lands well after that". It doesn't promise beatmatching or harmonic mixing.
+
+## Recommendations
+
+1. An app-owned queue with a 2–3 track buffer, plus party mode
+2. Suggestion engine: LLM + Last.fm tags, validated against Spotify search, extending
+   `song_profile.py` rather than starting a new system
+3. Build the core loop first (now playing → suggest a move → queue), then the control dial, then the
+   Requests inbox
+4. Generate suggestions ahead of time, while the current song is playing, so they are ready before
+   the host asks
+
+## Suggested Decisions
+
+- **Confirmed:** a feature of Boomin Beats, not a separate app; iOS first; playback through the
+  user's provider with in-app control; hosting is the primary use; guest requests are in scope at
+  low priority and arrive through the provider app
+- **Recommended, pending confirmation:**
+  - App-owned queue with a 2–3 track buffer
+  - Adventurousness as its own setting, separate from the control dial
+  - Guest requests sequenced after the core loop
+
+## Open Questions
+
+- **Test:** do Spotify Jam additions show up in `GET /me/player/queue`? Can tracks queued by a user
+  be told apart from tracks coming from autoplay or the current playlist? Guest requests depend on
+  both answers.
+- Playback path on iOS: Web API through the backend (inherits spotipy's migration handling, per the
+  2026-08-03 audit) vs. App Remote (lower latency, and supports subscribing to player state)
+- Suggestion latency and cost with BYOK: how far ahead to generate suggestions, and what to cache
+- Where the do-not-play list and session feedback live while there's no database (Keychain or
+  on-device storage are likely fine for a single host)
+- How the queue recovers when the host plays something directly in Spotify, outside the app
+
+## Next Steps (what /plan needs)
+
+1. Run the Jam / `GET /me/player/queue` test first. Its result decides the guest-request design.
+2. Pick the iOS playback path and define the polling/subscription loop for now-playing state
+3. Specify the move → prompt contract: inputs (recent tracks, Last.fm tags, adventurousness) and
+   output schema, reusing `llm_json.py` parsing
+4. Define app-owned queue reconciliation: buffer top-up timing, foreground reconcile, and recovery
+   from outside edits
+5. Acceptance for the first milestone: now-playing view with play/pause/skip, three move-labelled
+   suggestions per track, and tap-to-queue landing in the buffer

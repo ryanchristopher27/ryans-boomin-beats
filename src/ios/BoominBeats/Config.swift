@@ -54,4 +54,41 @@ enum Config {
             }
         }
     }
+
+    // MARK: - LLM (BYOK)
+
+    /// Matches services/llm_auth.py SUPPORTED_PROVIDERS.
+    static let llmProviders = ["groq", "claude", "openai"]
+
+    static var llmProvider: String {
+        get { (try? Keychain.read(.llmProvider)) ?? "groq" }
+        set { try? Keychain.write(newValue, for: .llmProvider) }
+    }
+
+    /// The user's own provider key, sent per request as X-LLM-Key. Keychain only.
+    static var llmKey: String? {
+        get { try? Keychain.read(.llmKey) }
+        set {
+            if let newValue, !newValue.isEmpty {
+                try? Keychain.write(newValue, for: .llmKey)
+            } else {
+                try? Keychain.delete(.llmKey)
+            }
+        }
+    }
+
+    // MARK: - DJ
+
+    private static let bufferDepthKey = "background_buffer_depth"
+    static let bufferDepthRange = 1...10
+
+    /// How many tracks the queue hands to Spotify when the app goes to the
+    /// background (DJ2's adaptive buffer). The foreground depth is fixed at 1.
+    static var backgroundBufferDepth: Int {
+        get {
+            let v = UserDefaults.standard.integer(forKey: bufferDepthKey)
+            return bufferDepthRange.contains(v) ? v : 5
+        }
+        set { UserDefaults.standard.set(newValue, forKey: bufferDepthKey) }
+    }
 }

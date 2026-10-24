@@ -9,10 +9,15 @@ import SwiftUI
 /// address means the phone itself, so a LAN IP is required.
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    // Optional: Settings is also reachable from the login screen, outside MainTabs.
+    @Environment(DJSettings.self) private var dj: DJSettings?
 
     @State private var host: String = Config.apiBaseURL.absoluteString
     @State private var deviceKey: String = Config.deviceKey ?? ""
     @State private var probe: ProbeState = .idle
+    @State private var bufferDepth = Config.backgroundBufferDepth
+    @State private var llmProvider = Config.llmProvider
+    @State private var llmKey = Config.llmKey ?? ""
 
     enum ProbeState: Equatable {
         case idle
@@ -74,6 +79,42 @@ struct SettingsView: View {
                         EmptyView()
                     }
                 }
+
+                Section {
+                    Picker("Provider", selection: $llmProvider) {
+                        ForEach(Config.llmProviders, id: \.self) { Text($0.capitalized).tag($0) }
+                    }
+                    SecureField("API key", text: $llmKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("AI")
+                } footer: {
+                    Text("Your own key, used for DJ suggestions. Stored in the Keychain and sent only to the Boomin Beats backend.")
+                }
+
+                Section {
+                    Stepper("\(bufferDepth) tracks", value: $bufferDepth, in: Config.bufferDepthRange)
+                } header: {
+                    Text("Queue When Backgrounded")
+                } footer: {
+                    Text("While the app is open, one track is sent ahead to Spotify so the rest of the queue stays editable. When you leave the app, this many are sent so music keeps playing.")
+                }
+
+                if let dj, !(dj.avoidTracks.isEmpty && dj.avoidArtists.isEmpty) {
+                    Section {
+                        ForEach(dj.avoidArtists, id: \.self) { Label($0, systemImage: "person.crop.circle.badge.xmark") }
+                            .onDelete { dj.removeArtists(at: $0) }
+                        ForEach(dj.avoidTracks) { t in
+                            Label("\(t.title) — \(t.artist)", systemImage: "nosign")
+                        }
+                        .onDelete { dj.removeTracks(at: $0) }
+                    } header: {
+                        Text("Do Not Play")
+                    } footer: {
+                        Text("The DJ never suggests these. Swipe to remove. Tap ⋯ on a suggestion to add more.")
+                    }
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -94,6 +135,9 @@ struct SettingsView: View {
             Config.apiBaseURL = url
         }
         Config.deviceKey = deviceKey.trimmingCharacters(in: .whitespaces)
+        Config.backgroundBufferDepth = bufferDepth
+        Config.llmProvider = llmProvider
+        Config.llmKey = llmKey.trimmingCharacters(in: .whitespaces)
     }
 
     /// Hits the unguarded root endpoint, which answers without a Spotify token and

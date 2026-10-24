@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from spotipy import Spotify, SpotifyException
 
+from routers.player import player_error
 from services.spotify_auth import get_spotify_token
 from services.spotify_client import user_client
 
@@ -278,12 +279,8 @@ def queue_songs(body: QueueRequest, token: str = Depends(get_spotify_token)):
             # found" on one call, a bare "Not found." on the next. Branch on the
             # status, not the text; string matching missed the second phrasing
             # and surfaced it as a 500.
-            if e.http_status == 404:
-                log.info('[spotify] queue stopped after %d: %s', queued, e)
-                return {'error': 'no_active_device', 'queued': queued}
-            if e.http_status == 403:
-                # Playback control requires Spotify Premium.
-                return {'error': 'premium_required', 'queued': queued}
-            raise HTTPException(status_code=500, detail=str(e))
+            # A 403 is not always Premium — player_error tells them apart by reason.
+            log.info('[spotify] queue stopped after %d: %s', queued, e)
+            return {**player_error(e), 'queued': queued}
         queued += 1
     return {'queued': queued}

@@ -5,10 +5,11 @@ import requests
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from spotipy import SpotifyException
 
 from config import ALLOWED_ORIGINS, DEVICE_KEY
 from routers import search, profile
-from routers import llm_connect, llm_playlist, spotify_actions, song_profile
+from routers import llm_connect, llm_playlist, spotify_actions, song_profile, player, dj
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +94,20 @@ async def upstream_unavailable_handler(request: Request, exc: Exception):
     )
 
 
+@app.exception_handler(SpotifyException)
+async def spotify_exception_handler(request: Request, exc: SpotifyException):
+    # Rate limits are app-wide in Development Mode and can last hours; say so
+    # instead of surfacing a raw 429 as a server fault.
+    if exc.http_status == 429:
+        log.warning('[spotify] rate-limited on %s %s', request.method, request.url.path)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Spotify is rate-limiting this app right now. Try again later."},
+            headers={"Access-Control-Allow-Origin": request.headers.get("origin", "")},
+        )
+    return await global_exception_handler(request, exc)
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     # Don't let the catch-all swallow the transient cases above.
@@ -116,3 +131,5 @@ app.include_router(llm_connect.router)
 app.include_router(llm_playlist.router)
 app.include_router(spotify_actions.router)
 app.include_router(song_profile.router)
+app.include_router(player.router)
+app.include_router(dj.router)

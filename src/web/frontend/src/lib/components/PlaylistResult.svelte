@@ -83,6 +83,11 @@
 					: 'Open Spotify on a device first, then try again.';
 			} else if (data.error === 'premium_required') {
 				actionError = 'Queueing requires Spotify Premium.';
+			} else if (data.error) {
+				// e.g. 'restricted': Spotify refused for a non-Premium reason.
+				actionError = data.queued
+					? `Queued ${data.queued} before Spotify refused the rest. Try again in a moment.`
+					: "Spotify didn't allow queueing right now. Try again in a moment.";
 			} else {
 				queueSuccess = true;
 			}
