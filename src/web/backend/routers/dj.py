@@ -11,7 +11,7 @@ import asyncio
 import json
 import logging
 import re
-from typing import Annotated
+from typing import Annotated, Literal
 
 import requests
 from fastapi import APIRouter, Depends
@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Order is the display order. Bridge needs a destination, so it arrives with DJ6.
+# Order is the display order. A goal (DJ6) adds one more move in front.
 MOVES = {
     'hold': 'Same energy, tempo feel and era/scene as now playing. Keep the vibe going.',
     'lift': 'Noticeably MORE energy than now playing, but a coherent next step, not a jarring jump.',
@@ -71,6 +71,16 @@ def _refs():
     return Field(default=[], max_length=_MAX_REFS)
 
 
+class Goal(BaseModel):
+    """Optional steering (DJ6). Deliberately not a precomputed path: each
+    suggestion round asks for the next *step* from what actually played."""
+    kind: Literal['destination', 'arc', 'drift']
+    destination: Annotated[str, StringConstraints(max_length=200)] = ''
+    shape: Literal['build', 'wind_down', 'peak_cool'] = 'build'
+    minutes: int = Field(default=30, ge=5, le=240)
+    elapsed_minutes: float = Field(default=0, ge=0)
+
+
 class SuggestRequest(BaseModel):
     now_playing: TrackRef
     recent: list[TrackRef] = _refs()
@@ -84,6 +94,47 @@ class SuggestRequest(BaseModel):
     skipped: list[TrackRef] = _refs()
     avoid_tracks: list[TrackRef] = _refs()
     avoid_artists: list[_Text] = _refs()
+    goal: Goal | None = None
+
+
+def _arc_step(goal: Goal) -> str:
+    """Where an energy arc stands right now, as an instruction for this step."""
+    p = min(goal.elapsed_minutes / goal.minutes, 1.0)
+    pct, m = round(p * 100), goal.minutes
+    if goal.shape == 'build':
+        if p >= 1:
+            return f'The {m}-minute build has reached its peak: hold peak energy.'
+        return f'{pct}% through a {m}-minute build to a peak: step the energy UP from now playing.'
+    if goal.shape == 'wind_down':
+        if p >= 1:
+            return f'The {m}-minute wind-down is done: keep it calm and low.'
+        return f'{pct}% through a {m}-minute wind-down: step the energy DOWN from now playing.'
+    # peak_cool: rise to a peak at the midpoint, then come back down.
+    if p < 0.5:
+        return f'{pct}% through a {m}-minute peak-then-cool: still climbing to the peak at the halfway mark, step energy UP.'
+    if p >= 1:
+        return f'The {m}-minute peak-then-cool has finished cooling: keep it relaxed.'
+    return f'{pct}% through a {m}-minute peak-then-cool: past the peak, step energy DOWN.'
+
+
+def goal_move(goal: Goal | None) -> tuple[str, str] | None:
+    """The extra move a goal adds: (key, description for the prompt)."""
+    if goal is None:
+        return None
+    if goal.kind == 'drift':
+        return ('drift', 'One step somewhere NEW, away from where the night has been (see the already played list), '
+                         'without a jarring jump. There is no destination; keep travelling.')
+    if goal.kind == 'destination' and goal.destination.strip():
+        return ('toward', f'One step closer to where the host wants to end up: "{goal.destination.strip()}". '
+                          'Move part of the way there from now playing, not all at once.')
+    if goal.kind == 'arc':
+        return ('toward', _arc_step(goal))
+    return None
+
+
+def moves_for(goal: Goal | None) -> dict[str, str]:
+    extra = goal_move(goal)
+    return {extra[0]: extra[1], **MOVES} if extra else dict(MOVES)
 
 
 def _adventure_line(a: float) -> str:
@@ -99,7 +150,7 @@ def build_prompt(body: SuggestRequest, tags: list[str]) -> str:
     def lines(refs: list[TrackRef]) -> str:
         return '\n'.join(f'- {r.title} — {r.artist}' for r in refs) or '- (none)'
 
-    moves = '\n'.join(f'- "{name}": {desc}' for name, desc in MOVES.items())
+    moves = '\n'.join(f'- "{name}": {desc}' for name, desc in moves_for(body.goal).items())
     tag_line = ', '.join(tags) if tags else '(no tags available)'
     # The clean filter drops explicit tracks after validation (DJ4: one extra left
     # whole moves empty), so ask for more when it's on.
@@ -119,13 +170,13 @@ def build_prompt(body: SuggestRequest, tags: list[str]) -> str:
     )
 
 
-def normalize_moves(data) -> dict[str, list[dict]]:
+def normalize_moves(data, allowed: dict[str, str] = MOVES) -> dict[str, list[dict]]:
     """Coerce the parsed model output into {move: [{title, artist, reason}]},
     keeping only known moves and well-formed entries."""
     if not isinstance(data, dict):
         return {}
     out = {}
-    for move in MOVES:
+    for move in allowed:
         entries = data.get(move)
         if not isinstance(entries, list):
             continue
@@ -288,9 +339,9 @@ async def suggest(
         return {'moves': [], 'tags': tags, 'error': f'{creds.provider} request failed: {e}'}
 
     try:
-        moves = normalize_moves(extract_json(raw, context='dj'))
+        moves = normalize_moves(extract_json(raw, context='dj'), moves_for(body.goal))
     except LLMParseError as e:
-        moves = normalize_moves(salvage_truncated(e.raw))
+        moves = normalize_moves(salvage_truncated(e.raw), moves_for(body.goal))
         log.warning('[dj] parse failed (%d chars); salvaged %d moves', len(e.raw), len(moves))
         if not moves:
             return {'moves': [], 'tags': tags, 'error': _CUT_OFF}

@@ -6,6 +6,8 @@ struct NowPlayingView: View {
     @Environment(SuggestionStore.self) private var suggestions: SuggestionStore?
     @Environment(DJSettings.self) private var settings
     @State private var queued: Set<String> = []
+    @State private var editingDestination = false
+    @State private var destinationDraft = ""
 
     var body: some View {
         NavigationStack {
@@ -132,9 +134,70 @@ struct NowPlayingView: View {
                 .onChange(of: settings.cleanOnly) {
                     if let track = model?.state?.track { refresh(track, force: false) }
                 }
+
+            goalRow
         }
         .padding()
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+        .alert("Where should the night end up?", isPresented: $editingDestination) {
+            TextField("e.g. 90s R&B, or Daft Punk", text: $destinationDraft)
+            Button("Set") {
+                let text = destinationDraft.trimmingCharacters(in: .whitespaces)
+                if !text.isEmpty { setGoal(DJGoal(kind: .destination, destination: text)) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The DJ steers one step at a time, so it can change course as the night does.")
+        }
+    }
+
+    // MARK: - Goal (DJ6)
+
+    @ViewBuilder
+    private var goalRow: some View {
+        HStack {
+            Text("Goal").font(.subheadline)
+            Spacer()
+            Menu {
+                Button("None") { setGoal(nil) }
+                Button("Destination…", systemImage: "location.north") {
+                    destinationDraft = settings.goal?.destination ?? ""
+                    editingDestination = true
+                }
+                ForEach(DJGoal.Shape.allCases) { shape in
+                    Button(shape.label, systemImage: "chart.line.uptrend.xyaxis") {
+                        setGoal(DJGoal(kind: .arc, shape: shape, minutes: settings.goal?.minutes ?? 30))
+                    }
+                }
+                Button("Drift", systemImage: "wind") { setGoal(DJGoal(kind: .drift)) }
+            } label: {
+                Text(settings.goal?.label ?? "None").lineLimit(1)
+            }
+        }
+
+        if let goal = settings.goal, goal.kind == .arc {
+            Picker("Length", selection: Binding(
+                get: { goal.minutes },
+                set: { settings.goal?.minutes = $0; refreshCurrent() }
+            )) {
+                ForEach(DJGoal.arcLengths, id: \.self) { Text("\($0) min").tag($0) }
+            }
+            .pickerStyle(.segmented)
+            TimelineView(.periodic(from: .now, by: 30)) { _ in
+                Text("\(min(Int(goal.elapsedMinutes), goal.minutes)) of \(goal.minutes) min")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func setGoal(_ goal: DJGoal?) {
+        settings.goal = goal
+        refreshCurrent()
+    }
+
+    private func refreshCurrent() {
+        if let track = model?.state?.track { refresh(track, force: false) }
     }
 
     private func feedbackButton(_ model: NowPlayingModel, track: Track, more: Bool) -> some View {

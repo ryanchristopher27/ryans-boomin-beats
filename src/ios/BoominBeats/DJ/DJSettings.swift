@@ -6,6 +6,42 @@ struct AvoidedTrack: Codable, Identifiable, Hashable {
     let artist: String
 }
 
+/// Optional steering (DJ6). Not a precomputed path: every suggestion round asks
+/// for the next step from what actually played, so the night can wander.
+struct DJGoal: Codable, Equatable {
+    enum Kind: String, Codable { case destination, arc, drift }
+    enum Shape: String, Codable, CaseIterable, Identifiable {
+        case build, windDown = "wind_down", peakCool = "peak_cool"
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .build: return "Build to peak"
+            case .windDown: return "Wind down"
+            case .peakCool: return "Peak then cool"
+            }
+        }
+    }
+
+    var kind: Kind
+    var destination = ""
+    var shape: Shape = .build
+    var minutes = 30
+    /// When an arc started; its position is worked out at request time.
+    var startedAt = Date()
+
+    static let arcLengths = [15, 30, 60]
+
+    var elapsedMinutes: Double { Date().timeIntervalSince(startedAt) / 60 }
+
+    var label: String {
+        switch kind {
+        case .destination: return "Toward \(destination)"
+        case .arc: return "\(shape.label) · \(minutes) min"
+        case .drift: return "Drift"
+        }
+    }
+}
+
 /// The host's DJ controls (DJ4), persisted on device. The backend is stateless,
 /// so all of this travels with each /dj/suggest/ request.
 @MainActor
@@ -29,8 +65,7 @@ final class DJSettings {
             case .whisper: return "Suggests only when you ask."
             case .copilot: return "Always has moves ready; you pick."
             case .autofill: return "Adds a pick when the queue runs dry. Swipe it away to veto."
-            // Goal-setting (destination / energy arc) arrives with DJ6.
-            case .driver: return "Keeps 3 songs lined up, choosing the moves itself."
+            case .driver: return "Keeps 3 songs lined up, choosing the moves itself. Set a goal to steer it."
             }
         }
 
@@ -50,6 +85,7 @@ final class DJSettings {
     var cleanOnly: Bool { didSet { defaults.set(cleanOnly, forKey: Keys.clean) } }
     private(set) var avoidTracks: [AvoidedTrack] { didSet { saveList(avoidTracks, Keys.avoidTracks) } }
     private(set) var avoidArtists: [String] { didSet { saveList(avoidArtists, Keys.avoidArtists) } }
+    var goal: DJGoal? { didSet { defaults.set(goal.flatMap { try? JSONEncoder().encode($0) }, forKey: Keys.goal) } }
 
     private let defaults = UserDefaults.standard
 
@@ -59,6 +95,7 @@ final class DJSettings {
         static let clean = "dj_clean_only"
         static let avoidTracks = "dj_avoid_tracks"
         static let avoidArtists = "dj_avoid_artists"
+        static let goal = "dj_goal"
     }
 
     init() {
@@ -67,6 +104,7 @@ final class DJSettings {
         cleanOnly = defaults.bool(forKey: Keys.clean)
         avoidTracks = Self.loadList(Keys.avoidTracks) ?? []
         avoidArtists = Self.loadList(Keys.avoidArtists) ?? []
+        goal = UserDefaults.standard.data(forKey: Keys.goal).flatMap { try? JSONDecoder().decode(DJGoal.self, from: $0) }
     }
 
     func avoid(_ track: AvoidedTrack) {

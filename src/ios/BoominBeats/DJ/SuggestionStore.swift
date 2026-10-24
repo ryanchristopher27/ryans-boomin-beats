@@ -16,6 +16,8 @@ struct MoveSuggestions: Decodable {
             case "drop": return "Give the room a breather"
             case "pivot": return "Change genre, keep a thread"
             case "curveball": return "Something unexpected"
+            case "toward": return "Next step toward your goal"
+            case "drift": return "Somewhere new"
             default: return ""
             }
         }
@@ -27,6 +29,8 @@ struct MoveSuggestions: Decodable {
             case "drop": return "arrow.down.circle"
             case "pivot": return "arrow.triangle.turn.up.right.circle"
             case "curveball": return "sparkles"
+            case "toward": return "location.north.circle"
+            case "drift": return "wind"
             default: return "music.note"
             }
         }
@@ -78,12 +82,34 @@ private struct SuggestRequest: Encodable {
     let skipped: [TrackRef]
     let avoidTracks: [TrackRef]
     let avoidArtists: [String]
+    let goal: GoalPayload?
+
+    struct GoalPayload: Encodable {
+        let kind: String
+        let destination: String
+        let shape: String
+        let minutes: Int
+        let elapsedMinutes: Double
+
+        init(_ goal: DJGoal) {
+            kind = goal.kind.rawValue
+            destination = goal.destination
+            shape = goal.shape.rawValue
+            minutes = goal.minutes
+            elapsedMinutes = goal.elapsedMinutes
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case kind, destination, shape, minutes
+            case elapsedMinutes = "elapsed_minutes"
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
         case nowPlaying = "now_playing"
         case avoidTracks = "avoid_tracks"
         case avoidArtists = "avoid_artists"
-        case recent, upcoming, adventurousness, clean, liked, disliked, skipped
+        case recent, upcoming, adventurousness, clean, liked, disliked, skipped, goal
     }
 }
 
@@ -127,7 +153,7 @@ final class SuggestionStore {
             return
         }
         // Settings that change the answer are part of the cache key.
-        let cacheKey = "\(track.id)|\(Int(settings.adventurousness * 3))|\(settings.cleanOnly)"
+        let cacheKey = "\(track.id)|\(Int(settings.adventurousness * 3))|\(settings.cleanOnly)|\(Self.goalKey(settings.goal))"
         if !force, let cached = cache[cacheKey] {
             state = .loaded(cached)
             await autopilot(queue: queue, settings: settings)
@@ -152,7 +178,8 @@ final class SuggestionStore {
             disliked: session.disliked.map(TrackRef.init),
             skipped: session.skipped.map(TrackRef.init),
             avoidTracks: settings.avoidTracks.map(TrackRef.init),
-            avoidArtists: settings.avoidArtists
+            avoidArtists: settings.avoidArtists,
+            goal: settings.goal.map { SuggestRequest.GoalPayload($0) }
         )
         do {
             let response: MoveSuggestions = try await client.post("dj/suggest/", body: body)
@@ -174,19 +201,33 @@ final class SuggestionStore {
         }
     }
 
-    /// Picks in the order autopilot should take them: moves ranked by
+    /// Part of the cache key for a goal. An arc's instruction changes as it
+    /// progresses, so its key moves on every 5 minutes.
+    nonisolated static func goalKey(_ goal: DJGoal?) -> String {
+        guard let goal else { return "none" }
+        switch goal.kind {
+        case .destination: return "dest:\(goal.destination)"
+        case .arc: return "arc:\(goal.shape.rawValue):\(goal.minutes):\(Int(goal.elapsedMinutes / 5))"
+        case .drift: return "drift"
+        }
+    }
+
+    /// Picks in the order autopilot should take them: with a goal, every pick
+    /// from the goal's move (`lead`) first; then the other moves ranked by
     /// adventurousness (safe → hold/lift/drop, bold → pivot/curveball first),
-    /// interleaved one per move per round, minus anything already queued.
+    /// interleaved one per move per round. Anything already queued is skipped.
     nonisolated static func autopilotCandidates(
         moves: [MoveSuggestions.Move],
         adventurousness a: Double,
-        excluding queued: Set<String>
+        excluding queued: Set<String>,
+        lead: String? = nil
     ) -> [MoveSuggestions.Pick] {
         let order = a < 0.34 ? ["hold", "lift", "drop"]
             : a < 0.67 ? ["hold", "lift", "pivot", "drop", "curveball"]
             : ["pivot", "curveball", "lift", "hold"]
         let lists = order.compactMap { name in moves.first { $0.move == name }?.tracks }
-        var candidates: [MoveSuggestions.Pick] = []
+        var candidates = (lead.flatMap { name in moves.first { $0.move == name }?.tracks } ?? [])
+            .filter { !queued.contains($0.id) }
         for i in 0..<(lists.map(\.count).max() ?? 0) {
             for list in lists where i < list.count && !queued.contains(list[i].id) {
                 candidates.append(list[i])
@@ -206,7 +247,8 @@ final class SuggestionStore {
         var candidates = Self.autopilotCandidates(
             moves: moves,
             adventurousness: settings.adventurousness,
-            excluding: Set((queue.sent + queue.upcoming).map(\.trackID))
+            excluding: Set((queue.sent + queue.upcoming).map(\.trackID)),
+            lead: settings.goal.map { $0.kind == .drift ? "drift" : "toward" }
         )
         while queue.aheadCount < target, !candidates.isEmpty {
             var item = candidates.removeFirst().queueItem

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import BoominBeats
 
@@ -125,6 +126,22 @@ struct QueueLogicTests {
     @Test func boldAutopilotLeadsWithPivotAndCurveball() {
         let picks = SuggestionStore.autopilotCandidates(moves: moves, adventurousness: 0.9, excluding: [])
         #expect(picks.prefix(4).map(\.id) == ["p1", "c1", "l1", "h1"])
+    }
+
+    @Test func aGoalMoveLeadsAutopilotWithAllItsPicks() {
+        let withGoal = [move("toward", ["t1", "t2"])] + moves
+        let picks = SuggestionStore.autopilotCandidates(moves: withGoal, adventurousness: 0.1,
+                                                         excluding: ["t2"], lead: "toward")
+        #expect(picks.map(\.id).prefix(3) == ["t1", "h1", "l1"])
+    }
+
+    @Test func goalCacheKeyMovesWithArcProgress() {
+        var arc = DJGoal(kind: .arc, shape: .build, minutes: 30, startedAt: Date())
+        let early = SuggestionStore.goalKey(arc)
+        arc.startedAt = Date().addingTimeInterval(-6 * 60)
+        #expect(SuggestionStore.goalKey(arc) != early)
+        #expect(SuggestionStore.goalKey(nil) == "none")
+        #expect(SuggestionStore.goalKey(DJGoal(kind: .drift)) == "drift")
     }
 
     @Test func autopilotSkipsAlreadyQueuedTracks() {

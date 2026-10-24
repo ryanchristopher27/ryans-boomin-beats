@@ -11,7 +11,8 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from routers.dj import (  # noqa: E402
-    SuggestRequest, TrackRef, build_prompt, merge_recent, normalize_moves, salvage_truncated, select_tracks,
+    Goal, SuggestRequest, TrackRef, build_prompt, goal_move, merge_recent, moves_for, normalize_moves,
+    salvage_truncated, select_tracks,
 )
 
 
@@ -130,6 +131,52 @@ class SpotifyRecent(unittest.TestCase):
         client.current_user_recently_played.side_effect = requests.exceptions.ReadTimeout('slow')
         with mock.patch.object(dj, 'user_client', return_value=client):
             self.assertEqual(dj._spotify_recent('token'), [])
+
+
+class Goals(unittest.TestCase):
+    def test_no_goal_means_no_extra_move(self):
+        self.assertIsNone(goal_move(None))
+        self.assertEqual(list(moves_for(None)), ['hold', 'lift', 'drop', 'pivot', 'curveball'])
+
+    def test_destination_leads_the_moves(self):
+        key, desc = goal_move(Goal(kind='destination', destination='90s R&B'))
+        self.assertEqual(key, 'toward')
+        self.assertIn('"90s R&B"', desc)
+        self.assertEqual(list(moves_for(Goal(kind='destination', destination='x')))[0], 'toward')
+
+    def test_blank_destination_is_ignored(self):
+        self.assertIsNone(goal_move(Goal(kind='destination', destination='   ')))
+
+    def test_drift_has_its_own_key(self):
+        self.assertEqual(goal_move(Goal(kind='drift'))[0], 'drift')
+
+    def test_arc_phases(self):
+        arc = lambda shape, elapsed: goal_move(Goal(kind='arc', shape=shape, minutes=30, elapsed_minutes=elapsed))[1]
+        self.assertIn('UP', arc('build', 10))
+        self.assertIn('33%', arc('build', 10))
+        self.assertIn('peak', arc('build', 45))           # past the end: hold the peak
+        self.assertIn('DOWN', arc('wind_down', 5))
+        self.assertIn('UP', arc('peak_cool', 10))         # before the midpoint
+        self.assertIn('DOWN', arc('peak_cool', 20))       # after it
+
+    def test_goal_move_survives_parsing(self):
+        data = {'toward': [{'title': 'A', 'artist': 'X'}], 'hold': [{'title': 'B', 'artist': 'Y'}]}
+        goal = Goal(kind='destination', destination='90s R&B')
+        self.assertEqual(list(normalize_moves(data, moves_for(goal))), ['toward', 'hold'])
+        self.assertEqual(list(normalize_moves(data)), ['hold'])  # no goal: unknown key dropped
+
+    def test_goal_bounds(self):
+        from pydantic import ValidationError
+        with self.assertRaises(ValidationError):
+            Goal(kind='destination', destination='x' * 201)
+        with self.assertRaises(ValidationError):
+            Goal(kind='arc', minutes=1)
+        with self.assertRaises(ValidationError):
+            Goal(kind='teleport')
+
+    def test_prompt_includes_the_goal_move(self):
+        body = SuggestRequest(now_playing=TrackRef(title='A', artist='X'), goal=Goal(kind='drift'))
+        self.assertIn('"drift"', build_prompt(body, []))
 
 
 class BuildPrompt(unittest.TestCase):

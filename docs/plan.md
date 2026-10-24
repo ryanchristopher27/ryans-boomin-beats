@@ -2510,3 +2510,35 @@ overnight gap; whether that instance was transient or a real revocation can't be
 - `refresh()` logs out only on `.rejected`. On anything else it stays `.loggedIn` with the saved
   grant, and `validToken()` retries before the next request.
 - 3 tests in `BoominBeatsTests/SessionTests.swift` (23 iOS tests in total).
+
+### DJ6 result — goals, step by step (2026-10-24) — **built, live check pending**
+
+**Owner decisions:**
+- Goals are **optional**: a destination, an energy shape (Build to peak / Wind down / Peak then cool
+  over 15/30/60 min), **Drift**, or none.
+- **No predefined path.** "Sometimes you don't know where you're going or where you'll end up."
+  This replaces the plan's "Bridge + arc planning": nothing builds or follows a fixed route.
+
+**Backend (`routers/dj.py`):**
+- An optional `Goal` on `SuggestRequest` (bounded; validated kind and shape; `minutes` 5–240).
+- `goal_move()` adds one move, ahead of the five standard ones:
+  - **toward** for a destination ("one step closer to ‹destination›, part of the way, not all at
+    once"), or for an arc via `_arc_step()`, which turns `elapsed_minutes / minutes` into this
+    step's instruction (up, down, or hold at the peak or the end).
+  - **drift** for no destination: "one step somewhere new, away from where the night has been".
+- `normalize_moves` takes the allowed moves per request. 8 new tests (71 in total).
+
+**iOS:**
+- `DJGoal`, persisted in `DJSettings`. An arc keeps `startedAt`, and its position is computed at
+  request time.
+- A Goal row in the DJ card: a menu, a destination prompt, and a 15/30/60 picker plus "n of m min"
+  for arcs.
+- The cache key includes the goal, and an arc's key moves on every 5 minutes as it progresses.
+- Autopilot takes the goal move's picks first (`lead`). Move labels: Toward ("Next step toward
+  your goal") and Drift ("Somewhere new").
+- 2 new tests (20 iOS tests in total, 23 with the session fix).
+
+**Not verified live:** Spotify search was still rate-limited (until about 2026-10-24 21:20 CDT), so
+no Toward or Drift suggestion has been seen end to end yet, and the Goal row hasn't been seen
+rendered: the Simulator came back signed out. Run a small, rate-budgeted live check once search
+unblocks.
