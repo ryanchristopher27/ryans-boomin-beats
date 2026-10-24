@@ -2437,3 +2437,64 @@ is shared, so the playlist builder and song profile get it too.
 **Lesson for testing:** budget Spotify searches the way the Groq budget is budgeted. Prefer unit
 tests with fakes (as in `test_validator_cache.py`) over live bursts. A live `/dj/suggest/` costs up
 to `5 × (per_move + 2)` searches on a cold cache.
+
+### Pre-DJ5 — review W4 + S2 (2026-10-23)
+
+- **W4:** added the `BoominBeatsTests` target (hand-written pbxproj: a synchronized folder, hosted in
+  the app, using Swift Testing). The pure logic was extracted and tested:
+  `QueueStore.arrival(of:in:)`, `QueueStore.reconciled(_:against:)` and
+  `SuggestionStore.autopilotCandidates(...)`. Run with
+  `xcodebuild test -scheme BoominBeats -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`.
+- **S2:** reconcile drops only the played *prefix* of `sent`, and keeps the trailing unmatched
+  tracks when Spotify's 20-item view is full. The naive "keep anything unmatched when full" would
+  have been wrong: the playing context nearly always pads the view to 20.
+
+### DJ5 result — Requests inbox (2026-10-23)
+
+**Owner decision:** build without the Jam half of DJ0.1. The proven path is someone queuing
+straight into Spotify (another phone on the host's account, or the Spotify app). **Whether Jam
+guests' adds appear in `GET /me/player/queue` is still unverified.**
+
+**Detection: `QueueStore.detectRequests`, a pure function.** It runs on a ~10s queue poll while the
+app is in the foreground, plus on reconcile. A track is a request if either rule fires:
+- **Wedged** (the plan's rule): a non-app track sits ahead of one of the app's own `sent` tracks.
+  Reliable, but typically one top-up late.
+- **Inserted (new):** the track was absent from the previous queue view and now sits before the
+  last track the two views share. Context tracks only ever enter the view at its tail, so a mid-view
+  newcomer was queued by someone. This catches requests on the next poll, which **removes the
+  plan's one-song delay**. The rule is off while `smart_shuffle` is on (Spotify inserts its own
+  recommendations mid-queue), so `/player/state/` now returns `smart_shuffle`.
+
+**Inbox: a Requests section at the top of the Queue tab, with a badge on the tab.**
+- **Keep:** the track plays where Spotify put it, and it's remembered so it isn't flagged again.
+- **Later:** skip on arrival, and re-add the track to the end of Up Next.
+- **Decline:** skip on arrival.
+- Requests, pending guest skips and kept tracks persist in `queue.json` (optional fields, so
+  pre-DJ5 files still decode).
+
+**Two ordering bugs, caught by reasoning and in the live run respectively, now fixed:**
+1. After Later, the guest's copy and the app's re-sent copy share a track id. Guest skips are now
+   checked *before* `sent` arrival, because the guest copy was queued first and arrives first.
+2. When the app's copy followed the skipped guest copy, there was no track-id change, so `observe`
+   never ran and the stale `sent` entry blocked top-ups. `skipCurrent` now clears `lastTrackID` so
+   the next poll re-observes.
+
+| Check (live, Simulator + Spotify, the guest add done straight through Spotify's API) | Result |
+|---|---|
+| Insertion rule: guest track queued while the app runs → in the inbox on the next poll, badge 1 | ✅ (twice) |
+| No false positives from the playlist's tracks | ✅ |
+| Decline → guest track auto-skipped about 2s after it came up, inbox cleared | ✅ |
+| Later → guest copy skipped, the app's copy plays, Sent clears (after fix 2) | ✅ |
+| Keep | ⚠️ built, not exercised live |
+| Smart Shuffle suppression | ⚠️ unit-tested only |
+| Jam guests | ❓ unverified (owner deferred the test) |
+
+**Known gaps:**
+- A track queued **while the app is closed** isn't caught on launch. There is no previous snapshot
+  for the insertion rule, and a wedge needs an app track behind it. Observed live with "12 to 12".
+  It's caught later only if the app's next top-up wedges it.
+- The queue poll adds about 1 player read every 10s, on top of the 2s state poll. Player endpoints
+  weren't rate-limited during the search lockout, but they count against the same app.
+
+7 new detection tests (18 iOS tests in total). Backend: `smart_shuffle` added to
+`normalize_playback` and asserted in `test_player`. All 63 backend tests pass.

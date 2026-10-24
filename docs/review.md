@@ -66,13 +66,13 @@ Critical: 0 | Warning: 4 | Suggestion: 6
 | W1 | `routers/dj.py` `_spotify_recent` | The best-effort history call catches builtin `TimeoutError`/`ConnectionError`, but `requests.exceptions.ReadTimeout`/`ConnectionError` don't subclass them (verified). A slow Spotify history call therefore fails the *whole* suggestion with a 503 instead of being skipped. | Also catch `requests.exceptions.RequestException`. | Fixed pre-commit |
 | W2 | `routers/dj.py` `SuggestRequest` / `TrackRef` | Unbounded `recent`/`upcoming`/`liked`/`disliked`/`skipped`/`avoid_*` lists and string lengths. A client can inflate the prompt, which costs the user's LLM budget, and on the hosted instance it sits behind only the device key. | `Field(max_length=…)`: lists ≤ 50, strings ≤ 300. | Fixed pre-commit |
 | W3 | `src/web/backend/.cache` | A token cache is tracked in git despite `.gitignore`. It holds a (now expired) app access token, which is in history since `c0e744c`. | `git rm --cached src/web/backend/.cache`. The token is short-lived, so no rotation is needed. | Fixed pre-commit |
-| W4 | `src/ios/BoominBeats/DJ/QueueStore.swift`, `SuggestionStore.autopilot` | Order-sensitive logic (arrival trimming, skip-on-arrival, reconcile matching with duplicates, Autofill/Driver targets) has no runnable check. It was only verified by hand in the Simulator. | Add an XCTest target and pure-logic tests with a fake client. → /iterate | Open |
+| W4 | `src/ios/BoominBeats/DJ/QueueStore.swift`, `SuggestionStore.autopilot` | Order-sensitive logic (arrival trimming, skip-on-arrival, reconcile matching with duplicates, Autofill/Driver targets) has no runnable check. It was only verified by hand in the Simulator. | Add an XCTest target and pure-logic tests with a fake client. → /iterate | Fixed before DJ5 |
 
 ### Suggestion
 | # | Location | Issue | Recommendation | Status |
 |---|---|---|---|---|
 | S1 | `Networking/APIClient.swift` | Sends `X-LLM-Provider`/`X-LLM-Key` on **every** request, not just LLM routes. That widens where the key travels (proxies, future logging) for no benefit. | Attach them only for `dj/`, `llm/` and `song/` paths. | Open |
-| S2 | `DJ/QueueStore.reconcile` | `GET /me/player/queue` returns at most 20 items. If more than 20 non-app tracks sit ahead (a busy Jam), still-queued `sent` items get dropped as "played". | Only drop `sent` items when the response has fewer than 20 entries, or keep unmatched ones. | Open |
+| S2 | `DJ/QueueStore.reconcile` | `GET /me/player/queue` returns at most 20 items. If more than 20 non-app tracks sit ahead (a busy Jam), still-queued `sent` items get dropped as "played". | Only drop `sent` items when the response has fewer than 20 entries, or keep unmatched ones. | Fixed before DJ5 |
 | S3 | `DJ/NowPlayingView.swift` `content()` | The `ScrollView` was wrapped around an un-reindented `VStack`, so it misreads as unbalanced. | Re-indent. | Open |
 | S4 | `DJ/SuggestionStore.swift` doc comment | It says a call "takes ~6s", which is stale after `reasoning_effort='low'` (about 3s). | Update the comment. | Open |
 | S5 | `routers/spotify_actions.py` | It imports `player_error` from another router. | Move `player_error` to `services/` when next touched. | Open |
@@ -97,3 +97,15 @@ Critical: 0 | Warning: 4 | Suggestion: 6
 None of these block shipping. W1–W3 were fixed before the commit: `requests` exceptions are caught
 (with a test), `SuggestRequest` has bounds (lists ≤ 50, strings ≤ 300, with a test), and `.cache`
 is untracked with `git rm --cached`. 63 tests pass.
+
+## Follow-up (2026-10-23, before DJ5)
+- **W4:** added a `BoominBeatsTests` target to the hand-written pbxproj: a synchronized folder,
+  hosted in the app, using Swift Testing. The pure logic was extracted into
+  `QueueStore.arrival(of:in:)`, `QueueStore.reconciled(_:against:)` and
+  `SuggestionStore.autopilotCandidates(...)`, with 11 tests. Run:
+  `xcodebuild test -scheme BoominBeats -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`.
+- **S2:** `reconciled` drops only the *played prefix* (everything before the first `sent` track
+  still visible). When the view is full (20), it keeps the trailing tracks it can't match. Keeping
+  "any unmatched track when the view is full" would have been wrong, because the playing context
+  nearly always pads the view to 20. Ceiling: with 20+ non-app tracks ahead, nothing of ours is
+  visible, and everything is treated as played.

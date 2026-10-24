@@ -20,6 +20,19 @@ struct QueueItem: Codable, Identifiable, Equatable {
     var imageURL: URL? { URL(string: image) }
 }
 
+/// A track that appeared in Spotify's queue without the app sending it: a
+/// guest's Jam add, or someone queuing directly in Spotify (DJ5).
+struct GuestRequest: Codable, Identifiable, Equatable {
+    var id = UUID()
+    let trackID: String
+    let title: String
+    let artists: [String]
+    let image: String
+
+    var artistLine: String { artists.joined(separator: ", ") }
+    var imageURL: URL? { URL(string: image) }
+}
+
 /// The app-owned queue (DJ2).
 ///
 /// Spotify's queue only accepts additions, so the editable queue lives here and
@@ -36,6 +49,16 @@ struct QueueItem: Codable, Identifiable, Equatable {
 final class QueueStore {
     private(set) var sent: [QueueItem] = [] { didSet { save() } }
     private(set) var upcoming: [QueueItem] = [] { didSet { save() } }
+    /// Pending guest requests, oldest first (DJ5).
+    private(set) var requests: [GuestRequest] = [] { didSet { save() } }
+    /// Guest tracks to skip when they come up (declined, or moved "Later").
+    /// An array, not a set: the same song can be requested twice.
+    private var guestSkips: [String] = [] { didSet { save() } }
+    /// Guest tracks the host chose to keep, so they aren't flagged again
+    /// while they wait in Spotify's queue. Cleared on arrival.
+    private var keptGuests: Set<String> = [] { didSet { save() } }
+    /// The previous queue view, for the insertion rule in `detectRequests`.
+    private var lastQueueView: [String]?
     private(set) var message: String?
     /// Track ids the app skipped itself (skip-on-arrival), so they aren't
     /// mistaken for the host skipping them.
@@ -103,17 +126,33 @@ final class QueueStore {
         guard let trackID = state.track?.id, trackID != lastTrackID else { return }
         lastTrackID = trackID
 
-        // Spotify plays queued tracks in order, so arriving at sent[i] means
-        // everything before it has already played or been skipped elsewhere.
-        if let i = sent.firstIndex(where: { $0.trackID == trackID }) {
-            let arrived = sent[i]
-            sent.removeFirst(i + 1)
-            if arrived.skipOnArrival {
-                autoSkipped.insert(arrived.trackID)
-                _ = try? await client.post("player/next/", body: NoBody()) as CommandResult
+        // Guest skips first: after "Later" the app re-sends the same track, but the
+        // guest's copy was queued earlier, so it is the one arriving now.
+        if let i = guestSkips.firstIndex(of: trackID) {
+            guestSkips.remove(at: i)
+            await skipCurrent(trackID)
+        } else {
+            let (remaining, arrived) = Self.arrival(of: trackID, in: sent)
+            sent = remaining
+            if let arrived {
+                if arrived.skipOnArrival { await skipCurrent(trackID) }
+            } else {
+                // A request that arrives undecided just plays: Spotify already put it there.
+                requests.removeAll { $0.trackID == trackID }
+                keptGuests.remove(trackID)
             }
         }
         await topUp(to: Self.foregroundDepth)
+    }
+
+    private func skipCurrent(_ trackID: String) async {
+        autoSkipped.insert(trackID)
+        _ = try? await client.post("player/next/", body: NoBody()) as CommandResult
+        // What plays next may be the same track id (after "Later", the app's own
+        // copy follows the skipped guest copy), which the track-change check in
+        // `observe` would miss, leaving a stale `sent` entry that blocks top-ups.
+        // Forget the last track so the next poll re-observes whatever is playing.
+        lastTrackID = nil
     }
 
     /// On return to the foreground: drop sent tracks that played while the app
@@ -123,14 +162,129 @@ final class QueueStore {
         await observe(state)
 
         guard let response: SpotifyQueue = try? await client.get("player/queue/") else { return }
-        // Match in order, so a track queued twice is matched against the right copy.
-        var remaining = response.queue.map(\.id)[...]
-        sent = sent.filter { item in
-            guard let i = remaining.firstIndex(of: item.trackID) else { return false }
-            remaining = remaining[(i + 1)...]
-            return true
-        }
+        sent = Self.reconciled(sent, against: response.queue.map(\.id))
+        record(response.queue, smartShuffle: state.smartShuffle ?? false)
         await topUp(to: Self.foregroundDepth)
+    }
+
+    // MARK: - Guest requests (DJ5)
+
+    /// Read Spotify's queue and pick up new guest requests. Called on a ~10s
+    /// cadence while the app is in the foreground.
+    func pollRequests(smartShuffle: Bool) async {
+        guard let response: SpotifyQueue = try? await client.get("player/queue/") else { return }
+        record(response.queue, smartShuffle: smartShuffle)
+    }
+
+    private func record(_ queue: [Track], smartShuffle: Bool) {
+        let view = queue.map(\.id)
+        let found = Self.detectRequests(
+            previous: lastQueueView,
+            current: view,
+            appIDs: Set(sent.map(\.trackID)),
+            ignoring: Set(requests.map(\.trackID)).union(keptGuests).union(guestSkips),
+            insertionsAllowed: !smartShuffle
+        )
+        requests += found.map { i in
+            let t = queue[i]
+            return GuestRequest(trackID: t.id, title: t.title, artists: t.artists, image: t.image)
+        }
+        lastQueueView = view
+    }
+
+    /// Leave it where Spotify put it.
+    func keep(_ request: GuestRequest) {
+        requests.removeAll { $0.id == request.id }
+        keptGuests.insert(request.trackID)
+    }
+
+    /// Skip it when it comes up and add it to the end of Up Next instead.
+    func later(_ request: GuestRequest) async {
+        requests.removeAll { $0.id == request.id }
+        guestSkips.append(request.trackID)
+        upcoming.append(QueueItem(trackID: request.trackID, title: request.title, artists: request.artists, image: request.image))
+        await topUp(to: Self.foregroundDepth)
+    }
+
+    /// Skip it when it comes up.
+    func decline(_ request: GuestRequest) {
+        requests.removeAll { $0.id == request.id }
+        guestSkips.append(request.trackID)
+    }
+
+    // MARK: - Pure queue logic (unit-tested in BoominBeatsTests)
+
+    /// Indices in `current` (Spotify's queue view) that are guest requests.
+    ///
+    /// Two signals, either is enough:
+    /// - **Wedged:** a non-app track ahead of one of the app's own tracks. Spotify
+    ///   plays the user queue first-in, first-out before the context, so only a
+    ///   queued track can sit there (the DJ0.1 finding). Reliable, but typically
+    ///   one top-up late, since the app keeps only one track ahead.
+    /// - **Inserted:** a track absent from the previous view that now sits before
+    ///   the last track the two views share. Context tracks only ever enter the
+    ///   view at its tail as it slides, so a mid-view newcomer was queued by
+    ///   someone. Catches requests on the next poll. Off under Smart Shuffle,
+    ///   which inserts its own recommendations mid-queue.
+    nonisolated static func detectRequests(
+        previous: [String]?,
+        current: [String],
+        appIDs: Set<String>,
+        ignoring: Set<String>,
+        insertionsAllowed: Bool
+    ) -> [Int] {
+        let lastApp = current.lastIndex(where: appIDs.contains)
+        let previousSet = Set(previous ?? [])
+        let lastShared = insertionsAllowed && !previousSet.isEmpty
+            ? current.lastIndex(where: previousSet.contains) : nil
+        var seen = Set<String>()
+        var found: [Int] = []
+        for (i, id) in current.enumerated() where !appIDs.contains(id) && !ignoring.contains(id) {
+            let wedged = lastApp.map { i < $0 } ?? false
+            let inserted = lastShared.map { i < $0 && !previousSet.contains(id) } ?? false
+            if (wedged || inserted), seen.insert(id).inserted { found.append(i) }
+        }
+        return found
+    }
+
+    /// How many upcoming tracks GET /me/player/queue returns at most.
+    nonisolated static let spotifyQueueWindow = 20
+
+    /// Spotify plays queued tracks in order, so arriving at sent[i] means
+    /// everything before it has already played or been skipped elsewhere.
+    nonisolated static func arrival(of trackID: String, in sent: [QueueItem]) -> (remaining: [QueueItem], arrived: QueueItem?) {
+        guard let i = sent.firstIndex(where: { $0.trackID == trackID }) else { return (sent, nil) }
+        return (Array(sent[(i + 1)...]), sent[i])
+    }
+
+    /// `sent` minus whatever Spotify has already played, given the ids in its
+    /// queue view. Played tracks are a *prefix* of `sent` (Spotify plays the user
+    /// queue first-in, first-out), so drop everything before the first one still
+    /// visible, then match the rest in order so a track queued twice pairs with
+    /// the right copy.
+    ///
+    /// The view is capped at `spotifyQueueWindow` and is nearly always full (the
+    /// playing context pads it), so a trailing unmatched track may simply be past
+    /// the window: keep those when the view is full (review S2). Ceiling: if 20+
+    /// non-app tracks sit ahead of ours (a very busy Jam), nothing of ours is
+    /// visible and everything is treated as played.
+    nonisolated static func reconciled(_ sent: [QueueItem], against queue: [String]) -> [QueueItem] {
+        guard let start = sent.firstIndex(where: { queue.contains($0.trackID) }) else { return [] }
+        var remaining = queue[...]
+        var kept: [QueueItem] = []
+        for (offset, item) in sent[start...].enumerated() {
+            if let i = remaining.firstIndex(of: item.trackID) {
+                kept.append(item)
+                remaining = remaining[(i + 1)...]
+            } else if queue.count >= spotifyQueueWindow {
+                // Possibly just past the visible window, and so is everything
+                // after it. A track that truly vanished isn't stuck: once nothing
+                // before it is visible it becomes a prefix and is dropped.
+                kept.append(contentsOf: sent[(start + offset)...])
+                break
+            }
+        }
+        return kept
     }
 
     /// Top up to the background depth before iOS suspends the app.
@@ -177,6 +331,10 @@ final class QueueStore {
     private struct Snapshot: Codable {
         let sent: [QueueItem]
         let upcoming: [QueueItem]
+        // Optional so pre-DJ5 queue files still decode.
+        var requests: [GuestRequest]?
+        var guestSkips: [String]?
+        var keptGuests: [String]?
     }
 
     private static var fileURL: URL {
@@ -188,12 +346,17 @@ final class QueueStore {
               let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
         sent = snapshot.sent
         upcoming = snapshot.upcoming
+        requests = snapshot.requests ?? []
+        guestSkips = snapshot.guestSkips ?? []
+        keptGuests = Set(snapshot.keptGuests ?? [])
     }
 
     private func save() {
         do {
             try FileManager.default.createDirectory(at: .applicationSupportDirectory, withIntermediateDirectories: true)
-            try JSONEncoder().encode(Snapshot(sent: sent, upcoming: upcoming)).write(to: Self.fileURL, options: .atomic)
+            let snapshot = Snapshot(sent: sent, upcoming: upcoming, requests: requests,
+                                    guestSkips: guestSkips, keptGuests: Array(keptGuests))
+            try JSONEncoder().encode(snapshot).write(to: Self.fileURL, options: .atomic)
         } catch {
             message = "Couldn't save the queue: \(error.localizedDescription)"
         }

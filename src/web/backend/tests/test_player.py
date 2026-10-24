@@ -50,6 +50,7 @@ class NormalizePlayback(unittest.TestCase):
         self.assertEqual(n['track']['image'], 'big')  # largest, unlike /get-profile/
         self.assertEqual(n['disallows'], ['resuming'])  # only truthy entries
         self.assertEqual(n['context_uri'], 'spotify:playlist:x')
+        self.assertFalse(n['smart_shuffle'])
 
     def test_episode_has_no_track(self):
         n = normalize_playback(_playback(item={'type': 'episode', 'name': 'Pod'}))

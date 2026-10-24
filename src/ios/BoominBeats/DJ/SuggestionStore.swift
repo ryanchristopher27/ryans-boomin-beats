@@ -174,6 +174,27 @@ final class SuggestionStore {
         }
     }
 
+    /// Picks in the order autopilot should take them: moves ranked by
+    /// adventurousness (safe → hold/lift/drop, bold → pivot/curveball first),
+    /// interleaved one per move per round, minus anything already queued.
+    nonisolated static func autopilotCandidates(
+        moves: [MoveSuggestions.Move],
+        adventurousness a: Double,
+        excluding queued: Set<String>
+    ) -> [MoveSuggestions.Pick] {
+        let order = a < 0.34 ? ["hold", "lift", "drop"]
+            : a < 0.67 ? ["hold", "lift", "pivot", "drop", "curveball"]
+            : ["pivot", "curveball", "lift", "hold"]
+        let lists = order.compactMap { name in moves.first { $0.move == name }?.tracks }
+        var candidates: [MoveSuggestions.Pick] = []
+        for i in 0..<(lists.map(\.count).max() ?? 0) {
+            for list in lists where i < list.count && !queued.contains(list[i].id) {
+                candidates.append(list[i])
+            }
+        }
+        return candidates
+    }
+
     /// Autofill and Driver (DJ4): keep `mode.autopilotTarget` tracks lined up,
     /// drawing from the current moves. Adventurousness picks which moves lead;
     /// picks are interleaved across moves so Driver's three aren't all one move.
@@ -182,19 +203,11 @@ final class SuggestionStore {
         let target = settings.mode.autopilotTarget
         guard target > 0, queue.aheadCount < target, case let .loaded(moves) = state else { return }
 
-        let a = settings.adventurousness
-        let order = a < 0.34 ? ["hold", "lift", "drop"]
-            : a < 0.67 ? ["hold", "lift", "pivot", "drop", "curveball"]
-            : ["pivot", "curveball", "lift", "hold"]
-        let lists = order.compactMap { name in moves.first { $0.move == name }?.tracks }
-        let queued = Set((queue.sent + queue.upcoming).map(\.trackID))
-        var candidates: [MoveSuggestions.Pick] = []
-        for i in 0..<(lists.map(\.count).max() ?? 0) {
-            for list in lists where i < list.count && !queued.contains(list[i].id) {
-                candidates.append(list[i])
-            }
-        }
-
+        var candidates = Self.autopilotCandidates(
+            moves: moves,
+            adventurousness: settings.adventurousness,
+            excluding: Set((queue.sent + queue.upcoming).map(\.trackID))
+        )
         while queue.aheadCount < target, !candidates.isEmpty {
             var item = candidates.removeFirst().queueItem
             item.addedByDJ = true

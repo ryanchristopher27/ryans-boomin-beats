@@ -45,6 +45,36 @@ struct QueueView: View {
                 Text(message).font(.footnote).foregroundStyle(.red)
             }
 
+            if !queue.requests.isEmpty {
+                Section {
+                    ForEach(queue.requests) { request in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 12) {
+                                artwork(request.imageURL)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(request.title).lineLimit(1)
+                                    Text(request.artistLine)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            HStack {
+                                Button("Keep") { queue.keep(request) }
+                                Button("Later") { Task { await queue.later(request) } }
+                                Button("Decline", role: .destructive) { queue.decline(request) }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                } header: {
+                    Text("Requests")
+                } footer: {
+                    Text("Added in Spotify by someone else. Keep plays it where Spotify put it, Later moves it to the end of Up Next, Decline skips it.")
+                }
+            }
+
             if !queue.sent.isEmpty {
                 Section {
                     ForEach(queue.sent) { item in
@@ -80,15 +110,19 @@ struct QueueView: View {
         }
     }
 
+    private func artwork(_ url: URL?) -> some View {
+        AsyncImage(url: url) { image in
+            image.resizable().aspectRatio(contentMode: .fill)
+        } placeholder: {
+            RoundedRectangle(cornerRadius: 4).fill(.quaternary)
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
     private func row(_ item: QueueItem) -> some View {
         HStack(spacing: 12) {
-            AsyncImage(url: item.imageURL) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                RoundedRectangle(cornerRadius: 4).fill(.quaternary)
-            }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            artwork(item.imageURL)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {

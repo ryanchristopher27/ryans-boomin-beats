@@ -54,6 +54,9 @@ def normalize_playback(p: dict | None) -> dict:
         # Spotify's server time for progress_ms — lets the client interpolate.
         'timestamp': p.get('timestamp', 0),
         'shuffle': p.get('shuffle_state', False),
+        # Smart Shuffle inserts recommendations mid-queue, which would look like
+        # guest requests to DJ5's insertion rule; the client turns that rule off.
+        'smart_shuffle': p.get('smart_shuffle', False),
         'repeat': p.get('repeat_state', 'off'),
         'device': {'name': device.get('name', ''), 'type': device.get('type', '')},
         'context_uri': (p.get('context') or {}).get('uri'),

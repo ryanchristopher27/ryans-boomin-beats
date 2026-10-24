@@ -14,11 +14,13 @@ struct PlaybackState: Decodable {
     let device: Device?
     let track: Track?
     let disallows: [String]?
+    let smartShuffle: Bool?
 
     enum CodingKeys: String, CodingKey {
         case active, device, track, disallows
         case isPlaying = "is_playing"
         case progressMs = "progress_ms"
+        case smartShuffle = "smart_shuffle"
     }
 
     func allows(_ action: String) -> Bool { !(disallows ?? []).contains(action) }
@@ -49,6 +51,7 @@ final class NowPlayingModel {
     private(set) var disliked: [Track] = []
     /// When `state` was fetched; progress is interpolated from here between polls.
     private var fetchedAt = Date()
+    private var lastRequestPoll = Date.distantPast
 
     private let client: APIClient
     private let queue: QueueStore
@@ -97,6 +100,12 @@ final class NowPlayingModel {
             fetchedAt = Date()
             if message == Self.noDevice, s.active { message = nil }
             await queue.observe(s)
+            // Guest requests (DJ5): Spotify's queue is a separate, slower read, so
+            // poll it every ~10s rather than on every 2s state poll.
+            if Date().timeIntervalSince(lastRequestPoll) >= 10 {
+                lastRequestPoll = Date()
+                await queue.pollRequests(smartShuffle: s.smartShuffle ?? false)
+            }
         } catch {
             message = (error as? APIClient.Error)?.errorDescription ?? error.localizedDescription
         }

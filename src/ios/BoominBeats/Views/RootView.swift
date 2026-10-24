@@ -29,6 +29,7 @@ struct MainTabs: View {
         TabView {
             Tab("Now Playing", systemImage: "play.circle") { NowPlayingView() }
             Tab("Queue", systemImage: "list.bullet") { QueueView() }
+                .badge(queue?.requests.count ?? 0)
             Tab("Profile", systemImage: "person.crop.circle") { ProfileView() }
         }
         .environment(nowPlaying)
