@@ -126,9 +126,37 @@ final class SpotifySession {
                 "client_id": Config.spotifyClientID,
             ])
             state = .loggedIn
-        } catch {
-            // A failed refresh means the grant is gone — force a fresh login.
+        } catch TokenError.rejected {
+            // Spotify refused the grant (expired or revoked): only a fresh login helps.
             logOut()
+        } catch {
+            // Offline, a 5xx or a 429: the grant is still good. Previously any failure
+            // logged out, so a moment without signal at launch wiped the session.
+            // Stay signed in; validToken() retries the refresh before the next request.
+            state = .loggedIn
+        }
+    }
+
+    enum TokenError: Error, LocalizedError, Equatable {
+        /// 400/401 from the token endpoint: the code or refresh token is no good.
+        case rejected(status: Int)
+        /// Anything else: worth retrying.
+        case unavailable(status: Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .rejected: return "Spotify didn't accept the sign-in. Try again."
+            case let .unavailable(status): return "Couldn't reach Spotify (\(status)). Try again in a moment."
+            }
+        }
+
+        /// The token endpoint's outcome for an HTTP status, or nil on success.
+        nonisolated static func classify(status: Int) -> TokenError? {
+            switch status {
+            case 200..<300: return nil
+            case 400, 401: return .rejected(status: status)
+            default: return .unavailable(status: status)
+            }
         }
     }
 
@@ -142,9 +170,8 @@ final class SpotifySession {
             .data(using: .utf8)
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw URLError(.userAuthenticationRequired)
-        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if let failure = TokenError.classify(status: status) { throw failure }
         let token = try JSONDecoder().decode(TokenResponse.self, from: data)
 
         accessToken = token.access_token

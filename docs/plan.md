@@ -2498,3 +2498,15 @@ app is in the foreground, plus on reconcile. A track is a request if either rule
 
 7 new detection tests (18 iOS tests in total). Backend: `smart_shuffle` added to
 `normalize_playback` and asserted in `test_player`. All 63 backend tests pass.
+
+### Fix — transient refresh failures no longer sign the user out (2026-10-24)
+
+`SpotifySession.refresh()` logged out on *any* failure, so a dropped connection, a Spotify 5xx or a
+429 while renewing the token wiped the session. At a party, opening the app with a moment of no
+signal would sign the host out. It was found when the Simulator came back logged out after an
+overnight gap; whether that instance was transient or a real revocation can't be told.
+- `postToken` now throws `TokenError.rejected` (400/401: the grant is gone) or `.unavailable`
+  (anything else).
+- `refresh()` logs out only on `.rejected`. On anything else it stays `.loggedIn` with the saved
+  grant, and `validToken()` retries before the next request.
+- 3 tests in `BoominBeatsTests/SessionTests.swift` (23 iOS tests in total).
