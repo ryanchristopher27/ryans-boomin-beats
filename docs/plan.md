@@ -2542,3 +2542,42 @@ overnight gap; whether that instance was transient or a real revocation can't be
 no Toward or Drift suggestion has been seen end to end yet, and the Goal row hasn't been seen
 rendered: the Simulator came back signed out. Run a small, rate-budgeted live check once search
 unblocks.
+
+**DJ6 partial live check (2026-10-24 16:20 CDT).** Search was still 429 (`Retry-After: 17989`), so
+this covered everything *except* Spotify validation:
+- **The LLM step.** The exact `build_prompt` output for each goal (Tadow — Masego playing; Kendrick
+  and Solange in history) was sent straight to Groq. The goal move led every reply with the five
+  standard moves after it, in 2.7–3.9s.
+  - **Destination "90s R&B":** TLC, Tevin Campbell, K-Ci & JoJo, Erykah Badu. ✅ On target, though
+    it jumps all the way there instead of "part of the way".
+  - **Build arc (33% of 30 min):** Redbone, Otis Redding, a likely-hallucinated Jonas Brothers
+    track, an Amy Winehouse remix. ⚠️ **Not reliably higher energy.** At
+    `reasoning_effort='low'` the "step energy UP" instruction is followed weakly.
+  - **Drift:** Erykah Badu, Bill Withers (live), "Don't You Worry 'Bout a Thing" credited to Teddy
+    Pendergrass (it's Stevie Wonder's), and a likely-hallucinated "Cinematic Edit". The direction
+    is right (away from hip-hop). The bad entries would be dropped by Spotify validation or the
+    artist check, which leaves the move with fewer picks.
+- **iOS:** the "Nothing playing" state rendered correctly (a DJ1 gap, now seen). The Goal row
+  wasn't reachable, because the DJ card only shows while a track plays.
+
+**Still open:** end-to-end once search unblocks (about 21:20 CDT), the Goal row in the UI, and
+whether the arc prompt needs concrete energy markers (tempo, intensity) to steer reliably.
+
+**DJ6 arc prompt tweak + UI check (2026-10-24 ~16:30 CDT).**
+- `_arc_step` now uses concrete markers. Up: "a clearly faster tempo, harder drums or more intense
+  production … say what makes it higher energy". Down: slower, softer or sparser. Hold-peak and
+  hold-low variants too. Re-tested on the same scenario:
+  - Run 2: Anderson .Paak "Bubblin'", Lucky Daye, the Justice remix of "Electric Feel", Frank Ocean
+    "Nights" (for its beat switch). ✅ Clearly higher energy, with reasons naming tempo and drums.
+  - Run 1: the KAYTRANADA remix of "Cranes in the Sky" (good), plus a non-existent Masego track and
+    "Redbone — higher BPM" (wrong).
+  - Conclusion: much better, not perfect. Spotify validation drops the fake track; a confident
+    wrong reason can still slip through.
+- **UI, verified in the Simulator:** the Goal row and menu (None / Destination… / Build to peak /
+  Wind down / Peak then cool / Drift).
+  - Picking **Build to peak** shows "Build to peak · 30 min", the 15/30/60 picker and "0 of 30 min".
+  - **Destination…** opens the prompt; "90s R&B" sets "Toward 90s R&B", and the arc picker hides.
+  - While search was blocked, suggestions showed the 503 "Spotify is rate-limiting this app right
+    now" message, as designed.
+- **Still open:** the end-to-end Toward/Drift picks after Spotify validation, once search unblocks
+  (about 21:20 CDT).

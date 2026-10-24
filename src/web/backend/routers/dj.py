@@ -97,24 +97,35 @@ class SuggestRequest(BaseModel):
     goal: Goal | None = None
 
 
+# Concrete markers, because a bare "step energy UP" was followed weakly at
+# reasoning_effort='low' (DJ6 live check: Otis Redding offered as a build step).
+_UP = ('step the energy UP from now playing: each song must have a clearly faster tempo, harder drums '
+       'or more intense production than now playing. Say in the reason what makes it higher energy.')
+_DOWN = ('step the energy DOWN from now playing: each song must have a clearly slower tempo, softer or '
+         'sparser production than now playing. Say in the reason what makes it calmer.')
+_HOLD_PEAK = ('hold peak energy: match the intensity of the most energetic songs played so far. Say in the '
+              'reason what keeps it at the peak.')
+_HOLD_LOW = 'keep it calm and low: slow tempos, soft or sparse production.'
+
+
 def _arc_step(goal: Goal) -> str:
     """Where an energy arc stands right now, as an instruction for this step."""
     p = min(goal.elapsed_minutes / goal.minutes, 1.0)
     pct, m = round(p * 100), goal.minutes
     if goal.shape == 'build':
         if p >= 1:
-            return f'The {m}-minute build has reached its peak: hold peak energy.'
-        return f'{pct}% through a {m}-minute build to a peak: step the energy UP from now playing.'
+            return f'The {m}-minute build has reached its peak: {_HOLD_PEAK}'
+        return f'{pct}% through a {m}-minute build to a peak: {_UP}'
     if goal.shape == 'wind_down':
         if p >= 1:
-            return f'The {m}-minute wind-down is done: keep it calm and low.'
-        return f'{pct}% through a {m}-minute wind-down: step the energy DOWN from now playing.'
+            return f'The {m}-minute wind-down is done: {_HOLD_LOW}'
+        return f'{pct}% through a {m}-minute wind-down: {_DOWN}'
     # peak_cool: rise to a peak at the midpoint, then come back down.
     if p < 0.5:
-        return f'{pct}% through a {m}-minute peak-then-cool: still climbing to the peak at the halfway mark, step energy UP.'
+        return f'{pct}% through a {m}-minute peak-then-cool, still climbing to the peak at the halfway mark: {_UP}'
     if p >= 1:
-        return f'The {m}-minute peak-then-cool has finished cooling: keep it relaxed.'
-    return f'{pct}% through a {m}-minute peak-then-cool: past the peak, step energy DOWN.'
+        return f'The {m}-minute peak-then-cool has finished cooling: {_HOLD_LOW}'
+    return f'{pct}% through a {m}-minute peak-then-cool, past the peak: {_DOWN}'
 
 
 def goal_move(goal: Goal | None) -> tuple[str, str] | None:
