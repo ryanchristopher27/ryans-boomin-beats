@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from spotipy import Spotify, SpotifyException
 
 from services.spotify_auth import get_spotify_token
+from services.spotify_client import user_client
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class SaveTrackRequest(BaseModel):
 
 @router.post("/spotify/create-playlist/")
 def create_playlist(body: CreatePlaylistRequest, token: str = Depends(get_spotify_token)):
-    spotify = Spotify(auth=token)
+    spotify = user_client(token)
     playlist = spotify._post("me/playlists", payload={"name": body.name, "public": False, "description": "Created by Boomin Beats"})
     if body.track_ids:
         spotify.playlist_add_items(playlist['id'], body.track_ids)
@@ -45,7 +46,7 @@ def create_playlist(body: CreatePlaylistRequest, token: str = Depends(get_spotif
 @router.get("/spotify/playlists/")
 def list_playlists(token: str = Depends(get_spotify_token)):
     """List the user's editable playlists (owned or collaborative)."""
-    spotify = Spotify(auth=token)
+    spotify = user_client(token)
     me_id = spotify.me()['id']
 
     playlists = []
@@ -82,7 +83,7 @@ def list_playlists(token: str = Depends(get_spotify_token)):
 def add_to_playlist(body: AddToPlaylistRequest, token: str = Depends(get_spotify_token)):
     if not body.track_ids:
         return {'added': 0}
-    spotify = Spotify(auth=token)
+    spotify = user_client(token)
     spotify.playlist_add_items(body.playlist_id, body.track_ids)
     return {
         'added': len(body.track_ids),
@@ -96,7 +97,7 @@ def top_tracks(
     time_range: str = Query(default='medium_term'),
     token: str = Depends(get_spotify_token),
 ):
-    spotify = Spotify(auth=token)
+    spotify = user_client(token)
     result = spotify.current_user_top_tracks(limit=limit, time_range=time_range)
     tracks = []
     for t in result.get('items', []):
@@ -116,7 +117,7 @@ def taste_over_time(token: str = Depends(get_spotify_token)):
     """Aggregate listening metrics across the three timeframes. Uses cheap
     Spotify-native data (popularity, release year) and tries audio-features
     (deprecated for new apps) — degrading to audio_features=None if unavailable."""
-    spotify = Spotify(auth=token)
+    spotify = user_client(token)
 
     ranges = [('short_term', '1 Month'), ('medium_term', '6 Months'), ('long_term', 'All Time')]
     af_dims = {'Energy': 'energy', 'Danceability': 'danceability', 'Positivity': 'valence', 'Acousticness': 'acousticness'}
@@ -170,7 +171,7 @@ def taste_over_time(token: str = Depends(get_spotify_token)):
 def recently_played(token: str = Depends(get_spotify_token)):
     """Return play timestamps for the listening clock. Spotify caps this at the
     50 most-recent plays. Needs the user-read-recently-played scope."""
-    spotify = Spotify(auth=token)
+    spotify = user_client(token)
     try:
         res = spotify.current_user_recently_played(limit=50)
     except SpotifyException as e:
@@ -239,7 +240,7 @@ def _saved_tracks_modify(spotify: Spotify, ids: list[str], remove: bool) -> None
 def save_track(body: SaveTrackRequest, token: str = Depends(get_spotify_token)):
     if not body.track_ids:
         return {'ok': True, 'saved': not body.remove}
-    spotify = Spotify(auth=token)
+    spotify = user_client(token)
     try:
         _saved_tracks_modify(spotify, body.track_ids, body.remove)
     except SpotifyException as e:
@@ -254,7 +255,7 @@ def saved_contains(ids: str = Query(default=""), token: str = Depends(get_spotif
     id_list = [i for i in ids.split(',') if i]
     if not id_list:
         return {'saved': {}}
-    spotify = Spotify(auth=token)
+    spotify = user_client(token)
     try:
         flags = _saved_tracks_contains(spotify, id_list)
     except SpotifyException as e:
@@ -266,7 +267,7 @@ def saved_contains(ids: str = Query(default=""), token: str = Depends(get_spotif
 
 @router.post("/spotify/queue/")
 def queue_songs(body: QueueRequest, token: str = Depends(get_spotify_token)):
-    spotify = Spotify(auth=token)
+    spotify = user_client(token)
     queued = 0
     for track_id in body.track_ids:
         try:

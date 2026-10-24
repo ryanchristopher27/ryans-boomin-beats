@@ -1,6 +1,7 @@
 import hmac
 import logging
 
+import requests
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -65,8 +66,38 @@ def root():
     return {"status": "ok", "docs": "/docs"}
 
 
+# Upstream timeouts and connection failures are not SpotifyExceptions — a read
+# timeout surfaces as a bare builtin TimeoutError — so they sail past every
+# `except SpotifyException` handler and land in the 500 handler below, which
+# reports a server fault for what is really "Spotify didn't answer". 503 tells
+# the client it's transient and worth retrying.
+_UPSTREAM_UNAVAILABLE = (
+    requests.exceptions.Timeout,
+    requests.exceptions.ConnectionError,
+    TimeoutError,
+    ConnectionError,
+)
+
+
+@app.exception_handler(requests.exceptions.Timeout)
+@app.exception_handler(requests.exceptions.ConnectionError)
+@app.exception_handler(TimeoutError)
+@app.exception_handler(ConnectionError)
+async def upstream_unavailable_handler(request: Request, exc: Exception):
+    log.warning('[upstream] %s %s unreachable: %s', request.method, request.url.path, exc)
+    origin = request.headers.get("origin", "")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Spotify is not responding. Try again in a moment."},
+        headers={"Access-Control-Allow-Origin": origin},
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    # Don't let the catch-all swallow the transient cases above.
+    if isinstance(exc, _UPSTREAM_UNAVAILABLE):
+        return await upstream_unavailable_handler(request, exc)
     # Keep CORS headers on 500s so the browser reports the real error instead of
     # a misleading CORS failure (2026-06-05 reflect). Credentials flag dropped
     # along with SessionMiddleware — no cookies are involved any more.

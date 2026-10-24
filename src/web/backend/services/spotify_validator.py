@@ -1,15 +1,8 @@
 import asyncio
+
 from spotipy import Spotify
-from spotipy.oauth2 import SpotifyClientCredentials
 
-from config import CLIENT_ID, CLIENT_SECRET
-
-
-def _get_spotify() -> Spotify:
-    return Spotify(auth_manager=SpotifyClientCredentials(
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-    ))
+from services.spotify_client import app_client
 
 
 def _format_track(track: dict) -> dict:
@@ -43,7 +36,7 @@ def _search_one(spotify: Spotify, title: str, artist: str) -> dict | None:
 
 
 async def validate_songs(suggestions: list[dict]) -> tuple[list[dict], list[dict]]:
-    spotify = await asyncio.to_thread(_get_spotify)
+    spotify = await asyncio.to_thread(app_client)
 
     async def check(suggestion: dict):
         track = await asyncio.to_thread(_search_one, spotify, suggestion['title'], suggestion['artist'])

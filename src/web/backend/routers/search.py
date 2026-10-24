@@ -1,22 +1,13 @@
 from fastapi import APIRouter, Query
-from spotipy import Spotify
-from spotipy.oauth2 import SpotifyClientCredentials
 
-from config import CLIENT_ID, CLIENT_SECRET
+from services.spotify_client import app_client
 
 router = APIRouter()
 
 
-def _get_spotify() -> Spotify:
-    return Spotify(auth_manager=SpotifyClientCredentials(
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-    ))
-
-
 @router.get("/search/")
 def search(searchValue: str = Query(...)):
-    spotify = _get_spotify()
+    spotify = app_client()
     result = spotify.search(q='track:' + searchValue)
 
     tracks = []
