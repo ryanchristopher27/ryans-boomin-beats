@@ -4,11 +4,13 @@ import SwiftUI
 @main
 struct BoominBeatsApp: App {
     @State private var session = SpotifySession()
+    @AppStorage(Appearance.storageKey) private var appearance: Appearance = .system
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(session)
+                .preferredColorScheme(appearance.colorScheme)
                 .task {
                     #if DEBUG
                     Diagnostics.keychainSelfTest()

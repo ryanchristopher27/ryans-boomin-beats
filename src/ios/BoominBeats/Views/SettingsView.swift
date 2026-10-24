@@ -1,5 +1,32 @@
 import SwiftUI
 
+/// App-wide light/dark override. `system` follows the phone's setting, which
+/// the app already did before this existed; the override lets a host keep the
+/// app dark at a party with the phone on Light.
+enum Appearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+
+    static let storageKey = "appearance"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 /// API host + device key entry.
 ///
 /// The base URL is configurable rather than compiled in because the same build has
@@ -15,6 +42,8 @@ struct SettingsView: View {
     @State private var host: String = Config.apiBaseURL.absoluteString
     @State private var deviceKey: String = Config.deviceKey ?? ""
     @State private var probe: ProbeState = .idle
+    // Applies immediately, like iOS's own appearance setting, rather than on Save.
+    @AppStorage(Appearance.storageKey) private var appearance: Appearance = .system
     @State private var bufferDepth = Config.backgroundBufferDepth
     @State private var llmProvider = Config.llmProvider
     @State private var llmKey = Config.llmKey ?? ""
@@ -29,6 +58,13 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Appearance") {
+                    Picker("Appearance", selection: $appearance) {
+                        ForEach(Appearance.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section {
                     TextField("http://192.168.1.x:8005", text: $host)
                         .textInputAutocapitalization(.never)
@@ -117,6 +153,8 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            // A sheet keeps its own appearance; mirror the choice so the change shows here at once.
+            .preferredColorScheme(appearance.colorScheme)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
