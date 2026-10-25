@@ -15,6 +15,7 @@ import logging
 import requests
 from requests.adapters import HTTPAdapter
 from spotipy import Spotify
+from spotipy.cache_handler import MemoryCacheHandler
 from spotipy.oauth2 import SpotifyClientCredentials
 from urllib3.util.retry import Retry
 
@@ -63,6 +64,11 @@ def user_client(token: str) -> Spotify:
     )
 
 
+# Shared across calls so the client-credentials token is reused until it
+# expires instead of fetched per request. Process-lifetime, like any cache here.
+_APP_TOKEN_CACHE = MemoryCacheHandler()
+
+
 def app_client() -> Spotify:
     """Client-credentials client, for catalog reads that need no user context.
 
@@ -73,6 +79,9 @@ def app_client() -> Spotify:
         auth_manager=SpotifyClientCredentials(
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
+            # spotipy's default writes the app token to ./.cache. Vercel's
+            # filesystem is read-only (SY2), and the file kept ending up in git.
+            cache_handler=_APP_TOKEN_CACHE,
         ),
         requests_session=_session(),
         requests_timeout=REQUEST_TIMEOUT,
