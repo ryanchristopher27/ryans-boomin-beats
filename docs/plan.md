@@ -2890,3 +2890,30 @@ pane throttling timers):
 - **New risk found:** the Spotify **search** daily quota (`QUOTA_EXCEEDED`, resets about 21:20
   local) was exhausted again by a morning of Co-pilot prefetch. Tracked as a high-priority bug;
   not part of SY2.
+
+### SY3 result (2026-10-25)
+Built in `src/ios/BoominBeats/DJ/`: `SyncDoc.swift` (the shared document, field-level three-way
+merge), `DJSync.swift` (pull on a version change, debounced push with If-Match, merge-and-retry on
+409 up to 3 times, seed at v0, Drive from here) and `SyncBanner.swift` (on Now Playing and Queue).
+Primary-only gating covers top-ups, skip-on-arrival, reconcile, request polling, autopilot, and
+history/skip recording. The last role is remembered, so a participant doesn't drive at launch.
+Five new tests in `SyncTests.swift`. **Pending:** the live two-device check (iPhone on dev, plus
+the simulator).
+
+### W1 result (2026-10-25)
+`src/web/frontend/src/lib/dj/`:
+- `logic.js`: pure logic, ported one to one, with 23 vitest ports of the iOS tests.
+- `dj.js`: one engine over a single synced `doc` store, plus local `player`, `sync` and
+  `suggestions` stores.
+- `api.js`: `{status, data}` fetch; the LLM key is sent only to `/dj/suggest/`.
+
+Five engine tests run against a fake SY1 backend: seed, participant gating, 409 merge, Drive from
+here, and adopting the queue with a notice.
+
+Web-specific choices:
+- A hidden tab keeps 5 tracks ahead, because browsers throttle hidden timers. The iOS equivalent is
+  the background top-up.
+- The device label is `<platform> web`.
+
+**Found and fixed on both clients:** a participant's add waited for the next track change before
+the primary sent it. The primary now tops up after adopting remote state.
