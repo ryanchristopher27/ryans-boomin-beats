@@ -969,3 +969,256 @@ lands well after that". It doesn't promise beatmatching or harmonic mixing.
    from outside edits
 5. Acceptance for the first milestone: now-playing view with play/pause/skip, three move-labelled
    suggestions per track, and tap-to-queue landing in the buffer
+
+---
+
+# DJ Companion — Web Design Brief (2026-10-25)
+
+`/design shape` output. This is the contract `/design craft` builds against. It brings the iOS DJ
+(DJ1–DJ6) to the SvelteKit web app, at full parity, as a **customizable widget grid** modelled on
+Robinhood Legend's layout engine.
+
+## Decisions (confirmed with the owner)
+
+- **Placement:** a new **DJ** nav page, plus a fixed **mini player** bar on every other page.
+- **Layout:** a widget grid the user can rearrange, inspired by Robinhood Legend (resize,
+  reposition, presets, linking). The **Host** preset (the three-column Option 1) is the default.
+- **Primary use:** hosting from a laptop by the speakers. Optimise for glanceability and fast,
+  confident taps; detail on demand.
+- **Scope:** full parity with iOS.
+- **Moves come in both forms:** a combined **Next moves** widget *and* single-move widgets (Toward,
+  Hold, Lift, Drop, Pivot, Curveball, Drift).
+- **Editing is locked by default.** An **Edit layout** toggle reveals drag handles, resize corners,
+  an Add widget menu, and Done. A laptop at a party gets bumped, so no accidental drags.
+- **The mini player is fixed,** not customizable.
+
+## Register and stance
+
+**Product register.** The bar is earned familiarity: "would a Spotify or Legend power user trust
+this?" The tool disappears into the night. Delight is reserved for one moment (the album-art
+ambience, below), never for chrome.
+
+**AI-slop check.**
+- First-order: "music app → dark + neon". That's the existing brand (logo-derived blue/purple on
+  #121212) and the product-register default, so it's kept on purpose, not by reflex.
+- Second-order traps refused: aurora gradients, glassmorphism, neon glow, gradient text, identical
+  card grids.
+- The distinctiveness comes from the **move vocabulary** and **album-art ambience**, not decoration.
+
+## Information architecture
+
+### Widget catalog
+
+Each widget has a header (title + optional actions), a body, and every state shipped.
+
+| Widget | Content | Min size (cols × rows, 12-col grid) | Notes |
+|---|---|---|---|
+| **Now playing** | Art, title, artists, progress, ⏮ ⏯ ⏭, 👎/👍, device | 3 × 5 | Carries the album-art ambience |
+| **DJ controls** | Mode (Whisper / Co-pilot / Autofill / Driver), Safe↔Bold, Clean only | 3 × 3 | |
+| **Goal** | None / Destination / Build / Wind down / Peak then cool / Drift, length, progress | 3 × 2 | Can be docked inside DJ controls in Host |
+| **Next moves** | All moves stacked; each pick has art, title, artist, reason, ⋯, + | 4 × 6 | Refresh in the header |
+| **Single move** (×7 kinds) | One move's picks, same row anatomy | 2 × 3 | Kind chosen when added |
+| **Up next** | Sent to Spotify + Up Next, reorder, remove, Later, + Add song (search) | 3 × 5 | ✦ marks DJ-added picks |
+| **Requests** | Guest requests with Keep / Later / Decline; a badge count | 3 × 3 | Empty state: "Requests from your Spotify queue show up here." |
+| **Song profile** *(pass 2)* | The existing `SongProfile` component for the selected song | 3 × 5 | Linked (below) |
+| **Recently played** *(pass 2)* | This session's history | 3 × 3 | |
+
+### Presets
+
+The layout picker in the page header offers presets, plus "Your layout" once one is edited.
+
+- **Host** (default; the Option 1 shape): Now playing + DJ controls + Goal on the left (3 cols),
+  Next moves in the middle (6), Requests over Up next on the right (3).
+- **Board** (the Option 3 shape): a Now playing banner across the top (12 × 2, a compact variant),
+  a row of single-move widgets, and Up next + Requests along the bottom.
+- **Focus:** a big Now playing (5) beside Next moves (7). Queue reachable through the mini
+  affordance.
+- **Reset to Host** is always one click away in the layout menu.
+
+### Linking (pass 2)
+
+Legend's "dynamic linking", scoped down: one link group. **Song profile follows the selection:**
+the now-playing track by default; clicking any suggestion or queued row selects it. The selected
+row gets the selection treatment (below). No multi-group colour linking; it's overkill here.
+
+### Mini player (other pages)
+
+A fixed 64px bar along the bottom, above any page content: art 40px · title/artist · progress
+hairline · ⏮ ⏯ ⏭ · current goal label · "Open DJ" link. It hides when nothing is playing or the
+user isn't signed in.
+
+## Grid behaviour
+
+- **gridstack.js** (MIT, no dependencies, drag + resize + `save()` / `load()`), pinned to the latest
+  **13.x** (13.3.0). 14.0.0 is a month-old major; adopt it only after checking its changelog.
+  Wrapped in one Svelte component; widgets are Svelte components mounted into grid items.
+- A 12-column grid with a fixed row height. **Breakpoints:** 12 cols at ≥1280px, 8 at 1024–1279,
+  6 at 800–1023. The app's existing desktop-only floor (min-width 800) stays. Below 1280,
+  gridstack's column-reflow keeps each widget's order.
+- **Edit layout:** widget headers show a drag handle, a bottom-right resize corner, and a remove ×.
+  A dashed snap preview appears while dragging. **Done** saves. **Esc** cancels, back to the last
+  saved layout.
+- **Persistence:** `localStorage` key `djLayout.v1` (layout JSON + preset name). It's per-browser
+  convenience state, so a stateless backend is correct; a corrupt or missing value falls back to
+  Host.
+- **Keyboard:** in edit mode, a focused widget moves with arrow keys and resizes with Shift+arrows.
+  An "Add widget" menu adds to the first free slot. That meets `rules:keyboard-operable` without
+  needing drag.
+
+## Visual system
+
+Built on the existing tokens in `routes/styles.css` (surfaces 0/1/2, `--accent` blue, `--accent-2`
+purple, radius 12/8/20, Inter). No new font family.
+
+- **Colour strategy: restrained.** Neutral surfaces. `--accent` only for action, selection and
+  progress. **One meaning per hue across the page:**
+  - Accent blue: primary actions (⏯, +, refresh), progress, selection.
+  - **Toward/Drift lead move:** `--accent-2` purple. It marks the goal's influence, so it's the only
+    purple in the content area.
+  - Danger red: Decline and the Requests badge. Success is not used.
+- **Album-art ambience (the signature move):** the Now playing widget's background is a
+  low-chroma OKLCH tint taken from the cover's dominant colour. It's sampled from the 64px Spotify
+  thumbnail on a canvas (CORS-safe through `i.scdn.co`) and clamped to L 0.18–0.24, C ≤ 0.04 so text
+  contrast stays ≥ 4.5:1. It crossfades over 400ms on track change, with an instant swap under
+  `prefers-reduced-motion`. That's the one atmospheric element; every other widget stays neutral.
+- **Type:** Inter (existing). Product scale 1.2: 12 / 14 / 16 / 20 / 24. Track title in Now playing
+  is 24/600; widget titles 14/600; reasons 13/400 `--text-muted`. Reasons wrap to 2 lines, never
+  truncate mid-word, with the full text in a tooltip. **No uppercase tracked labels** (the
+  existing nav pills are left alone, out of scope).
+- **Widget chrome:** `--surface-1` body, 12px radius, no shadow. Header 40px with a hairline
+  divider. No nested cards: rows inside widgets are bordered rows, not cards.
+- **Icons:** one SVG set across the page (Tabler-style outline, same as the mockups). Replaces the
+  ⚙ glyph only where the DJ page touches it.
+
+## States (every widget)
+
+Loading: skeleton rows matching the row anatomy (no spinners mid-panel). Empty: an invitation with
+a verb. Error: plain sentence plus a retry. Rate-limited: "Spotify is rate-limiting this app right
+now. Try again later." Needs key: "Add an AI key in Settings to get suggestions." with a button that
+opens the existing LLM settings popover. No device: "Open Spotify on any device to start playback."
+
+## Motion
+
+Product stance: 150–250ms, state only. Exponential ease-out. Specifically: row insert/remove in
+queues (height + opacity, FLIP via Svelte's `animate:flip`); the + button turns into ✓ (150ms);
+the ambience crossfade (400ms, the one exception, because it is the state change); the edit-mode
+reveal (handles fade in 150ms). Nothing animates on page load. Reduced motion gets instant swaps.
+
+## Copy
+
+Sentence case; verb + object buttons ("Add song", "Edit layout", "Reset to Host"). No em dashes in
+UI strings. Move summaries are reused from iOS ("Raise the energy", "Somewhere new").
+
+## Data and logic (implementation notes for craft)
+
+The web app has **none of the iOS queue logic yet.** Port it to `src/lib/dj/`, keeping the iOS
+structure so it can be tested the same way:
+- `queueStore.js`: sent/upcoming, adaptive buffer (1 ahead; there's no "background" on the web, so
+  a `visibilitychange` hidden event tops up to N), skip-on-arrival, `reconciled()`,
+  `detectRequests()` and `arrival()` as pure functions, all persisted to `localStorage`.
+- `nowPlaying.js` (2s poll, track-change detection, recent/liked/disliked/skipped),
+  `suggestions.js` (prefetch, cache key incl. settings + goal, in-flight guard, autopilot), and
+  `djSettings.js`.
+- Port the iOS `QueueLogicTests` cases to **vitest** for the pure functions.
+- The backend needs no changes: `/player/*`, `/dj/suggest/`, `/spotify/queue/`, `/search/` already
+  cover the web.
+
+## Out of scope
+
+Mobile/responsive web below 800px · multiple link groups · syncing layouts across devices · a
+theme or light mode for the web (the web app is dark-only today) · restyling the existing pages'
+nav and gradient headline (noted: the Explore headline uses gradient text, which the frontend rules
+ban; fix it separately).
+
+## Risks and open questions
+
+1. **Two hosts at once.** If the iOS app *and* the web DJ are both open, each runs its own queue
+   store and both send tracks to Spotify, so each will see the other's sends as guest requests.
+   Recommend: only one active "DJ host". The web shows a banner ("The DJ is also running on another
+   device") when it sees non-app tracks it can't explain, and offers "Take over". Needs a decision
+   before craft.
+2. **The grid library's fit with Svelte 4 + SvelteKit 1.** Gridstack is vanilla JS, so mounting
+   Svelte widgets into its DOM nodes must be done in `onMount`. Spike this first.
+3. **Groq/Spotify budgets** are unchanged: prefetch stays one call per track change no matter how
+   many move widgets are on screen. All move widgets read the same `suggestions` store.
+
+## Build passes (suggested for /plan)
+
+1. **Pass 1:** the `src/lib/dj/` logic port with vitest; the grid shell (gridstack spike); the Now
+   playing, DJ controls, Goal, Next moves, Single move, Up next and Requests widgets; the Host,
+   Board and Focus presets; Edit layout; the mini player; the album-art ambience.
+2. **Pass 2:** linking + the Song profile widget, Recently played, keyboard move/resize polish, and
+   the two-host takeover.
+
+---
+
+# DJ Sync Across Devices (2026-10-25)
+
+## Problem
+
+The queue and the DJ options live on each device, so the iPhone and the web DJ can't share a
+night. Worse, if both run at once, each treats the other's sends as guest requests. The owner
+wants the queue and the DJ options synced across devices.
+
+## Decision reversed: the backend is no longer stateless
+
+The no-database design (native iOS brainstorm D1; DJ plan "State: on-device only") is **replaced
+for DJ state.** Everything else (Spotify tokens, LLM keys) stays per-request and stateless.
+
+## Confirmed decisions
+
+- **Storage: Supabase Postgres.** One `dj_state` row per Spotify user. Both the local (Mac) and
+  hosted backends point at the same database, which keeps the two-deployment design: the web can
+  stay on the local backend with Ollama while the phone uses the hosted one, and they still sync.
+- **Driving model: like a Spotify Jam.**
+  - The device that starts the DJ session is the **primary**. It's the only one that sends tracks
+    to Spotify (buffer top-up, skip-on-arrival, Autofill/Driver queuing) and the only one that
+    runs request detection.
+  - Every other device is a **participant** with full editing: queue add/reorder/remove, Keep /
+    Later / Decline on requests, mode, Safe↔Bold, clean only, goal, do-not-play, 👍/👎.
+  - It's always labelled: "Driving from this iPhone" or "Driving from MacBook web".
+  - **No silent failover.** If the primary's heartbeat stops for ~60s, participants see "Your
+    iPhone stopped driving" with **Drive from here**; one tap moves the primary role. A
+    participant can also tap Drive from here at any time.
+- **Synced:** the queue (sent, upcoming, requests, guest skips, kept guests), the DJ options (mode,
+  adventurousness, clean, goal, do-not-play), **session feedback** (liked, disliked, skipped), and
+  **recent history**.
+- **Not synced:** the web DJ layout, Appearance, the background buffer depth, and the LLM key.
+  These are per-device by nature.
+- **Include the hosted backend deploy (P0/D1)** so a physical iPhone syncs away from home Wi-Fi.
+
+## Mechanics (recommended, to be finalised in /plan)
+
+- **Identity:** keyed by Spotify user id. The backend resolves it from the bearer token
+  (`GET /me`, cached per token), so no new accounts and a client can't write another user's row.
+- **Endpoints:** `GET /dj/state` → `{version, state, primary}`, and `PUT /dj/state` with
+  `If-Match: <version>`, which returns **409** with the current document on conflict. The client
+  re-applies its edit and retries. Plus `POST /dj/primary` (claim) and a heartbeat.
+- **Granularity:** whole-document writes. The document is small (a queue of tens of items plus
+  settings).
+- **Change pickup:** each client checks the version on the poll it already runs (~2s), and only
+  fetches the full state when the version changes. Supabase Realtime is a possible later upgrade
+  but not needed.
+- **Offline:** a device keeps a local copy and queues its edits; on reconnect it merges with the
+  409 retry loop. The primary keeps driving from its local copy if Supabase is briefly unreachable.
+- **Security:** the Supabase service key lives server-side only (`.env` / host secrets), never in a
+  client. Row access is enforced in the backend by the resolved user id. RLS is enabled as defence
+  in depth.
+
+## Impact on existing work
+
+- **iOS:** `QueueStore` and `DJSettings` persistence switches from `queue.json`/UserDefaults to the
+  sync layer (with the local copy kept as a cache). Request detection and top-ups gated to the
+  primary. A new primary/participant indicator and Drive from here.
+- **Web DJ (design brief above):** the `src/lib/dj/` port is built on the sync layer from the
+  start. The "two hosts at once" risk in the brief is resolved by this design.
+- **Backend:** the first persistent store. Tests for the version/409 logic and the user-id
+  scoping.
+
+## Open questions for /plan
+
+1. Hosting choice for P0/D1 (Fly, Render, Railway) and cold-start tolerance.
+2. Supabase project: new, or an existing one (the connector is available in this environment).
+3. Heartbeat interval and the offline threshold (proposed 15s heartbeat / 60s offline).
+4. Migration: first launch after the update uploads the device's existing local queue, or starts
+   empty.
