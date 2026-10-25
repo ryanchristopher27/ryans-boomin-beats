@@ -373,6 +373,8 @@ final class QueueStore {
         requests = q.requests
         guestSkips = q.guestSkips
         keptGuests = Set(q.keptGuests)
+        // A participant's add only reaches Spotify through the primary.
+        Task { await topUp(to: Self.foregroundDepth) }
     }
 
     /// Became primary mid-session: resume driving from the shared queue.
