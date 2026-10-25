@@ -9,7 +9,7 @@ from spotipy import SpotifyException
 
 from config import ALLOWED_ORIGINS, DEVICE_KEY
 from routers import search, profile
-from routers import llm_connect, llm_playlist, spotify_actions, song_profile, player, dj
+from routers import llm_connect, llm_playlist, spotify_actions, song_profile, player, dj, dj_state
 
 log = logging.getLogger(__name__)
 
@@ -133,3 +133,4 @@ app.include_router(spotify_actions.router)
 app.include_router(song_profile.router)
 app.include_router(player.router)
 app.include_router(dj.router)
+app.include_router(dj_state.router)

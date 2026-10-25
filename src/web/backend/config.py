@@ -14,6 +14,13 @@ LASTFM_API_KEY = os.environ.get('LASTFM_API_KEY', '')
 # unaffected. Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 DEVICE_KEY = os.environ.get('DEVICE_KEY', '')
 
+# DJ sync (SY1). Both local and hosted instances point at the same Supabase
+# project, so devices on either one share state. Unset = sync disabled; the
+# rest of the backend runs unchanged and sync routes answer 503.
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '').rstrip('/')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY', '')
+SYNC_ENABLED = bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
+
 # Browser origins allowed to call this instance. Native clients send no Origin
 # and are unaffected by CORS; the hosted instance normally needs no origins at all.
 ALLOWED_ORIGINS = [

@@ -2810,3 +2810,55 @@ Answers: **Vercel** (revisit later), **a new Supabase project**, **60s offline**
 | Supabase project | New project **`boomin-beats`** (ref `dprikmlswldgkzuafcxy`, **us-east-1**, $0/mo free tier), created 2026-10-25 | Isolation from Trip Fairy. us-east-1 because us-west-2 wasn't offered for new projects and it's Vercel's default function region, so the backend and database sit together | 2026-10-25 |
 | Offline threshold | 15s heartbeat, 60s "stopped driving" | Rides out brief signal drops | 2026-10-25 |
 | Migration | The first device seeds the server; later devices adopt the server's copy | Nobody loses a queue they built | 2026-10-25 |
+
+### SY1 result — backend sync API (2026-10-25)
+
+**Built:**
+- **Migration** `supabase/migrations/20261025180000_dj_state.sql`, applied to `boomin-beats`.
+  RLS is on with no policies; the advisor's "RLS enabled, no policy" INFO is that intended
+  deny-all.
+- `services/dj_store.py` talks to Supabase's PostgREST API through **`httpx`**, which was already
+  a dependency (the plan allowed either this or the `supabase` package).
+  - The conditional update is `PATCH … ?version=eq.N`: zero rows back means Conflict. An insert
+    hitting the primary key → 409 → Conflict.
+  - `heartbeat()` is filtered on `primary_device`, so a heartbeat racing a takeover can't
+    overwrite the new primary.
+  - `OFFLINE_AFTER` is 60s and `HEARTBEAT_EVERY` is 15s.
+- `services/spotify_identity.py`: the Spotify user id via `/me`, cached by a SHA-256 of the token
+  for 50 minutes. The raw token is never stored.
+- `routers/dj_state.py`:
+  - `GET /dj/state` (version 0 / `state: null` when there's no row).
+  - `PUT /dj/state` with `If-Match`: `0` seeds the row and makes the device primary; `N` updates;
+    a 409 returns the current document.
+  - `POST /dj/primary` (404 if there's no session yet).
+  - The pydantic document mirrors the iOS field names. It **forbids unknown fields** and bounds
+    every list. Unconfigured → 503 "Sync isn't configured on this server."
+- `/player/state/` gains the piggyback: with `X-DJ-Device` it returns
+  `dj: {version, primary}` and heartbeats the primary (throttled to 15s). It's best effort: any
+  sync failure gives `dj: null` and never breaks player state.
+- Config: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SYNC_ENABLED`; `.env.example` documents them.
+
+**Note relative to the plan:** "no extra calls per poll" holds for *clients*. Server-side, a
+sync-enabled poll does one Supabase read, plus a heartbeat write at most every 15s.
+
+**Tests:** 15 new in `tests/test_dj_state.py` (86 in total, all pass). They cover seed + primary;
+a stale write → 409 with the winner's document; seeding twice → 409; per-user scoping; Drive from
+here; claim without a session; validation (unknown fields, bad mode, 201-item list, bad goal);
+`If-Match` required; unconfigured → 503; 60s offline / 15s heartbeat boundaries; and the
+piggyback degrading to None. Supabase and Spotify are faked.
+
+**Live check against the real project:** read (empty) → seed (v1, primary "MacBook web") → update
+(v2) → stale write **409** carrying the winner's "phone edit" → claim (primary "iPhone", version
+unchanged) → piggyback `dj: {version: 2, primary: {label: "iPhone", online: true}}`. ✅
+
+**Measured latency** (browser resource timing; an earlier multi-second reading came from a hidden
+pane throttling timers):
+
+| Call | Time |
+|---|---|
+| `/player/state/` without sync | about 230 ms |
+| `/player/state/` with sync | 270–310 ms (578 ms first, including the `/me` lookup) |
+| `/dj/state` | about 95 ms |
+| Supabase read from the Mac | about 100 ms |
+
+**Cleanup:** the live test row was deleted, so the first real device seeds the table.

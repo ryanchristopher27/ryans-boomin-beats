@@ -10,9 +10,10 @@ treating "no device" as a crash.
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from spotipy import SpotifyException
 
+from config import SYNC_ENABLED
 from services.spotify_auth import get_spotify_token
 from services.spotify_client import user_client
 
@@ -86,12 +87,40 @@ def player_error(e: SpotifyException) -> dict:
 
 
 @router.get('/player/state/')
-def player_state(token: str = Depends(get_spotify_token)):
+def player_state(
+    token: str = Depends(get_spotify_token),
+    x_dj_device: str | None = Header(default=None, max_length=64),
+):
     try:
         playback = user_client(token).current_playback()
     except SpotifyException as e:
         return player_error(e)
-    return normalize_playback(playback)
+    state = normalize_playback(playback)
+    if x_dj_device and SYNC_ENABLED:
+        state['dj'] = dj_status(token, x_dj_device)
+    return state
+
+
+def dj_status(token: str, device: str) -> dict | None:
+    """Sync piggyback (SY1): clients already poll this every ~2s, so it carries
+    the shared state's version and who's driving, and doubles as the primary's
+    heartbeat. No extra calls per poll. Best effort: a sync failure must never
+    break player state, so it degrades to None."""
+    from routers.dj_state import get_store
+    from services.dj_store import Unavailable, heartbeat_due, primary_info
+    from services.spotify_identity import user_id
+    try:
+        user = user_id(token)
+        store = get_store()
+        row = store.read(user)
+        if row is None:
+            return {'version': 0, 'primary': None}
+        if heartbeat_due(row, device):
+            store.heartbeat(user, device)
+        return {'version': row['version'], 'primary': primary_info(row)}
+    except (Unavailable, HTTPException) as e:
+        log.info('[player] dj status unavailable: %s', e)
+        return None
 
 
 @router.get('/player/queue/')
