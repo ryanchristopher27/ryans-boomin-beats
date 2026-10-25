@@ -35,6 +35,7 @@ struct QueueView: View {
 
     private func list(_ queue: QueueStore) -> some View {
         List {
+            SyncBanner()
             if queue.partyMode {
                 Label("Party mode: screen stays on", systemImage: "sun.max.fill")
                     .font(.footnote)

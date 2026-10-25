@@ -27,6 +27,7 @@ struct NowPlayingView: View {
     private func content(_ model: NowPlayingModel) -> some View {
         ScrollView {
         VStack(spacing: 24) {
+            SyncBanner()
             if let state = model.state, state.active {
                 if let track = state.track {
                     player(model, state: state, track: track)

@@ -67,6 +67,13 @@ final class QueueStore {
     /// Tracks lined up after the current one.
     var aheadCount: Int { sent.filter { !$0.skipOnArrival }.count + upcoming.count }
 
+    /// Only the primary device drives Spotify (SY3, Jam-style): it sends tracks,
+    /// skips on arrival, and detects requests. Participants just edit the shared
+    /// queue. True when sync is off, so a single device behaves as before.
+    var isPrimary = true
+    /// Called after any change to a synced field, for DJSync to push.
+    var onChange: (() -> Void)?
+
     /// Keeps the screen awake while hosting. Deliberately not persisted, so the
     /// idle timer is never left disabled by a forgotten setting.
     var partyMode = false {
@@ -121,9 +128,10 @@ final class QueueStore {
 
     // MARK: - Playback events
 
-    /// Called after every player-state poll. Acts only when the track changes.
+    /// Called after every player-state poll. Acts only when the track changes,
+    /// and only on the primary (participants learn the result through sync).
     func observe(_ state: PlaybackState) async {
-        guard let trackID = state.track?.id, trackID != lastTrackID else { return }
+        guard isPrimary, let trackID = state.track?.id, trackID != lastTrackID else { return }
         lastTrackID = trackID
 
         // Guest skips first: after "Later" the app re-sends the same track, but the
@@ -158,6 +166,7 @@ final class QueueStore {
     /// On return to the foreground: drop sent tracks that played while the app
     /// was suspended, using Spotify's real queue as the source of truth.
     func reconcile(with state: PlaybackState) async {
+        guard isPrimary else { return }
         lastTrackID = nil
         await observe(state)
 
@@ -172,7 +181,7 @@ final class QueueStore {
     /// Read Spotify's queue and pick up new guest requests. Called on a ~10s
     /// cadence while the app is in the foreground.
     func pollRequests(smartShuffle: Bool) async {
-        guard let response: SpotifyQueue = try? await client.get("player/queue/") else { return }
+        guard isPrimary, let response: SpotifyQueue = try? await client.get("player/queue/") else { return }
         record(response.queue, smartShuffle: smartShuffle)
     }
 
@@ -305,7 +314,7 @@ final class QueueStore {
 
     /// Send tracks from Up Next until `depth` non-skipped tracks are ahead in Spotify.
     private func topUp(to depth: Int) async {
-        guard !isToppingUp else { return }
+        guard isPrimary, !isToppingUp else { return }
         isToppingUp = true
         defer { isToppingUp = false }
 
@@ -351,7 +360,30 @@ final class QueueStore {
         keptGuests = Set(snapshot.keptGuests ?? [])
     }
 
+    /// The synced fields, for DJSync.
+    var syncQueue: SyncDoc.Queue {
+        SyncDoc.Queue(sent: sent, upcoming: upcoming, requests: requests,
+                      guestSkips: guestSkips, keptGuests: keptGuests.sorted())
+    }
+
+    /// Adopt the shared queue from another device (DJSync).
+    func apply(_ q: SyncDoc.Queue) {
+        sent = q.sent
+        upcoming = q.upcoming
+        requests = q.requests
+        guestSkips = q.guestSkips
+        keptGuests = Set(q.keptGuests)
+    }
+
+    /// Became primary mid-session: resume driving from the shared queue.
+    func startDriving() async {
+        lastTrackID = nil
+        lastQueueView = nil
+        await topUp(to: Self.foregroundDepth)
+    }
+
     private func save() {
+        onChange?()
         do {
             try FileManager.default.createDirectory(at: .applicationSupportDirectory, withIntermediateDirectories: true)
             let snapshot = Snapshot(sent: sent, upcoming: upcoming, requests: requests,

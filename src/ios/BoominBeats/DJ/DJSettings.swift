@@ -42,8 +42,8 @@ struct DJGoal: Codable, Equatable {
     }
 }
 
-/// The host's DJ controls (DJ4), persisted on device. The backend is stateless,
-/// so all of this travels with each /dj/suggest/ request.
+/// The host's DJ controls (DJ4), persisted on device and synced across devices
+/// (SY3). They travel with each /dj/suggest/ request.
 @MainActor
 @Observable
 final class DJSettings {
@@ -79,13 +79,33 @@ final class DJSettings {
         }
     }
 
-    var mode: Mode { didSet { defaults.set(mode.rawValue, forKey: Keys.mode) } }
+    var mode: Mode { didSet { defaults.set(mode.rawValue, forKey: Keys.mode); onChange?() } }
     /// 0 = safe, 1 = bold.
-    var adventurousness: Double { didSet { defaults.set(adventurousness, forKey: Keys.adventurousness) } }
-    var cleanOnly: Bool { didSet { defaults.set(cleanOnly, forKey: Keys.clean) } }
-    private(set) var avoidTracks: [AvoidedTrack] { didSet { saveList(avoidTracks, Keys.avoidTracks) } }
-    private(set) var avoidArtists: [String] { didSet { saveList(avoidArtists, Keys.avoidArtists) } }
-    var goal: DJGoal? { didSet { defaults.set(goal.flatMap { try? JSONEncoder().encode($0) }, forKey: Keys.goal) } }
+    var adventurousness: Double { didSet { defaults.set(adventurousness, forKey: Keys.adventurousness); onChange?() } }
+    var cleanOnly: Bool { didSet { defaults.set(cleanOnly, forKey: Keys.clean); onChange?() } }
+    private(set) var avoidTracks: [AvoidedTrack] { didSet { saveList(avoidTracks, Keys.avoidTracks); onChange?() } }
+    private(set) var avoidArtists: [String] { didSet { saveList(avoidArtists, Keys.avoidArtists); onChange?() } }
+    var goal: DJGoal? { didSet { defaults.set(goal.flatMap { try? JSONEncoder().encode($0) }, forKey: Keys.goal); onChange?() } }
+
+    /// Called after any change to a synced option, for DJSync to push (SY3).
+    var onChange: (() -> Void)?
+
+    /// The synced options, for DJSync.
+    var syncOptions: SyncDoc.Options {
+        SyncDoc.Options(mode: mode.rawValue, adventurousness: adventurousness, clean: cleanOnly,
+                        goal: goal, avoidTracks: avoidTracks, avoidArtists: avoidArtists)
+    }
+
+    /// Adopt options from another device (DJSync). Only assigns what differs,
+    /// so an unchanged field doesn't re-trigger dependent work (mode → prefetch).
+    func apply(_ o: SyncDoc.Options) {
+        if let m = Mode(rawValue: o.mode), m != mode { mode = m }
+        if o.adventurousness != adventurousness { adventurousness = o.adventurousness }
+        if o.clean != cleanOnly { cleanOnly = o.clean }
+        if o.goal != goal { goal = o.goal }
+        if o.avoidTracks != avoidTracks { avoidTracks = o.avoidTracks }
+        if o.avoidArtists != avoidArtists { avoidArtists = o.avoidArtists }
+    }
 
     private let defaults = UserDefaults.standard
 

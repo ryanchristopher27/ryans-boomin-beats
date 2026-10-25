@@ -24,6 +24,7 @@ struct MainTabs: View {
     @State private var queue: QueueStore?
     @State private var suggestions: SuggestionStore?
     @State private var djSettings = DJSettings()
+    @State private var sync: DJSync?
 
     var body: some View {
         TabView {
@@ -36,6 +37,7 @@ struct MainTabs: View {
         .environment(queue)
         .environment(suggestions)
         .environment(djSettings)
+        .environment(sync)
         // Prefetch at this level, not in a tab, so suggestions are ready whichever
         // tab is showing. Re-keyed on track change, which cancels a stale load.
         .task(id: nowPlaying?.state?.track?.id) { await prefetch() }
@@ -48,8 +50,10 @@ struct MainTabs: View {
                 let client = APIClient(session: session)
                 let q = QueueStore(client: client)
                 queue = q
-                nowPlaying = NowPlayingModel(client: client, queue: q)
+                let np = NowPlayingModel(client: client, queue: q)
+                nowPlaying = np
                 suggestions = SuggestionStore(client: client)
+                sync = DJSync(client: client, queue: q, settings: djSettings, nowPlaying: np)
             }
             guard scenePhase == .active, let nowPlaying else { return }
             await nowPlaying.run()

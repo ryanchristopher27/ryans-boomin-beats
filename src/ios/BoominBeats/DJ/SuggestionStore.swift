@@ -242,7 +242,8 @@ final class SuggestionStore {
     /// Driver's goal-setting (destination / arc) arrives with DJ6.
     func autopilot(queue: QueueStore, settings: DJSettings) async {
         let target = settings.mode.autopilotTarget
-        guard target > 0, queue.aheadCount < target, case let .loaded(moves) = state else { return }
+        // Primary only (SY3): two devices autopiloting would both add picks.
+        guard queue.isPrimary, target > 0, queue.aheadCount < target, case let .loaded(moves) = state else { return }
 
         var candidates = Self.autopilotCandidates(
             moves: moves,

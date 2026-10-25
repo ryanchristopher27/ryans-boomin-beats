@@ -15,9 +15,11 @@ struct PlaybackState: Decodable {
     let track: Track?
     let disallows: [String]?
     let smartShuffle: Bool?
+    /// Sync status (SY3); present when the request named this device.
+    let dj: DJStatus?
 
     enum CodingKeys: String, CodingKey {
-        case active, device, track, disallows
+        case active, device, track, disallows, dj
         case isPlaying = "is_playing"
         case progressMs = "progress_ms"
         case smartShuffle = "smart_shuffle"
@@ -59,6 +61,10 @@ final class NowPlayingModel {
 
     private let client: APIClient
     private let queue: QueueStore
+    /// Set by MainTabs once the sync engine exists.
+    weak var sync: DJSync?
+    /// Called after a change to synced feedback/recent, for DJSync to push.
+    var onChange: (() -> Void)?
 
     init(client: APIClient, queue: QueueStore) {
         self.client = client
@@ -90,8 +96,10 @@ final class NowPlayingModel {
 
     func refresh() async {
         do {
-            let s: PlaybackState = try await client.get("player/state/")
-            if let previous = state?.track, previous.id != s.track?.id {
+            let headers = sync.map { ["X-DJ-Device": $0.deviceID] } ?? [:]
+            let s: PlaybackState = try await client.get("player/state/", headers: headers)
+            // History and skips are recorded by the primary only; others get them via sync.
+            if queue.isPrimary, let previous = state?.track, previous.id != s.track?.id {
                 // Left before halfway = a skip, unless the queue skipped it itself.
                 if progressMs(at: Date()) < previous.durationMs / 2, !queue.autoSkipped.contains(previous.id) {
                     Self.push(previous, onto: &skipped)
@@ -99,6 +107,7 @@ final class NowPlayingModel {
                 recent.removeAll { $0.id == previous.id }
                 recent.insert(previous, at: 0)
                 recent = Array(recent.prefix(10))
+                onChange?()
             }
             state = s
             fetchedAt = Date()
@@ -106,6 +115,7 @@ final class NowPlayingModel {
                 message = nil
                 messageFromPoll = false
             }
+            await sync?.observe(s.dj)
             await queue.observe(s)
             // Guest requests (DJ5): Spotify's queue is a separate, slower read, so
             // poll it every ~10s rather than on every 2s state poll.
@@ -123,6 +133,23 @@ final class NowPlayingModel {
         liked.removeAll { $0.id == track.id }
         disliked.removeAll { $0.id == track.id }
         if more { Self.push(track, onto: &liked) } else { Self.push(track, onto: &disliked) }
+        onChange?()
+    }
+
+    /// The synced feedback and history, for DJSync.
+    var syncFeedback: SyncDoc.Feedback {
+        SyncDoc.Feedback(liked: liked.map(SyncDoc.TrackRef.init), disliked: disliked.map(SyncDoc.TrackRef.init),
+                         skipped: skipped.map(SyncDoc.TrackRef.init))
+    }
+
+    var syncRecent: [SyncDoc.TrackRef] { recent.map(SyncDoc.TrackRef.init) }
+
+    /// Adopt feedback and history from another device (DJSync).
+    func apply(feedback f: SyncDoc.Feedback, recent r: [SyncDoc.TrackRef]) {
+        liked = f.liked.map(\.track)
+        disliked = f.disliked.map(\.track)
+        skipped = f.skipped.map(\.track)
+        recent = r.map(\.track)
     }
 
     private static func push(_ track: Track, onto list: inout [Track]) {

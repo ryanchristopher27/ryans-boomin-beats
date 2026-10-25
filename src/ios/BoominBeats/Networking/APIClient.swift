@@ -39,7 +39,7 @@ struct APIClient {
 
     // MARK: - Requests
 
-    func get<T: Decodable>(_ path: String, query: [String: String] = [:]) async throws -> T {
+    func get<T: Decodable>(_ path: String, query: [String: String] = [:], headers: [String: String] = [:]) async throws -> T {
         var components = URLComponents(
             url: Config.apiBaseURL.appendingPathComponent(path),
             resolvingAgainstBaseURL: false
@@ -49,6 +49,7 @@ struct APIClient {
         }
         var request = URLRequest(url: components.url!)
         request.httpMethod = "GET"
+        headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
         return try await send(request)
     }
 
@@ -60,7 +61,35 @@ struct APIClient {
         return try await send(request)
     }
 
+    /// For callers that need the status and body of a non-2xx answer, such as
+    /// sync's 409 (which carries the current document). Throws only for auth and
+    /// transport failures.
+    func raw(_ method: String, _ path: String, json body: Data? = nil, headers: [String: String] = [:]) async throws -> (status: Int, data: Data) {
+        var request = URLRequest(url: Config.apiBaseURL.appendingPathComponent(path))
+        request.httpMethod = method
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+        }
+        headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+        let (data, http) = try await perform(request)
+        return (http.statusCode, data)
+    }
+
     private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
+        let (data, http) = try await perform(request)
+        guard (200..<300).contains(http.statusCode) else {
+            throw Error.http(status: http.statusCode, detail: Self.detail(from: data))
+        }
+
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            throw Error.decoding(error)
+        }
+    }
+
+    private func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         var request = request
 
         guard let token = await session.validToken() else { throw Error.notAuthenticated }
@@ -82,19 +111,10 @@ struct APIClient {
         } catch {
             throw Error.transport(error)
         }
-
         guard let http = response as? HTTPURLResponse else {
             throw Error.http(status: -1, detail: nil)
         }
-        guard (200..<300).contains(http.statusCode) else {
-            throw Error.http(status: http.statusCode, detail: Self.detail(from: data))
-        }
-
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw Error.decoding(error)
-        }
+        return (data, http)
     }
 
     /// FastAPI reports errors as {"detail": "..."}; surface that rather than a status code.
