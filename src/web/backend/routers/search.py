@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from services.spotify_client import app_client
+from services.spotify_client import app_client, search as guarded_search
 
 router = APIRouter()
 
@@ -8,7 +8,7 @@ router = APIRouter()
 @router.get("/search/")
 def search(searchValue: str = Query(...)):
     spotify = app_client()
-    result = spotify.search(q='track:' + searchValue)
+    result = guarded_search(spotify, q='track:' + searchValue)
 
     tracks = []
     for track in result['tracks']['items']:

@@ -2,7 +2,7 @@ import asyncio
 
 from spotipy import Spotify
 
-from services.spotify_client import app_client
+from services.spotify_client import app_client, search
 
 
 def _format_track(track: dict) -> dict:
@@ -35,14 +35,14 @@ def _search_one(spotify: Spotify, title: str, artist: str, fallback: bool = True
         return _CACHE[key]
 
     # Pass 1: strict — title + artist
-    result = spotify.search(q=f'track:{title} artist:{artist}', limit=1, type='track')
+    result = search(spotify, q=f'track:{title} artist:{artist}', limit=1, type='track')
     items = result['tracks']['items']
     track = _format_track(items[0]) if items else None
 
     # Pass 2: loose — title only. Callers that reject other artists' songs
     # anyway (the DJ) pass fallback=False and save the search.
     if track is None and fallback:
-        result = spotify.search(q=f'track:{title}', limit=1, type='track')
+        result = search(spotify, q=f'track:{title}', limit=1, type='track')
         items = result['tracks']['items']
         track = _format_track(items[0]) if items else None
 

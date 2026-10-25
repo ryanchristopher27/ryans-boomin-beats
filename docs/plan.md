@@ -2862,3 +2862,31 @@ pane throttling timers):
 | Supabase read from the Mac | about 100 ms |
 
 **Cleanup:** the live test row was deleted, so the first real device seeds the table.
+
+### SY2 progress (2026-10-25)
+
+- **Vercel facts, from the docs** (`/docs/plans/hobby`, `/docs/frameworks/backend/fastapi`):
+  - Hobby includes 1M function invocations, 4 active-CPU hours and 360 GB-hours of memory a
+    month, with a 300s max duration.
+  - **Exceeding a limit pauses the project for 30 days**; there's no overage billing.
+  - Hobby is for **non-commercial, personal use only**. Boomin Beats qualifies as long as it stays
+    a personal tool; productizing under Christopher Ventures means Pro (see the hosting revisit
+    task).
+  - Estimate: about 17k invocations per 4h party with 2 devices; about 150k/month with regular
+    use; 1–1.5 CPU-hours; about 25 GB-hours. Comfortable.
+- **Prep committed (`d5a3776`):** `vercel.json` (iad1, `main.py` maxDuration 60, tests/Dockerfile/
+  .env excluded), pinned `requirements.txt`, and an in-memory app-token cache. `main.py` with a
+  top-level `app` is a supported entrypoint, so no code moved.
+- **Branching:** production deploys from `main`. `dev` merged `main` (`0c9e694`), keeping the
+  dead Django `.pyc` files deleted. **PR #1** (dev → main) is open.
+- **Vercel project `boomin-beats-api`** (`prj_CoJ2oMXuNX9OtUn3ClCpqSyFJXE0`, team Christopher
+  Ventures), Git-linked, root `src/web/backend`, production branch `main`, no deploy yet.
+  `SPOTIFY_CLIENT_ID` and `SUPABASE_URL` are set as plain values.
+- **Owner to set (secrets, Sensitive type):** `SPOTIFY_CLIENT_SECRET`, `LASTFM_API_KEY`,
+  `SUPABASE_SERVICE_KEY`, and a newly generated `DEVICE_KEY`.
+- **The repo is public.** A full-history secret scan found an old 2023 Spotify client secret in the
+  Django code. It differs from the current secret (verified by hash), so it was rotated and is
+  dead. Nothing live is in the history.
+- **New risk found:** the Spotify **search** daily quota (`QUOTA_EXCEEDED`, resets about 21:20
+  local) was exhausted again by a morning of Co-pilot prefetch. Tracked as a high-priority bug;
+  not part of SY2.

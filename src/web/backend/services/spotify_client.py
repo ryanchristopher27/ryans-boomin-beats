@@ -11,10 +11,11 @@ resulting bare `TimeoutError` is NOT a SpotifyException, so it sailed past every
 `except SpotifyException` handler and became a 500 with a raw traceback.
 """
 import logging
+import time
 
 import requests
 from requests.adapters import HTTPAdapter
-from spotipy import Spotify
+from spotipy import Spotify, SpotifyException
 from spotipy.cache_handler import MemoryCacheHandler
 from spotipy.oauth2 import SpotifyClientCredentials
 from urllib3.util.retry import Retry
@@ -86,3 +87,42 @@ def app_client() -> Spotify:
         requests_session=_session(),
         requests_timeout=REQUEST_TIMEOUT,
     )
+
+
+# --- Search lockout -----------------------------------------------------------
+# Spotify's search quota for Development Mode apps is daily and app-wide; once
+# it's spent, every search 429s (reason QUOTA_EXCEEDED) until a reset hours
+# away. Without this, each /dj/suggest/ still fired ~20 doomed searches while
+# locked (seen in production 2026-10-25), and failed calls may count against
+# the quota too. Per process: each serverless instance learns the lockout from
+# its first 429. Capped so a bogus Retry-After can't lock search for days.
+_MAX_LOCKOUT = 24 * 60 * 60
+_search_locked_until = 0.0
+
+
+def search_lockout_remaining() -> int:
+    """Seconds until search is worth trying again (0 = not locked)."""
+    return max(0, int(_search_locked_until - time.monotonic()))
+
+
+def search(spotify: Spotify, **kwargs) -> dict:
+    """spotify.search(), but skipped entirely while Spotify has us locked out.
+
+    Raises the same SpotifyException 429 a real lockout does, so callers and
+    main.py's 429 -> 503 handler behave identically either way."""
+    global _search_locked_until
+    remaining = search_lockout_remaining()
+    if remaining:
+        raise SpotifyException(429, -1, 'Spotify search is rate-limited',
+                               reason='LOCAL_LOCKOUT', headers={'Retry-After': str(remaining)})
+    try:
+        return spotify.search(**kwargs)
+    except SpotifyException as e:
+        if e.http_status == 429:
+            try:
+                retry_after = int((e.headers or {}).get('Retry-After', 60))
+            except (TypeError, ValueError):
+                retry_after = 60
+            _search_locked_until = time.monotonic() + min(max(retry_after, 1), _MAX_LOCKOUT)
+            log.warning('[spotify] search locked out for %ss (%s)', retry_after, e.reason)
+        raise
