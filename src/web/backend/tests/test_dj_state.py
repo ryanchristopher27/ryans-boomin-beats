@@ -156,6 +156,43 @@ class Primary(unittest.TestCase):
 
 
 class PlayerPiggyback(unittest.TestCase):
+    def setUp(self):
+        from unittest import mock
+        from routers import player
+        self.player, self.store = player, FakeStore()
+        self.patches = [mock.patch.object(dj_state, 'get_store', lambda: self.store),
+                        mock.patch('services.spotify_identity.user_id', lambda token: 'alice')]
+        for p in self.patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self.patches:
+            p.stop()
+
+    def seed(self, seconds_ago):
+        self.store.create('alice', {}, 'phone', 'iPhone')
+        self.store.rows['alice']['primary_seen_at'] = (now() - timedelta(seconds=seconds_ago)).isoformat()
+
+    def test_no_session_reports_version_zero(self):
+        self.assertEqual(self.player.dj_status('token', 'phone'), {'version': 0, 'primary': None})
+
+    def test_returns_version_and_primary(self):
+        self.seed(1)
+        status = self.player.dj_status('token', 'web')
+        self.assertEqual(status['version'], 1)
+        self.assertEqual(status['primary']['label'], 'iPhone')
+        self.assertTrue(status['primary']['online'])
+
+    def test_heartbeat_written_only_when_due_and_only_by_the_primary(self):
+        self.seed(5)
+        self.player.dj_status('token', 'phone')
+        self.assertEqual(self.store.heartbeats, 0)   # too soon
+        self.store.rows['alice']['primary_seen_at'] = (now() - timedelta(seconds=20)).isoformat()
+        self.player.dj_status('token', 'web')
+        self.assertEqual(self.store.heartbeats, 0)   # not the primary
+        self.player.dj_status('token', 'phone')
+        self.assertEqual(self.store.heartbeats, 1)
+
     def test_sync_failure_never_breaks_player_state(self):
         from routers import player
         original = dj_state.get_store
@@ -167,6 +204,21 @@ class PlayerPiggyback(unittest.TestCase):
             self.assertIsNone(player.dj_status('token', 'phone'))
         finally:
             dj_state.get_store = original
+
+
+class Identity(unittest.TestCase):
+    def test_network_errors_become_503_not_raw_exceptions(self):
+        # Review W2: a requests timeout must not escape as a non-HTTP error.
+        import requests
+        from unittest import mock
+        from services import spotify_identity
+        spotify_identity._cache.clear()
+        client = mock.Mock()
+        client.me.side_effect = requests.exceptions.ReadTimeout('slow')
+        with mock.patch.object(spotify_identity, 'user_client', return_value=client):
+            with self.assertRaises(HTTPException) as ctx:
+                spotify_identity.user_id('token')
+        self.assertEqual(ctx.exception.status_code, 503)
 
 
 if __name__ == '__main__':

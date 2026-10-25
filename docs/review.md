@@ -109,3 +109,84 @@ is untracked with `git rm --cached`. 63 tests pass.
   "any unmatched track when the view is full" would have been wrong, because the playing context
   nearly always pads the view to 20. Ceiling: with 20+ non-app tracks ahead, nothing of ours is
   visible, and everything is treated as played.
+
+---
+
+# Review — SY1 backend sync API
+Date: 2026-10-25
+Triggered by: /build completion (SY1), commit `822070f`
+Scope: `routers/dj_state.py`, `services/dj_store.py`, `services/spotify_identity.py`, the
+`routers/player.py` piggyback, `config.py`, `supabase/migrations/…_dj_state.sql`,
+`tests/test_dj_state.py`
+Focus: All, with an emphasis on security (the first persistent server-side state)
+
+## Summary
+
+Sound. All 8 SY1 tasks were built as planned, and the 409/seed/claim/piggyback flow is verified
+live. No criticals. One security warning: expired Spotify tokens stay accepted for sync, because
+of how long user ids are cached. The "never break player state" guarantee has a gap. The repo's
+migration file doesn't match the recorded version.
+
+Critical: 0 | Warning: 4 | Suggestion: 4
+
+## Plan Adherence
+
+- Every SY1 task is done. The deviations are allowed by the plan or noted in the SY1 result:
+  `httpx` instead of the `supabase` package; the piggyback costs one server-side DB read per poll.
+- The validation is stricter than the plan asked (unknown fields forbidden at every level, not just
+  top-level), and that's on purpose.
+
+## Code Quality
+
+- Thin router, store in `services/`, pure helpers (`primary_info`, `heartbeat_due`) unit-tested.
+  It matches the existing patterns.
+- The happy path of the piggyback (`dj_status` writing a heartbeat when due and returning
+  version/primary) is only covered by the live check, not by a test.
+
+## Security
+
+- **No injection:** PostgREST filters go through `httpx` params (URL-encoded), and `eq.` values
+  are compared literally. The device id is bounded to 64 characters.
+- **Authorization:** rows are keyed by the Spotify id resolved from the caller's own token, so a
+  client can't name another user's row. A 409 only ever returns the caller's own document.
+- **Secrets:** the service key is server-only (`.env`, gitignored, scan clean). RLS deny-all means
+  a leaked anon key can't read the table.
+- **Input:** bounded lists and strings and strict schemas. The worst-case document is about 1 MB.
+- **Weakness:** see W1. The identity cache outlives tokens.
+
+## Findings
+
+### Critical
+| # | Location | Issue | Recommendation | Status |
+|---|---|---|---|---|
+| — | — | None | — | — |
+
+### Warning
+| # | Location | Issue | Recommendation | Status |
+|---|---|---|---|---|
+| W1 | `services/spotify_identity.py` `_TTL` | User ids are cached for 50 minutes from *first use*, and `/dj/state` never calls Spotify after that. A token first used near its 1-hour expiry keeps working for sync for up to ~50 minutes **after** it expires, which widens the window a leaked token is useful. | Cut `_TTL` to 5 minutes. That's one `/me` call per device per 5 minutes and bounds expired-token acceptance to 5 minutes. | Fixed |
+| W2 | `routers/player.py` `dj_status` ← `user_id()` | `user_id()` only converts `SpotifyException`. A `requests` timeout or connection error from `/me` escapes `dj_status` (which catches `Unavailable` and `HTTPException`), so the **player poll itself fails with 503**. That breaks the documented "sync never breaks player state" guarantee whenever `/me` is slow. | Catch `requests.exceptions.RequestException` in `user_id()` and raise a 503 `HTTPException`. That covers the sync routes too. | Fixed |
+| W3 | `supabase/migrations/20261025180000_dj_state.sql` | Supabase recorded the migration as **`20261025175713`**. If the Supabase CLI is ever used (`db push`/`db diff`), it treats the file as unapplied, re-runs it, and fails with "relation already exists". | Rename the file to `20261025175713_dj_state.sql`. | Fixed |
+| W4 | `tests/test_dj_state.py` | The piggyback's success path is untested: heartbeat written only when due, `{version, primary}` returned, `{version: 0}` with no row. Only the failure path has a test. | Add 2–3 tests with the fake store and a stubbed `user_id`. | Fixed |
+
+### Suggestion
+| # | Location | Issue | Recommendation | Status |
+|---|---|---|---|---|
+| S1 | `routers/dj_state.py` endpoint signatures | `current_user` (a Spotify `/me` call) resolves *before* `get_store`, so an unconfigured server spends a Spotify call before answering 503. | Order the dependencies `store` before `user`. | Open |
+| S2 | `routers/player.py` `dj_status` | Imports inside the function. There's no import cycle that needs them. | Move them to the module top. | Open |
+| S3 | `routers/dj_state.py` `Goal.startedAt` | Free-form string. A malformed date is stored and fails later on a client. | Type it as `datetime` and dump with `model_dump(mode='json')`. | Open |
+| S4 | Data handling | Listening history, feedback and do-not-play now persist server-side, and there's no way to delete them. | Add `DELETE /dj/state` ("Clear synced DJ data") in SY3, and mention it in the data notes. | Open |
+
+## Resolved This Session
+- **W1:** `_TTL` cut to 5 minutes. The docstring now explains why the TTL bounds expired-token
+  acceptance.
+- **W2:** `user_id()` converts `requests` network errors to a 503 `HTTPException`. There's a test.
+- **W3:** the migration was renamed to `20261025175713_dj_state.sql`, matching Supabase's record.
+- **W4:** three piggyback tests (no session; version + primary; heartbeat only when due and only
+  from the primary) plus the identity network-error test. 90 tests pass.
+
+## Carried to /iterate
+1. W1, W2, W3: bounded; recommended before SY2/SY3 build on this.
+2. W4: tests to accompany the W2 fix.
+3. S1–S3: tidy-ups, cheap to do with the above.
+4. S4: fits SY3, where the iOS UI gets a sync section.
