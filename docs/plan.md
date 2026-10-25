@@ -2603,3 +2603,210 @@ on the next poll). `NowPlayingModel` only ever cleared the no-device message. It
 `message` came from a failed poll and clears it on the next successful poll. Command errors are
 untouched, because they must survive the re-read 400 ms after a command. The single 401 behind it
 wasn't reproduced; a token-refresh edge around expiry is the likely cause. Watch for a recurrence.
+
+---
+
+# Plan — DJ Sync, Hosted Deploy, and Web DJ
+Date: 2026-10-25
+Status: Active (SY0 decisions confirmed 2026-10-25)
+Brainstorm: `docs/brainstorm.md` → "DJ Sync Across Devices (2026-10-25)" and "DJ Companion — Web
+Design Brief (2026-10-25)"
+Depth: high-level for all milestones; **SY1 at task level** (the first build)
+
+## Overview
+
+Three connected pieces, in dependency order:
+1. **Sync layer:** a shared `dj_state` per Spotify user in Supabase Postgres, with a Jam-style
+   primary device. This is the backend's first persistent state, scoped to DJ state only.
+2. **Hosted deploy (finishes P0/D1):** so a physical iPhone can reach the backend away from home
+   Wi-Fi.
+3. **Web DJ:** the widget-grid design from the brief, built on the sync layer from day one, so it
+   is built once rather than twice.
+
+The iOS DJ moves onto the sync layer between 2 and 3.
+
+## Goals & Success Criteria
+
+| Goal | Success criteria |
+|---|---|
+| One DJ night across devices | An edit on the phone (add, reorder, remove, mode, goal) shows on the web within ~3s, and vice versa |
+| Exactly one device drives | Only the primary sends to Spotify. Two open devices never double-queue a track, and never flag each other's sends as requests |
+| Clear, Jam-like control | Every device shows who's driving. "Drive from here" moves it in one tap. When the primary goes silent for 60s, participants are told; there's no silent switch |
+| Safe under conflict | Simultaneous edits never lose data: the loser of a race re-applies on top of the winner (version + 409) |
+| Works offline briefly | A device that loses signal keeps working from its local copy and merges on reconnect. The primary keeps driving |
+| Reachable anywhere | The hosted backend is up over TLS behind the device key, and a physical iPhone syncs on cellular |
+| Web DJ at parity | Every iOS DJ feature on the web, in the customizable grid, with Host/Board/Focus presets and the mini player |
+
+## Scope
+
+### In scope
+- Supabase project, `dj_state` table + migration, RLS enabled
+- Backend: `/dj/state` read/write with optimistic concurrency, primary claim + heartbeat, user-id
+  resolution from the Spotify token
+- The hosted deploy (P0/D1.3–D1.4), with secrets for Spotify, Last.fm, Supabase and the device key
+- iOS: a sync client replacing `queue.json`/UserDefaults persistence for synced fields;
+  primary/participant gating; the "Driving from…" indicator and Drive from here; migration of the
+  existing local queue
+- The web DJ per the design brief, pass 1 and pass 2
+
+### Out of scope
+- Real-time push (Supabase Realtime, websockets). Version polling is enough at this scale; revisit
+  if ~3s feels slow
+- Multi-user sessions (guests with their own accounts). Guest requests stay as in DJ5
+- Syncing per-device settings: web layout, Appearance, buffer depth, LLM key
+- A server-side queue worker. The primary device still does the top-ups, so tokens stay
+  per-request
+
+## Tech Stack & Architecture
+
+**Storage: Supabase Postgres, a new project** (not the existing Trip Fairy project, which is a live
+app; mixing apps in one database couples their failures and their data). One table:
+
+```
+dj_state(
+  spotify_user_id  text primary key,
+  version          bigint not null default 1,
+  state            jsonb  not null,   -- queue, options, feedback, recent
+  primary_device   text,              -- device id (uuid, per install / per browser)
+  primary_label    text,              -- "iPhone", "MacBook web"
+  primary_seen_at  timestamptz,       -- heartbeat
+  updated_at       timestamptz not null default now()
+)
+```
+
+Access is **backend-only** through the service-role key, which never reaches a client. RLS is on
+with no policies (deny-all) as defence in depth.
+
+**State document:** `{queue: {sent, upcoming, requests, guestSkips, keptGuests}, options: {mode,
+adventurousness, clean, goal, avoidTracks, avoidArtists}, feedback: {liked, disliked, skipped},
+recent: [...]}`. The field names match iOS `QueueStore`/`DJSettings`, so the iOS port is
+mechanical. Whole-document writes; the document is a few KB.
+
+**API (new router `routers/dj_state.py`):**
+- `GET /dj/state` → `{version, state, primary: {device, label, seen_at, online}}`
+- `PUT /dj/state` with an `If-Match: <version>` header → `200 {version}`, or **409** with the
+  current document. The client re-applies its local change and retries (bounded to 3).
+- `POST /dj/primary` with `{device, label}` claims the primary role (always succeeds: that's Drive
+  from here).
+- The heartbeat rides on existing traffic: the primary's `GET /player/state` carries
+  `X-DJ-Device`. The backend refreshes `primary_seen_at` at most every 15s and adds `dj_version`
+  to the player-state response. **No extra calls per poll:** clients learn about remote changes
+  from the 2s poll they already make, and only fetch `/dj/state` when the version moves.
+- **Identity:** the Spotify user id comes from `GET /me` with the bearer token, cached per token
+  hash for its lifetime. A client cannot address another user's row.
+
+**Client model (iOS and web share it):** a local copy is the source of truth for rendering. Edits
+apply locally, then sync. Remote versions merge in, with the server winning except for the device's
+own pending edit, which is re-applied. Only the primary runs top-up, skip-on-arrival, autopilot and
+request detection; participants' "add" just edits `upcoming`, and the primary sends it.
+
+**Hosting: Vercel to start (owner's decision, 2026-10-25); the recommendation was Fly.io.** The
+owner already has a Vercel account and doesn't want another billed account until the LLC bank
+account exists. Revisiting hosting is tracked as a task.
+- Vercel caveats to handle in SY2:
+  - Check the Hobby tier's current invocation allowance against an estimate (2 devices × 2s poll
+    × a 4h party ≈ 14k calls).
+  - Set the function `maxDuration` above the `/dj/suggest/` latency (3–7s).
+  - The process-lifetime caches (the `/me` user id, the validator) become per-instance. That's
+    correct, just less effective.
+- Original reasoning, kept for the revisit:  (Docker, an always-on shared-CPU VM). The repo already has the
+Dockerfile from D1.
+- Ruled out **Render free:** it sleeps after idle, and a 30–60s cold start mid-party is
+  unacceptable.
+- Ruled out **Vercel:** it's familiar from Trip Fairy, but per-invocation metering fits poorly
+  with a 2s poll from every device, and cold starts add latency to `/player/state`.
+- **Needs the owner's choice:** Fly needs an account with a card. Expect a small monthly cost for
+  the smallest always-on VM; check current pricing before committing.
+
+**Web DJ:** per the design brief (gridstack.js pinned to 13.3.0, a Svelte 4 wrapper, logic in
+`src/lib/dj/` with vitest). Built against the sync client from the start.
+
+## Milestones
+
+| # | Milestone | Description | Dependencies |
+|---|---|---|---|
+| SY0 | Decisions + accounts | Confirm the host, create the Supabase project (cost confirmed first), set the heartbeat/offline numbers, pick the migration rule | — |
+| SY1 | Backend sync API | `dj_state` migration, `/dj/state` GET/PUT with version + 409, `/dj/primary`, heartbeat piggyback, user-id resolution, tests | SY0 |
+| SY2 | Hosted deploy (P0/D1) | Deploy FastAPI to **Vercel** (Python runtime) with secrets + device key; iOS points at it; verify on a physical iPhone on cellular | SY1 |
+| SY3 | iOS on sync | A sync client replaces local persistence for synced fields; primary-only driving; "Driving from…" + Drive from here; feedback/recent synced; local-queue migration; 409 tests | SY1 |
+| W1 | Web DJ logic + sync client | Port QueueStore/NowPlaying/Suggestions/DJSettings to `src/lib/dj/` on the sync client; vitest ports of the iOS logic tests | SY1 |
+| W2 | Web DJ grid + widgets | gridstack spike → grid shell; the Now playing, DJ controls, Goal, Next moves, Single move, Up next and Requests widgets; Host/Board/Focus presets; Edit layout | W1 |
+| W3 | Mini player + ambience + polish | Mini player on other pages, album-art ambience, `/design audit` + `polish` pass | W2 |
+| W4 | Web DJ pass 2 | Linking + Song profile widget, Recently played, keyboard move/resize | W3 |
+
+SY2 and SY3 can run in parallel after SY1. W1 needs only SY1; the hosted deploy isn't required for
+web-on-localhost.
+
+## Task Breakdown — SY1 (backend sync API)
+
+1. **Migration:** `supabase/migrations/<ts>_dj_state.sql` creates the table above, plus
+   `alter table dj_state enable row level security;` (no policies). Applied with the Supabase
+   connector after review.
+2. **Config:** add `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` to `config.py` and `.env.example`.
+   If unset, the sync endpoints return 503 "Sync isn't configured", so the backend still runs
+   without them.
+3. **`services/dj_store.py`:** the Supabase client (the `supabase` Python package, or `httpx`
+   against PostgREST). Functions: `read(user)`, `write(user, state, expected_version)` as an atomic
+   conditional update (`where version = expected`, one row affected or a conflict), and
+   `claim_primary(user, device, label)`.
+4. **`services/spotify_identity.py`:** `user_id(token)` via `/me`, cached by a SHA-256 of the
+   token with a TTL of about 50 minutes. The raw token is never logged.
+5. **`routers/dj_state.py`:** the three endpoints. Validates the state document with pydantic
+   (bounded lists, as in `SuggestRequest`; rejects unknown top-level keys).
+6. **Heartbeat piggyback:** `/player/state` accepts an optional `X-DJ-Device`. If it matches the
+   primary, `primary_seen_at` is touched at most every 15s, and the response gains `dj_version`.
+7. **Tests:** version conflict (two writes from the same base: the second gets a 409 with the
+   current document), user scoping (a token for user A can't read B), the unset-config path,
+   heartbeat throttling, and request bounds. The store is faked; no live Supabase in unit tests.
+8. **One live check** against the real project: read/write/conflict through curl with a real
+   token.
+
+**Acceptance:** all tests pass; a live 409 is demonstrated; the backend still starts with no
+Supabase config.
+
+## Risks & Mitigations
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| Two devices both think they're primary (a claim racing a heartbeat) | Medium | High (double-queue) | The server is authoritative. Each device re-reads `primary.device` from every player-state poll and stops driving within one poll if it's no longer primary |
+| A merge loses an edit | Medium | Medium | Whole-document version check plus re-apply of the device's own pending op; tests cover the race |
+| Supabase outage mid-party | Low | Medium | The local copy keeps everything working; the primary keeps driving; sync resumes |
+| Fly cost or account friction | Low | Low | Pick the smallest VM; the local backend keeps working on home Wi-Fi in the meantime |
+| More Spotify API load (`/me` per token) | Low | Medium | The `/me` result is cached per token; the heartbeat rides on the existing poll |
+| Request detection confused by the primary switching mid-night | Medium | Low | The `sent` list is in the shared state, so a new primary knows what "the app sent", whichever device sent it |
+| gridstack + Svelte 4 friction | Medium | Medium | A spike at the start of W2; the fallback is CSS Grid presets with no free drag (keeps the presets, defers drag/resize) |
+
+## Dependencies
+
+- A Supabase account (the same org as Trip Fairy is fine). The new project's cost must be
+  confirmed with the owner before creation.
+- A Fly.io account (or the chosen host) with billing.
+- The existing Spotify client ID; nothing changes there. The iOS app needs no new scopes.
+
+## Open Questions (SY0) — resolved 2026-10-25
+Answers: **Vercel** (revisit later), **a new Supabase project**, **60s offline** (15s heartbeat),
+**the first device seeds the server**. The original questions:
+
+1. **Host:** Fly.io (recommended) vs. alternatives.
+2. **Supabase:** a new project (recommended) in the existing org. Creation requires a cost check
+   for that org.
+3. **Heartbeat/offline:** a proposed 15s touch / 60s "stopped driving".
+4. **Migration:** proposed. On first sync, if the server has no row, the device uploads its local
+   queue and options. If a row exists, the server wins and the device's local queue is discarded
+   (one-time notice: "Using the queue from your other device").
+
+## Decisions Log
+
+| Decision | Choice | Reasoning | Date |
+|---|---|---|---|
+| Backend state | Supabase Postgres for DJ state only; tokens and keys stay per-request | Owner wants cross-device sync; the shared DB keeps both deployments | 2026-10-25 |
+| Driving model | Jam-style primary; participants edit; explicit Drive from here, no silent failover | Owner's choice | 2026-10-25 |
+| Synced data | Queue, options, feedback, recent | Owner's choice | 2026-10-25 |
+| Sync transport | Version polling piggybacked on `/player/state`; no realtime | Adds no calls per poll; realtime is unnecessary at this scale | 2026-10-25 |
+| Concurrency | Whole-document optimistic concurrency (version, 409, re-apply) | Small document; simplest correct option | 2026-10-25 |
+| Supabase project | New, separate from Trip Fairy (pending confirmation) | Isolation from a live app | 2026-10-25 |
+| Milestone prefixes | `SY#` for sync/deploy, `W#` for web | Distinct from `P#`/`DJ#` in the tracker | 2026-10-25 |
+| Host | Vercel to start; revisit (Fly.io) after the LLC bank account | No new billed account yet; Vercel is already set up | 2026-10-25 |
+| Supabase project | New project **`boomin-beats`** (ref `dprikmlswldgkzuafcxy`, **us-east-1**, $0/mo free tier), created 2026-10-25 | Isolation from Trip Fairy. us-east-1 because us-west-2 wasn't offered for new projects and it's Vercel's default function region, so the backend and database sit together | 2026-10-25 |
+| Offline threshold | 15s heartbeat, 60s "stopped driving" | Rides out brief signal drops | 2026-10-25 |
+| Migration | The first device seeds the server; later devices adopt the server's copy | Nobody loses a queue they built | 2026-10-25 |
