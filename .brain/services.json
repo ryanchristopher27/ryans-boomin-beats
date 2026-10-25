@@ -1,0 +1,8 @@
+{
+  "services": [
+    {"name": "api", "label": "API", "port": 8005, "url": "http://127.0.0.1:8005/docs",
+     "command": "cd src/web/backend && \"$HOME/mambaforge/envs/ryans-boomin-beats/bin/python\" -m uvicorn main:app --reload --port 8005"},
+    {"name": "web", "label": "Web app", "port": 5173, "url": "http://127.0.0.1:5173",
+     "command": "cd src/web/frontend && npm run dev"}
+  ]
+}

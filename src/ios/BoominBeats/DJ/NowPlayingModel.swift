@@ -43,6 +43,10 @@ final class NowPlayingModel {
 
     private(set) var state: PlaybackState?
     private(set) var message: String?
+    /// Whether `message` came from a failed state poll rather than a command.
+    /// A poll error is stale once a later poll succeeds; a command error isn't,
+    /// and must survive the re-read that follows every command.
+    private var messageFromPoll = false
     /// Tracks played this session, most recent first — context for suggestions.
     private(set) var recent: [Track] = []
     /// Session feedback for suggestions (DJ4), most recent first, capped at 5.
@@ -98,7 +102,10 @@ final class NowPlayingModel {
             }
             state = s
             fetchedAt = Date()
-            if message == Self.noDevice, s.active { message = nil }
+            if messageFromPoll || (message == Self.noDevice && s.active) {
+                message = nil
+                messageFromPoll = false
+            }
             await queue.observe(s)
             // Guest requests (DJ5): Spotify's queue is a separate, slower read, so
             // poll it every ~10s rather than on every 2s state poll.
@@ -108,6 +115,7 @@ final class NowPlayingModel {
             }
         } catch {
             message = (error as? APIClient.Error)?.errorDescription ?? error.localizedDescription
+            messageFromPoll = true
         }
     }
 
@@ -127,8 +135,10 @@ final class NowPlayingModel {
         do {
             let result: CommandResult = try await client.post("player/\(command.rawValue)/", body: NoBody())
             message = result.error.map(Self.describe)
+            messageFromPoll = false
         } catch {
             message = (error as? APIClient.Error)?.errorDescription ?? error.localizedDescription
+            messageFromPoll = false
         }
         // Spotify's player state lags a command slightly; re-read after a beat.
         try? await Task.sleep(for: .milliseconds(400))

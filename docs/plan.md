@@ -2581,3 +2581,25 @@ whether the arc prompt needs concrete energy markers (tempo, intensity) to steer
     now" message, as designed.
 - **Still open:** the end-to-end Toward/Drift picks after Spotify validation, once search unblocks
   (about 21:20 CDT).
+
+### DJ6 live check — end to end (2026-10-25 ~12:00 CDT)
+
+Search was unblocked (`200`). Checked in the Simulator against live Spotify, with the iPhone as the
+playing device, about 3 suggestion calls in total:
+
+| Goal | Now playing | Lead move (validated on Spotify) | Verdict |
+|---|---|---|---|
+| Toward 90s R&B | Lemonade (Internet Money, Gunna) | **Toward:** D'Angelo "Untitled (How Does It Feel)", D'Angelo "Brown Sugar" | ✅ on target; other moves fit the trap starting point |
+| Drift | Lemonade | **Drift:** Mr.Kitty "After Dark", Kavinsky "Nightcall" ("glides away from rap") | ✅ somewhere new, mood kept |
+| Drift (prefetched on track change) | Get You (Daniel Caesar) | boy pablo "Losing You", M83 "Midnight City (Eric Prydz remix)" | ✅ re-planned from the new track automatically |
+| Build to peak · 30 min | Hot Blooded (New Constellations) | **Toward:** M83 "Midnight City" ("faster tempo"), Mr.Kitty "After Dark" ("beats accelerate the pace") | ✅ higher energy, and the reasons name it |
+
+The Toward/Drift section leads the list, under the goal's own label and icon, followed by the five
+standard moves. Switching goals re-fetches immediately. **DJ6 is verified.**
+
+**Bug found and fixed: a stale error message.** "Session expired. Log in again." appeared once and
+never went away, though the session worked (a pause from the app went through, and the icon flipped
+on the next poll). `NowPlayingModel` only ever cleared the no-device message. It now tracks whether
+`message` came from a failed poll and clears it on the next successful poll. Command errors are
+untouched, because they must survive the re-read 400 ms after a command. The single 401 behind it
+wasn't reproduced; a token-refresh edge around expiry is the likely cause. Watch for a recurrence.
