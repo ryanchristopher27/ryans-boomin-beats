@@ -7,7 +7,7 @@ status: review
 assignee: 
 scoped_dir: .
 created: 2026-10-26T02:36:31Z
-updated: 2026-10-26T03:03:53Z
+updated: 2026-10-26T03:06:36Z
 ---
 
 ## Brief
@@ -23,3 +23,4 @@ Medium · /search/ · filter re-upload/cover variants from results, and offer 'S
 - 2026-10-26T02:53:43Z · status: doing → review (fixed + live-checked; deploy pending)
 - 2026-10-26T02:57:23Z · comment: Live in prod (26dad29): 'money trees' -> Kendrick Lamar first. Follow-ups: mid-word queries weak; '(Speed)' labels not filtered
 - 2026-10-26T03:03:53Z · comment: Mid-word + (Speed) fixed: popularity-led ordering, relevance check, label-based re-upload filter; live checked
+- 2026-10-26T03:06:36Z · comment: Live in prod (11a951d): mid-word 'septem' -> Earth, Wind & Fire first

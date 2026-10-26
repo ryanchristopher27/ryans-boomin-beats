@@ -3345,3 +3345,5 @@ are kept.
 Childish Gambino 2nd); septem → Earth, Wind & Fire; dancing qu → ABBA. About 0.5–1s.
 
 **Known:** "kendrick lamar money" lists a "Kendrick Lamar - Money Trees" upload by "Music" second.
+
+**Production check:** on 11a951d, the simulator's mid-word search "septem" (through production) lists Earth, Wind & Fire's "September" first.
