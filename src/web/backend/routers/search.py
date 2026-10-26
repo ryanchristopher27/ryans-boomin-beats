@@ -39,6 +39,32 @@ def _is_reupload(title: str, artist: str, query: str) -> bool:
     return deezer.is_reupload(title, artist, query)
 
 
+def _artist_prefixed(title: str, artist: str, songs: set[tuple[str, str]]) -> bool:
+    """A YouTube-style upload titled "Artist - Song", e.g. "Kendrick Lamar -
+    Money Trees" posted by "Music": the real recording ("Money Trees" by Kendrick
+    Lamar) is elsewhere in the results, or the uploader prefixed its own name.
+    Real dashed titles stay: "September - Live" by Earth, Wind & Fire isn't
+    dropped just because a band called September exists."""
+    m = re.match(r'^(.+?)\s-\s(.+)$', title)
+    if not m:
+        return False
+    left, song = _fold(m.group(1)), _fold(deezer._base_title(m.group(2)))
+    return left == _fold(artist) or (left, song) in songs
+
+
+_FEATURING = re.compile(r'[\(\[]\s*(?:feat\.?|ft\.?|featuring|with)\b[^\)\]]*[\)\]]', re.I)
+
+
+def _names_other_artist(title: str, artist: str, named: set[str]) -> bool:
+    """When the query names an artist ("kendrick lamar money"), a result whose
+    title mentions that artist but isn't by them is an upload, parody or tribute
+    ("humble by kendrick lamar", "kendrick lamar ~ money trees ﾉ slowed + reverb
+    ﾉ"). Featured credits ("(feat. Kendrick Lamar)") are real collaborations."""
+    text = _fold(_FEATURING.sub('', title))
+    own = {_fold(a) for a in deezer.artists_of(artist)}
+    return any(a in text and a not in own for a in named)
+
+
 def _relevant(title: str, artist: str, query: str) -> bool:
     """Every word typed must start some word of the title or artist. Last.fm
     matches whole words only, so mid-word ("money tre") it returns unrelated
@@ -57,21 +83,32 @@ def _bare(title: str, artist: str) -> dict:
 @router.get("/search/")
 async def search(searchValue: str = Query(..., min_length=1, max_length=200)):
     q = searchValue.strip()
+    hits = await lastfm_client.track_search(q)
+    try:
+        from_deezer = await deezer.client().search(q, limit=25)
+    except deezer.DeezerUnavailable:
+        if not hits:
+            raise HTTPException(status_code=503, detail="Search isn't available right now. Try again in a moment.")
+        from_deezer = []
+    # (artist, song) pairs either source lists, to spot "Artist - Song" uploads.
+    credited = {(_fold(a), _fold(deezer._base_title(h['title']))) for h in hits for a in deezer.artists_of(h['artist'])}
+    credited |= {(_fold(s['artists'][0]), _fold(deezer._base_title(s['title']))) for s in from_deezer if s['artists']}
+    # Artists the query names (credited by a real result), for _names_other_artist.
+    names = {_fold(a) for h in hits for a in deezer.artists_of(h['artist'])}
+    names |= {_fold(s['artists'][0]) for s in from_deezer if s['artists']}
+    # Only when the query is more than the name: "september" alone could mean
+    # the song or the band September, so it names nobody.
+    named = {a for a in names if len(a) >= 4 and a in _fold(q) and a != _fold(q)}
     ranked, seen = [], set()
-    for hit in await lastfm_client.track_search(q):
+    for hit in hits:
         k = _key(hit['title'], hit['artist'])
-        if k in seen or _is_reupload(hit['title'], hit['artist'], q) or not _relevant(hit['title'], hit['artist'], q):
+        if k in seen or _is_reupload(hit['title'], hit['artist'], q) or not _relevant(hit['title'], hit['artist'], q) \
+                or _artist_prefixed(hit['title'], hit['artist'], credited) or _names_other_artist(hit['title'], hit['artist'], named):
             continue
         seen.add(k)
         ranked.append(hit)
     top = ranked[:ENRICH]
     found = await deezer.find_many([{'title': h['title'], 'artist': h['artist']} for h in top]) if top else {}
-    try:
-        from_deezer = await deezer.client().search(q, limit=25)
-    except deezer.DeezerUnavailable:
-        if not ranked:
-            raise HTTPException(status_code=503, detail="Search isn't available right now. Try again in a moment.")
-        from_deezer = []
 
     tracks, ids = [], set()
 
@@ -90,7 +127,8 @@ async def search(searchValue: str = Query(..., min_length=1, max_length=200)):
     # 2. Deezer's own results: it matches prefixes, so it carries mid-word queries.
     for s in from_deezer:
         artist = s['artists'][0] if s['artists'] else ''
-        if _is_reupload(s['title'], artist, q) or not _relevant(s['title'], artist, q):
+        if _is_reupload(s['title'], artist, q) or not _relevant(s['title'], artist, q) \
+                or _artist_prefixed(s['title'], artist, credited) or _names_other_artist(s['title'], artist, named):
             continue
         keep(deezer.as_track(s))
     # 3. The rest of Last.fm's hits, for songs too niche for Deezer's search.

@@ -3347,3 +3347,23 @@ Childish Gambino 2nd); septem → Earth, Wind & Fire; dancing qu → ABBA. About
 **Known:** "kendrick lamar money" lists a "Kendrick Lamar - Money Trees" upload by "Music" second.
 
 **Production check:** on 11a951d, the simulator's mid-word search "septem" (through production) lists Earth, Wind & Fire's "September" first.
+
+### Type-ahead: uploads that name an artist (2026-10-25)
+"kendrick lamar money" listed "Kendrick Lamar - Money Trees" by "Music" second. Three rules now
+drop that kind of upload:
+- **"Artist - Song" titles:** dropped when the real recording by that artist is elsewhere in the
+  results, or the uploader prefixed its own name. "September - Live" by Earth, Wind & Fire
+  survives a band named September.
+- **Titles naming the searched artist:** when the query names an artist plus other words, results
+  that mention that artist in the title but aren't by them are dropped. That covers parodies,
+  "humble by kendrick lamar" and "~ slowed + reverb ~" uploads. "(feat. X)" credits are exempt,
+  and a query that is only a name ("september") applies no rule.
+- **Upload labels:** "(Official Audio/Video)" and "(Lyrics)" join the re-upload labels.
+
+**Live:**
+- kendrick lamar money → Money Trees (Kendrick Lamar) only
+- kendrick lamar humble → HUMBLE. only
+- drake one dance → One Dance (Drake)
+- taylor swift bad blood → Bad Blood, then Taylor's Version
+
+148 backend tests pass.

@@ -36,10 +36,10 @@ _RETRIES = 3
 # query allows a "(Speed Up)" result.
 _VARIANT = re.compile(
     r'\b(sped[ -]?up|speed(?:[ -]?up)?|slowed|reverb|nightcore|8d|karaoke|instrumental|'
-    r'cover|tribute|bass[ -]?boosted)\b', re.I)
+    r'cover|tribute|bass[ -]?boosted|official(?: music)? (?:audio|video)|lyrics?(?: video)?)\b', re.I)
 _KIND = {'sped': 'speed', 'speed': 'speed', 'slowed': 'slowed', 'reverb': 'slowed', 'nightcore': 'speed',
          '8d': '8d', 'karaoke': 'karaoke', 'instrumental': 'instrumental', 'cover': 'cover',
-         'tribute': 'cover', 'bass': 'bass'}
+         'tribute': 'cover', 'bass': 'bass', 'official': 'upload', 'lyric': 'upload', 'lyrics': 'upload'}
 _LABELS = re.compile(r'[\(\[]([^\)\]]*)[\)\]]|\s-\s(.+)$')
 # Accounts that only post re-uploads, named for it ("sped up viral").
 _REUPLOAD_ARTIST = re.compile(r'\b(sped[ -]?up|slowed|nightcore|8d audio|bass[ -]?boosted)\b', re.I)

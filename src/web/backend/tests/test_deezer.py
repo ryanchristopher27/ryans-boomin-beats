@@ -56,6 +56,9 @@ class Reuploads(unittest.TestCase):
         self.assertFalse(is_reupload('Need for Speed'))
         self.assertFalse(is_reupload('Undercover Lover'))
         self.assertFalse(is_reupload('Electric (R3hab Remix)'))  # remixes are real releases
+        self.assertTrue(is_reupload('HUMBLE. (Official Video)'))
+        self.assertTrue(is_reupload('Redbone - Lyrics'))
+        self.assertFalse(is_reupload('HUMBLE. (Official Video)', wanted='humble official video'))
 
     def test_reupload_accounts_and_album_labels(self):
         from services.deezer import is_reupload
@@ -207,6 +210,28 @@ class SearchEndpoint(unittest.TestCase):
         r = self.run_search('money tre', [{'title': 'HONEY (ARE U COMING?)', 'artist': 'Måneskin', 'listeners': 900000}],
                             [track(3, 'MONEY TREES', 'Rilès', isrc='FR0000000001')])
         self.assertEqual([t['title'] for t in r.json()['tracks']], ['MONEY TREES'])
+
+    def test_artist_dash_song_uploads_drop(self):
+        lastfm = [{'title': 'Kendrick Lamar - Money Trees', 'artist': 'Music', 'listeners': 900000},
+                  {'title': 'Money Trees', 'artist': 'Kendrick Lamar', 'listeners': 2210951},
+                  {'title': 'Kendrick Lamar - money without me (Official Audio)', 'artist': 'Kendrick Lamar', 'listeners': 5000}]
+        found = {'Money Trees': self.song('Money Trees', 'Kendrick Lamar', 'USUM71210785')}
+        r = self.run_search('kendrick lamar money', lastfm, [], found)
+        self.assertEqual([(t['title'], t['artists'][0]) for t in r.json()['tracks']], [('Money Trees', 'Kendrick Lamar')])
+
+    def test_uploads_naming_the_searched_artist_drop_but_features_stay(self):
+        lastfm = [{'title': 'HUMBLE.', 'artist': 'Kendrick Lamar', 'listeners': 2000000},
+                  {'title': 'humble by kendrick lamar', 'artist': 'John AND Jimmy', 'listeners': 100},
+                  {'title': 'kendrick lamar ~ humble ﾉ slowed + reverb ﾉ', 'artist': 'rum world', 'listeners': 100},
+                  {'title': 'Humble Pie (feat. Kendrick Lamar)', 'artist': 'Someone', 'listeners': 100}]
+        found = {'HUMBLE.': self.song('HUMBLE.', 'Kendrick Lamar', 'USUM71703085')}
+        titles = [t['title'] for t in self.run_search('kendrick lamar humble', lastfm, [], found).json()['tracks']]
+        self.assertEqual(titles, ['HUMBLE.', 'Humble Pie (feat. Kendrick Lamar)'])
+
+    def test_dashed_song_titles_stay(self):
+        lastfm = [{'title': 'September - Live', 'artist': 'Earth, Wind & Fire', 'listeners': 10},
+                  {'title': 'Cry for You', 'artist': 'September', 'listeners': 10}]  # a band named September
+        self.assertEqual(len(self.run_search('september', lastfm).json()['tracks']), 2)
 
     def test_lastfm_down_falls_back_to_deezer(self):
         r = self.run_search('redbone', [], [track(5, 'Redbone', 'Childish Gambino', isrc='USYAH1600107')])
