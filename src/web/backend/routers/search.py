@@ -55,11 +55,17 @@ def _artist_prefixed(title: str, artist: str, songs: set[tuple[str, str]]) -> bo
 _FEATURING = re.compile(r'[\(\[]\s*(?:feat\.?|ft\.?|featuring|with)\b[^\)\]]*[\)\]]', re.I)
 
 
-def _names_other_artist(title: str, artist: str, named: set[str]) -> bool:
+def _names_other_artist(title: str, artist: str, named: set[str], query: str) -> bool:
     """When the query names an artist ("kendrick lamar money"), a result whose
     title mentions that artist but isn't by them is an upload, parody or tribute
     ("humble by kendrick lamar", "kendrick lamar ~ money trees ﾉ slowed + reverb
-    ﾉ"). Featured credits ("(feat. Kendrick Lamar)") are real collaborations."""
+    ﾉ"). Featured credits ("(feat. Kendrick Lamar)") are real collaborations.
+    A title that is itself what was typed is the song, not a mention: "Dancing
+    Queen" by ABBA stays though a "Queen" exists, as does "Redbone (Slowed)".
+    Not "Kendrick Lamar - Money Without Me": its left side is the named artist."""
+    dashed = re.match(r'^(.+?)\s-\s', title)
+    if _fold(deezer._base_title(title)) in _fold(query) and not (dashed and _fold(dashed.group(1)) in named):
+        return False
     text = _fold(_FEATURING.sub('', title))
     own = {_fold(a) for a in deezer.artists_of(artist)}
     return any(a in text and a not in own for a in named)
@@ -104,7 +110,7 @@ async def search(searchValue: str = Query(..., min_length=1, max_length=200)):
     for hit in hits:
         k = _key(hit['title'], hit['artist'])
         if k in seen or _is_reupload(hit['title'], hit['artist'], q) or not _relevant(hit['title'], hit['artist'], q) \
-                or _artist_prefixed(hit['title'], hit['artist'], credited) or _names_other_artist(hit['title'], hit['artist'], named):
+                or _artist_prefixed(hit['title'], hit['artist'], credited) or _names_other_artist(hit['title'], hit['artist'], named, q):
             continue
         seen.add(k)
         ranked.append(hit)
@@ -131,7 +137,7 @@ async def search(searchValue: str = Query(..., min_length=1, max_length=200)):
     for s in from_deezer:
         artist = s['artists'][0] if s['artists'] else ''
         if _is_reupload(s['title'], artist, q) or not _relevant(s['title'], artist, q) \
-                or _artist_prefixed(s['title'], artist, credited) or _names_other_artist(s['title'], artist, named):
+                or _artist_prefixed(s['title'], artist, credited) or _names_other_artist(s['title'], artist, named, q):
             continue
         # One row per song per artist: Deezer lists every release ("Come and Get
         # Your Love", its single version, re-records, compilations) separately.
