@@ -7,7 +7,7 @@ status: review
 assignee: 
 scoped_dir: .
 created: 2026-10-26T02:36:31Z
-updated: 2026-10-26T02:42:09Z
+updated: 2026-10-26T02:50:45Z
 ---
 
 ## Brief
@@ -21,3 +21,4 @@ High · /player/state/ poll · 2026-10-25 20:35–21:13 CDT on prod, every ~2s, 
 - 2026-10-26T02:36:31Z · created
 - 2026-10-26T02:42:09Z · status: backlog → doing (fixing)
 - 2026-10-26T02:42:09Z · status: doing → review (fixed + tested; deploy pending)
+- 2026-10-26T02:50:45Z · comment: Live in prod (a9c360a): polls ~5.5-6s, no errors; ba361a1 stops request URLs (user ids, search terms) being logged

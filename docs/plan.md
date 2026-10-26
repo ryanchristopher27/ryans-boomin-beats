@@ -3293,3 +3293,8 @@ one.
 
 **Live:** a second poll within 1.5s came from the cache (same progress, no Spotify call). Tests:
 4 backend, 1 web engine, 1 iOS.
+
+**Production verification (2026-10-25):** after `a9c360a`, production logs show the simulator
+polling every ~5.5–6s (was ~2s), with no errors. `ba361a1` silences httpx's per-request INFO
+lines, which had been logging Spotify user ids and search terms in request URLs. Its deployment
+logs nothing while serving the simulator's polls normally.
