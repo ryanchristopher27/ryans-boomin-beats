@@ -3036,3 +3036,24 @@ read, delete).
 **Still to do:**
 - The hosted backend gets this on the next merge to `main`.
 - Measure a normal night once the quota resets.
+
+### SY3 live two-device check (2026-10-25)
+The web DJ ran in the browser pane on the local backend. The iOS simulator, built from dev
+(7163caf), ran on the production Vercel backend. Both use the same Supabase row.
+
+| Step | Result |
+|---|---|
+| Stale primary on open | The web showed "macOS web stopped driving · Drive from here", an older session; no silent switch. ✓ |
+| Drive from here on the web | The simulator showed "Driving from macOS web" within ~2s. ✓ |
+| Option change, web → iPhone | Clean only appeared on the simulator. ✓ |
+| Mode change, iPhone → web | Co-pilot appeared on the web in **2.9s** (server v18), inside the ~3s goal. ✓ |
+| Drive from here on the iPhone | The web showed "Driving from iPhone" in **1.8s**. ✓ |
+| Participant add | A song added on the web (now a participant) was sent by the iPhone (the primary) about 7s later. Exactly **one** copy was in Spotify's queue, and **no** false guest request. ✓ |
+
+**Cleanup:** the song is marked to skip on arrival, and the options are back to Whisper with Clean off.
+
+**Found:** the simulator had lost its keychain, so the device-key guard rejected every poll. The app
+reported that as "Session expired. Log in again." It now says "The server didn't accept this
+device's key. Check Device key in Settings."
+
+**Left for SY2:** the owner's physical iPhone on cellular.

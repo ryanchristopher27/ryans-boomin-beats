@@ -21,6 +21,10 @@ struct APIClient {
             case .notAuthenticated:
                 return "Log in to Spotify first."
             case let .http(status, detail):
+                // The hosted backend's guard also answers 401; logging in again won't fix that.
+                if status == 401, detail?.contains("X-Device-Key") == true {
+                    return "The server didn't accept this device's key. Check Device key in Settings."
+                }
                 if status == 401 { return "Session expired. Log in again." }
                 return detail ?? "Request failed (\(status))."
             case let .decoding(error):
