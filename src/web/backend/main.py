@@ -15,6 +15,9 @@ from services import spotify_client
 # Without this, every log.info in services/ was dropped (Python's default is
 # WARNING); the search counter (plan Q4) relies on INFO reaching the logs.
 logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s %(message)s')
+# httpx logs every request URL at INFO, which would put Spotify user ids
+# (Supabase filters) and people's search terms (Deezer queries) in the logs.
+logging.getLogger('httpx').setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
 app = FastAPI(title="Boomin Beats API")
