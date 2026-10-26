@@ -1,5 +1,6 @@
 <script>
 	import Icon from './Icon.svelte';
+	import { asSong, djContext } from './context.js';
 
 	/** @type {any} */
 	export let dj;
@@ -7,6 +8,7 @@
 	export let pick;
 	export let queued = false;
 
+	const { selected } = djContext();
 	const menuId = `pick-menu-${Math.random().toString(36).slice(2)}`;
 	let menu;
 	let anchor;
@@ -34,13 +36,15 @@
 	}
 </script>
 
-<div class="pick">
-	<img src={pick.image} alt="" width="44" height="44" loading="lazy" />
-	<div class="text">
-		<p class="title">{pick.title}</p>
-		<p class="artist">{pick.artists.join(', ')}</p>
-		<p class="reason" title={pick.reason}>{pick.reason}</p>
-	</div>
+<div class="pick" class:selected={$selected?.id === pick.id}>
+	<button class="select" on:click={() => selected.set(asSong(pick))} aria-label="Show the profile of {pick.title}">
+		<img src={pick.image} alt="" width="44" height="44" loading="lazy" />
+		<span class="text">
+			<span class="title">{pick.title}</span>
+			<span class="artist">{pick.artists.join(', ')}</span>
+			<span class="reason" title={pick.reason}>{pick.reason}</span>
+		</span>
+	</button>
 	<button class="icon-btn" bind:this={anchor} popovertarget={menuId} aria-label="More options for {pick.title}" title="More options">
 		<Icon name="dots" size={18} />
 	</button>
@@ -56,20 +60,43 @@
 <style>
 	.pick {
 		display: grid;
-		grid-template-columns: 44px minmax(0, 1fr) auto auto;
+		grid-template-columns: minmax(0, 1fr) auto auto;
 		align-items: start;
-		gap: 4px 12px;
-		padding: 10px 0;
+		gap: 4px;
+		padding: 6px 0;
+		border-radius: 6px;
+	}
+
+	/* Linking: the row the Song profile is showing. */
+	.selected {
+		background: rgba(var(--accent-rgb), 0.1);
+	}
+
+	.select {
+		display: grid;
+		grid-template-columns: 44px minmax(0, 1fr);
+		gap: 12px;
+		padding: 4px;
+		border: none;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		border-radius: 6px;
+		min-width: 0;
+	}
+
+	.text {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
 	}
 
 	img {
 		border-radius: 4px;
 		object-fit: cover;
 		background: var(--surface-2);
-	}
-
-	p {
-		margin: 0;
 	}
 
 	.title {

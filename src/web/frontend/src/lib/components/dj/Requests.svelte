@@ -1,9 +1,16 @@
 <script>
 	import { flip } from 'svelte/animate';
+	import { djContext, offerUndo } from './context.js';
 
 	/** @type {any} */
 	export let dj;
 	const { doc, sync } = dj;
+	const ctx = djContext();
+
+	function decline(r) {
+		dj.decline(r);
+		offerUndo(ctx, `Declined ${r.title}.`, () => dj.undoDecline(r));
+	}
 	$: requests = $doc.queue.requests;
 </script>
 
@@ -20,7 +27,7 @@
 					<div class="actions">
 						<button class="btn small" on:click={() => dj.keep(r)} title="Leave it where Spotify put it">Keep</button>
 						<button class="btn small" on:click={() => dj.later(r)} title="Move it to the end of Up next">Later</button>
-						<button class="btn small danger" on:click={() => dj.decline(r)} title="Skip it when it comes up">Decline</button>
+						<button class="btn small danger" on:click={() => decline(r)} title="Skip it when it comes up">Decline</button>
 					</div>
 				</li>
 			{/each}

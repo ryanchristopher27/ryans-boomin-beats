@@ -17,7 +17,7 @@ export async function request(method, path, { json = undefined, headers = {} } =
 		headers: {
 			...spotifyHeaders(),
 			// The LLM key goes only where it's used.
-			...(path.startsWith('dj/suggest') ? llmHeaders() : {}),
+			...(path.startsWith('dj/suggest') || path.startsWith('song/profile') ? llmHeaders() : {}),
 			...(json !== undefined ? { 'Content-Type': 'application/json' } : {}),
 			...headers
 		},

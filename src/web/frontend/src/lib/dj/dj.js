@@ -283,6 +283,24 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		});
 	}
 
+	/** Undo for "remove" in Up next: put the entry back where it was. */
+	async function restoreUpcoming(item, index) {
+		edit((x) => {
+			if (x.queue.upcoming.some((i) => i.id === item.id)) return;
+			x.queue.upcoming.splice(Math.min(index, x.queue.upcoming.length), 0, item);
+		});
+		await topUp(depth);
+	}
+
+	/** Undo for "decline": forget the skip and put the request back. */
+	function undoDecline(req) {
+		edit((x) => {
+			const i = x.queue.guestSkips.lastIndexOf(req.trackID);
+			if (i >= 0) x.queue.guestSkips.splice(i, 1);
+			if (!x.queue.requests.some((r) => r.id === req.id)) x.queue.requests.push(req);
+		});
+	}
+
 	function keep(req) {
 		edit((x) => {
 			x.queue.requests = x.queue.requests.filter((r) => r.id !== req.id);
@@ -516,9 +534,21 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 
 	// --- Suggestions (SuggestionStore on iOS) ---
 
+	// Suggestions cost an LLM call and 20-50 Spotify searches, so they're only
+	// fetched while a DJ page is open, or when Autofill/Driver need picks to queue.
+	let watchers = 0;
+
+	/** The DJ page calls this on mount; the returned function on destroy. */
+	function watchSuggestions() {
+		watchers++;
+		prefetch();
+		return () => watchers--;
+	}
+
 	function prefetch() {
 		const track = get(player).state?.track;
 		if (!track) return;
+		if (!watchers && L.AUTOPILOT_TARGET[d().options.mode] === 0) return;
 		if (d().options.mode === 'whisper') suggestions.set({ status: 'idle', moves: [], error: null });
 		else loadSuggestions(track);
 	}
@@ -654,11 +684,13 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		add,
 		moveUpcoming,
 		removeUpcoming,
+		restoreUpcoming,
 		removeSent,
 		playLater,
 		keep,
 		later,
 		decline,
+		undoDecline,
 		// options
 		setMode: (m) => setOption('mode', m),
 		setAdventurousness: (a) => setOption('adventurousness', a),
@@ -672,6 +704,9 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		send,
 		rate,
 		progressMs,
-		loadSuggestions
+		loadSuggestions,
+		watchSuggestions,
+		// for widgets with their own reads (Song profile)
+		request
 	};
 }

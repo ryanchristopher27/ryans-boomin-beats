@@ -12,12 +12,23 @@
 	import Moves from '$lib/components/dj/Moves.svelte';
 	import UpNext from '$lib/components/dj/UpNext.svelte';
 	import Requests from '$lib/components/dj/Requests.svelte';
+	import SongProfile from '$lib/components/dj/SongProfile.svelte';
+	import Recent from '$lib/components/dj/Recent.svelte';
+	import { provideDJContext } from '$lib/components/dj/context.js';
 	import SyncBanner from '$lib/components/dj/SyncBanner.svelte';
 	import Icon from '$lib/components/dj/Icon.svelte';
 	import '$lib/components/dj/dj.css';
 
 	const dj = /** @type {any} */ (getDJ());
 	const { doc, suggestions, player } = dj;
+	const { toast } = provideDJContext();
+	// Screen-reader feedback for keyboard move/resize.
+	let announcement = '';
+
+	function nudge(item, dx, dy, dw, dh) {
+		const n = grid.nudge(item.id, dx, dy, dw, dh);
+		if (n) announcement = `${titleFor(item)}: column ${n.x + 1}, row ${n.y + 1}, ${n.w} wide, ${n.h} tall.`;
+	}
 
 	let layout = loadLayout(read());
 	let items = itemsFor(layout);
@@ -32,6 +43,7 @@
 
 	onMount(() => {
 		$page = 'DJ';
+		return dj.watchSuggestions();
 	});
 
 	function read() {
@@ -145,7 +157,7 @@
 	{:else}
 		{#key gridKey}
 			<Grid bind:this={grid} bind:items {editing} let:item>
-				<Widget title={titleFor(item)} {editing} onRemove={() => grid.remove(item.id)} ambient={item.type === 'nowPlaying' ? ambient : ''}>
+				<Widget title={titleFor(item)} {editing} onRemove={() => grid.remove(item.id)} onNudge={(dx, dy, dw, dh) => nudge(item, dx, dy, dw, dh)} ambient={item.type === 'nowPlaying' ? ambient : ''}>
 					<svelte:fragment slot="badge">
 						{#if item.type === 'requests' && requestCount}
 							<span class="badge" aria-label="{requestCount} pending">{requestCount}</span>
@@ -177,14 +189,28 @@
 						<UpNext {dj} adding={addingSong} />
 					{:else if item.type === 'requests'}
 						<Requests {dj} />
+					{:else if item.type === 'profile'}
+						<SongProfile {dj} />
+					{:else if item.type === 'recent'}
+						<Recent {dj} />
 					{/if}
 				</Widget>
 			</Grid>
 		{/key}
 		{#if editing}
-			<p class="edit-hint">Drag a widget by its header, resize from its corner. Esc cancels.</p>
+			<p class="edit-hint">Drag a widget by its header, resize from its corner, or focus its handle and use the arrow keys (Shift resizes). Esc cancels.</p>
 		{/if}
 	{/if}
+
+	<p class="sr-only" aria-live="polite">{announcement}</p>
+	<div class="toast-region" aria-live="polite">
+		{#if $toast}
+			<div class="toast">
+				<span>{$toast.message}</span>
+				<button class="btn small" on:click={() => { $toast?.undo(); toast.set(null); }}>Undo</button>
+			</div>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -265,6 +291,34 @@
 		margin: 80px auto;
 		text-align: center;
 		color: var(--text-muted);
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	.toast-region {
+		position: fixed;
+		left: 50%;
+		bottom: 24px;
+		transform: translateX(-50%);
+		z-index: 60;
+	}
+
+	.toast {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		padding: 8px 8px 8px 16px;
+		background: var(--surface-2);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius);
+		font-size: 14px;
 	}
 
 	.edit-hint {

@@ -14,7 +14,9 @@ export const WIDGETS = {
 	moves: { title: 'Next moves', minW: 4, minH: 6, w: 6, h: 10 },
 	move: { title: 'Move', minW: 2, minH: 3, w: 3, h: 6 },
 	upNext: { title: 'Up next', minW: 3, minH: 5, w: 3, h: 8 },
-	requests: { title: 'Requests', minW: 3, minH: 3, w: 3, h: 4 }
+	requests: { title: 'Requests', minW: 3, minH: 3, w: 3, h: 4 },
+	profile: { title: 'Song profile', minW: 3, minH: 5, w: 3, h: 9 },
+	recent: { title: 'Recently played', minW: 3, minH: 3, w: 3, h: 6 }
 };
 
 const w = (type, x, y, width, h, extra = {}) => ({ id: extra.kind ? `move-${extra.kind}` : type, type, x, y, w: width, h, ...extra });

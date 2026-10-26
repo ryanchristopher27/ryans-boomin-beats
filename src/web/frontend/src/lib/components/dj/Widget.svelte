@@ -8,12 +8,30 @@
 	export let editing = false;
 	/** @type {(() => void) | null} */
 	export let onRemove = null;
+	/** Keyboard move/resize in edit mode: (dx, dy, dw, dh) in grid cells. */
+	/** @type {((dx: number, dy: number, dw: number, dh: number) => void) | null} */
+	export let onNudge = null;
+
+	const STEP = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+
+	function onKey(e) {
+		const step = STEP[e.key];
+		if (!step || !onNudge) return;
+		e.preventDefault();
+		const [x, y] = step;
+		if (e.shiftKey) onNudge(0, 0, x, y);
+		else onNudge(x, y, 0, 0);
+	}
 	export let ambient = '';
 </script>
 
 <section class="widget" class:editing style:--ambient={ambient || null} aria-label={title}>
 	<header class="widget-head" class:widget-handle={editing}>
-		{#if editing}<span class="grip"><Icon name="grip" size={16} /></span>{/if}
+		{#if editing}
+			<button class="grip" on:keydown={onKey} aria-label="Move or resize {title}. Arrow keys move it; Shift and arrow keys resize it.">
+				<Icon name="grip" size={16} />
+			</button>
+		{/if}
 		<h2>{title}</h2>
 		<slot name="badge" />
 		<div class="actions">
@@ -62,8 +80,22 @@
 	}
 
 	.grip {
-		color: var(--text-subtle);
-		margin-left: -4px;
+		display: inline-grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		margin-left: -6px;
+		padding: 0;
+		border: none;
+		border-radius: 6px;
+		background: none;
+		color: var(--text-muted);
+		cursor: grab;
+	}
+
+	.grip:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 1px;
 	}
 
 	h2 {

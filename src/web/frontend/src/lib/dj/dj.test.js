@@ -115,6 +115,43 @@ describe('web DJ engine', () => {
 		expect(get(a.sync).isPrimary).toBe(false);
 	});
 
+	test('undo puts a removed song and a declined request back', async () => {
+		const server = fakeServer();
+		const b = tab(server, 'b');
+		server.row = { version: 1, state: null, primary: { device: 'a', label: 'a', online: true } };
+		const { get: g } = await import('svelte/store');
+		await b.refresh(); // a participant: nothing leaves for Spotify
+		await b.add(track('t1'));
+		await b.add(track('t2'));
+		const item = g(b.doc).queue.upcoming[0];
+		b.removeUpcoming(item.id);
+		await b.restoreUpcoming(item, 0);
+		expect(g(b.doc).queue.upcoming.map((i) => i.trackID)).toEqual(['t1', 't2']);
+
+		b.doc.update((x) => ((x.queue.requests = [{ id: 'r', trackID: 'g', title: 'g', artists: [], image: '' }]), x));
+		const req = g(b.doc).queue.requests[0];
+		b.decline(req);
+		b.undoDecline(req);
+		expect(g(b.doc).queue.requests.map((r) => r.id)).toEqual(['r']);
+		expect(g(b.doc).queue.guestSkips).toEqual([]);
+	});
+
+	test('suggestions are only fetched while watched, or when autopilot needs them', async () => {
+		const server = fakeServer();
+		const storage = memoryStorage();
+		storage.set('dj_device_id', 'a');
+		const a = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0 });
+		const asks = () => server.calls.filter((c) => c.path === 'dj/suggest/').length;
+		await a.refresh();
+		expect(asks()).toBe(0); // Co-pilot, no DJ page open
+		const stop = a.watchSuggestions();
+		expect(asks()).toBe(1);
+		await new Promise((r) => setTimeout(r, 0)); // let that ask settle (the in-flight guard)
+		stop();
+		a.setMode('driver');
+		expect(asks()).toBe(2); // Driver queues picks itself
+	});
+
 	test('a new tab adopts the shared queue and says so', async () => {
 		const server = fakeServer();
 		const a = tab(server, 'a');

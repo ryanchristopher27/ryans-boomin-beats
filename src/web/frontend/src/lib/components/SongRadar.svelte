@@ -2,6 +2,7 @@
 	// Reusable radar chart. Pass `axes` as [{ label, value }].
 	// `max` defaults to the largest value (so the top axis reaches the edge).
 	export let axes = [];
+	/** @type {number | null} */
 	export let max = null;
 	export let showValue = true;
 	export let ariaLabel = 'Radar chart';

@@ -2,12 +2,20 @@
 	import { flip } from 'svelte/animate';
 	import SongSearch from '$lib/components/SongSearch.svelte';
 	import Icon from './Icon.svelte';
+	import { asSong, djContext, offerUndo } from './context.js';
 
 	/** @type {any} */
 	export let dj;
 	export let adding = false;
 
 	const { doc, sync } = dj;
+	const ctx = djContext();
+	const { selected } = ctx;
+
+	function remove(item, i) {
+		dj.removeUpcoming(item.id);
+		offerUndo(ctx, `Removed ${item.title}.`, () => dj.restoreUpcoming(item, i));
+	}
 	$: q = $doc.queue;
 	const reduced = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 	const anim = { duration: reduced ? 0 : 200 };
@@ -75,12 +83,14 @@
 					<button class="icon-btn grip" data-row={item.id} on:keydown={(e) => onKey(e, i)} aria-label="Reorder {item.title}" aria-describedby="reorder-hint">
 						<Icon name="grip" size={14} />
 					</button>
-					<img src={item.image} alt="" width="36" height="36" />
-					<div class="text">
-						<p class="title">{item.title}{#if item.addedByDJ}<span class="dj" title="Added by the DJ"><Icon name="sparkle" size={12} label="Added by the DJ" /></span>{/if}</p>
-						<p class="artist">{item.artists.join(', ')}</p>
-					</div>
-					<button class="icon-btn" on:click={() => dj.removeUpcoming(item.id)} aria-label="Remove {item.title}" title="Remove"><Icon name="x" size={16} /></button>
+					<button class="select" class:selected={$selected?.id === item.trackID} on:click={() => selected.set(asSong(item))} aria-label="Show the profile of {item.title}">
+						<img src={item.image} alt="" width="36" height="36" />
+						<span class="text">
+							<span class="title">{item.title}{#if item.addedByDJ}<span class="dj" title="Added by the DJ"><Icon name="sparkle" size={12} label="Added by the DJ" /></span>{/if}</span>
+							<span class="artist">{item.artists.join(', ')}</span>
+						</span>
+					</button>
+					<button class="icon-btn" on:click={() => remove(item, i)} aria-label="Remove {item.title}" title="Remove"><Icon name="x" size={16} /></button>
 				</li>
 			{/each}
 		</ul>
@@ -159,6 +169,31 @@
 	.text {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.select {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 2px;
+		border: none;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		border-radius: 6px;
+	}
+
+	.select.selected {
+		background: rgba(var(--accent-rgb), 0.1);
+	}
+
+	.text {
+		display: flex;
+		flex-direction: column;
 	}
 
 	p {

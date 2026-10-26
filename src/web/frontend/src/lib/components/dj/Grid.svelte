@@ -78,6 +78,19 @@
 		grid.makeWidget(nodeFor(item.id), { id, w, h, minW, minH, autoPosition: true });
 	}
 
+	/** Keyboard move/resize: shift by whole cells, kept on the grid and above minimums. */
+	export function nudge(id, dx, dy, dw, dh) {
+		const node = grid.engine.nodes.find((n) => n.id === id);
+		if (!node) return;
+		const cols = grid.getColumn();
+		const w = Math.max(node.minW ?? 1, Math.min(cols, node.w + dw));
+		const h = Math.max(node.minH ?? 1, node.h + dh);
+		const x = Math.max(0, Math.min(cols - w, node.x + dx));
+		const y = Math.max(0, node.y + dy);
+		grid.update(node.el, { x, y, w, h });
+		return grid.engine.nodes.find((n) => n.id === id);
+	}
+
 	export function remove(id) {
 		grid.removeWidget(nodeFor(id), false);
 		items = items.filter((i) => i.id !== id);
