@@ -137,3 +137,70 @@ Phase context: brainstorm → plan → scaffold (run ~5×), plus heavy build/ite
 
 ## Suggested Next Phase
 `/verify` (or `/run`) — drive the app for real and confirm the account-integration and AI-analysis paths end-to-end, since those are the least-tested and highest-risk areas. This also establishes the screenshot-based visual loop for any follow-up polish.
+
+---
+
+# Reflect — DJ Sync, Web DJ, and Quota-Safe Lookups
+Date: 2026-10-26
+Type: Milestone
+Phase context: /build (SY3, W1–W4, Q0–Q4) · /review (W1–W4) · /brainstorm + /plan (quota) · /iterate (polling, search) · production deploys
+
+## Accomplished
+- SY3: iOS on the shared DJ state (Jam-style primary, Drive from here); two-device check passed live.
+- W1–W4: web DJ engine on the sync client, gridstack widget grid with presets, mini player + ambience, linking/song profile/undo. /review found 9 issues; all fixed.
+- "Your Claude Code" AI provider (local CLI, no key, off on Vercel) and the app icon.
+- Q0–Q4: Deezer is the display source, Spotify is asked only when a song is chosen (by ISRC), songs carry provider-neutral identity, shared `track_lookup` cache in Supabase. Showing songs costs 0 Spotify searches; queuing costs 1; repeats 0.
+- Player polling 429 fix (backoff, shared state cache, 503 + retry_after lockout) and request URLs kept out of logs.
+- Six rounds of search fixes: originals first, mid-word queries, re-upload labels, artist-named uploads, covers on every row, one row per song.
+- Seven production deploys, each checked against live Vercel logs.
+- Tracker housekeeping: 41 verified tasks closed.
+
+## What Worked
+- **A production check after every deploy.** Logs caught what tests couldn't: 1,157 player 429s in 38 minutes, httpx logging user ids and search terms, type-ahead gaps.
+- **Spikes in parallel with the build.** Q0 ran against real APIs while Q1–Q4 were built against its expected answers; the results landed and only small adjustments followed.
+- **Live two-device checks** (browser + simulator) proved sync for real instead of relying on unit tests alone.
+- **Brainstorm → plan for the quota problem.** A blocker with no obvious fix ("needs 250k MAU") became a design (A + B + C) in one cycle.
+
+## What Didn't Work
+- **The Spotify limits were discovered by hitting them.** W1–W4 and the DJ prefetch assumed search was cheap; the quota locked search twice and forced the Q0–Q4 redesign.
+- **Search ranking is whack-a-mole.** Each round was triggered by one bad query the user noticed (Money Trees, "september", kendrick lamar money, Tadow). No regression set of real queries exists, so a later fix can quietly break an earlier one.
+- **A debug self-test destroyed real state.** The keychain self-test deleted the device key on every debug launch.
+- **The tracker review column grew to ~40 tasks**, because /build moves work to review and nothing closed it.
+
+## Decisions Reviewed
+| Decision | Outcome | Confidence |
+|---|---|---|
+| Deezer as display source | Works; terms are non-commercial/private, fine for personal + small circle, not public | Medium (fine for now) |
+| Spotify only at choose time, by ISRC | 0 searches to show, 1 per queued song | High |
+| App-client `isrc:` search with fixed market | Avoids the `user-read-private` 403 | High |
+| Player polling at 5s (sync ~5s instead of ~3s) | Stopped the 429s | Medium (fine for now) |
+| Last.fm ranking + Deezer enrichment for type-ahead | Originals first; heuristics still growing | Medium |
+| Claude Code provider local-only | No key handling; never reaches the iPhone | High |
+
+## Lessons Learned
+- **Check an external API's quotas and Development Mode limits before designing a feature that multiplies calls to it.** Recurring: the June reflection already asked for a Spotify gotchas note.
+- **A ranking heuristic needs a golden-query regression test** once it has more than two rules.
+- **A diagnostic writes only to its own slot**, never to real user state.
+- **Check production logs within the hour** (Vercel Hobby keeps 1 hour).
+
+## Surprises
+- Spotify Development Mode strips `external_ids` and `popularity` from tracks.
+- `market=from_token` returns 403 without `user-read-private`.
+- `isrc:` search lists compilations first, and sped-up re-uploads can share the original's ISRC.
+- Player endpoints are rate-limited too, not just search.
+- Extended Quota needs an organization with 250k MAU.
+- Deezer's strict `artist:"" track:""` syntax returns nothing; its ranking can hide originals.
+
+## Memory Updates
+- Written: reference memory "Spotify API gotchas" (closes the June suggestion).
+- Updated: project memory for Boomin Beats (quota-safe lookups shipped; Deezer terms limit public use).
+
+## Next Steps
+1. After a day of real use, check `/stats` and the logs; close e2df2d.
+2. Add a golden-query regression test for type-ahead search (the six reported queries plus a few controls).
+3. Rebuild the iPhone from dev and run the SY2 cellular check.
+4. Live-check DJ6 goals (destination, arc, drift).
+5. Small leftovers: LLM headers only on LLM routes, DELETE /dj/state, DJ/SY1 tidy-ups.
+
+## Suggested Next Phase
+`/iterate` for the golden-query test and the small leftovers, while real use accumulates for the quota check. Before a public launch, `/brainstorm` the Apple Music path, since Deezer's terms and Spotify's quota both block it.
