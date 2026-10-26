@@ -27,6 +27,7 @@
 	"type": "module",
 	"svelte": "index.js",
 	"dependencies": {
-		"@fontsource/inter": "^5.2.8"
+		"@fontsource/inter": "^5.2.8",
+		"gridstack": "13.3.0"
 	}
 }

@@ -663,7 +663,8 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		setMode: (m) => setOption('mode', m),
 		setAdventurousness: (a) => setOption('adventurousness', a),
 		setClean: (c) => setOption('clean', c),
-		setGoal: (g) => setOption('goal', g && { ...g, startedAt: g.startedAt ?? new Date(now()).toISOString() }),
+		// Every field filled, as the server stores it.
+		setGoal: (g) => setOption('goal', g && { destination: '', shape: 'build', minutes: 30, ...g, startedAt: g.startedAt ?? new Date(now()).toISOString() }),
 		avoidTrack,
 		avoidArtist,
 		unavoid,

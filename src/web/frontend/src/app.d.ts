@@ -7,6 +7,15 @@ declare global {
 		// interface PageData {}
 		// interface Platform {}
 	}
+
+	// The Popover API is newer than Svelte 4's element typings (DJ page menus).
+	namespace svelteHTML {
+		interface HTMLAttributes<T> {
+			popover?: 'auto' | 'manual';
+			popovertarget?: string;
+			'on:toggle'?: (event: Event & { newState?: string }) => any;
+		}
+	}
 }
 
 export {};

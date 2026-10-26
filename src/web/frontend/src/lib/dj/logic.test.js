@@ -1,7 +1,7 @@
 // Ports of the iOS BoominBeatsTests (QueueLogicTests + SyncTests), so both
 // clients' queue logic is held to the same cases.
 import { describe, expect, test } from 'vitest';
-import { arrival, autopilotCandidates, detectRequests, emptyDoc, goalKey, merge, reconciled } from './logic.js';
+import { arrival, autopilotCandidates, detectRequests, docsEqual, emptyDoc, goalKey, merge, reconciled } from './logic.js';
 
 const item = (id, skip = false) => ({ id: `e-${id}-${Math.random()}`, trackID: id, title: id, artists: ['A'], image: '', skipOnArrival: skip });
 const ids = (items) => items.map((i) => i.trackID);
@@ -118,6 +118,13 @@ describe('sync merge', () => {
 		const server = structuredClone(base);
 		server.options.adventurousness = 0.1;
 		expect(merge(base, local, server).options.adventurousness).toBe(0.9);
+	});
+	test("the server's filled-in defaults don't count as a change", () => {
+		const local = emptyDoc();
+		local.queue.upcoming = [{ id: 'e', trackID: 't', title: 't', artists: [], image: '', skipOnArrival: false }];
+		const server = structuredClone(local);
+		server.queue.upcoming[0] = { addedByDJ: null, ...server.queue.upcoming[0] };
+		expect(docsEqual(local, server)).toBe(true);
 	});
 	test('takes server fields this device did not touch', () => {
 		const base = emptyDoc();

@@ -1,15 +1,15 @@
 <script>
-	import { page, llmConfig, playlistsPanelOpen } from '../stores.js';
+	import { page, llmConfig, playlistsPanelOpen, llmSettingsOpen } from '../stores.js';
 	import BoominBeatsLogo from '$lib/images/BoominBeatsLogo.jpg';
 	import LLMSettingsPanel from '$lib/components/LLMSettingsPanel.svelte';
 
 	const navLinks = [
 		{ label: 'Explore', href: '/', page: 'Explore' },
 		{ label: 'Playlist Builder', href: '/playlist-builder/', page: 'Playlist Builder' },
+		{ label: 'DJ', href: '/dj/', page: 'DJ' },
 		{ label: 'Profile', href: '/profile/', page: 'Profile' },
 	];
 
-	let settingsOpen = false;
 </script>
 
 <header>
@@ -38,7 +38,7 @@
 			<button
 				class="settings-toggle"
 				class:connected={$llmConfig.connected}
-				on:click={() => (settingsOpen = !settingsOpen)}
+				on:click={() => ($llmSettingsOpen = !$llmSettingsOpen)}
 				title="AI Settings"
 			>
 				<span class="settings-icon">⚙</span>
@@ -49,9 +49,9 @@
 		</div>
 	</div>
 
-	{#if settingsOpen}
+	{#if $llmSettingsOpen}
 		<div class="settings-popover">
-			<LLMSettingsPanel onClose={() => (settingsOpen = false)} />
+			<LLMSettingsPanel onClose={() => ($llmSettingsOpen = false)} />
 		</div>
 	{/if}
 </header>

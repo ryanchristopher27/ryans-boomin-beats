@@ -125,7 +125,14 @@ const FIELDS = [
 
 /** @param {any} doc @param {[string | null, string]} field */
 const read = (doc, [s, k]) => (s ? doc[s][k] : doc[k]);
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+/** Key order and null-vs-missing don't count: the server fills defaults (`addedByDJ: null`). */
+const canon = (v) =>
+	Array.isArray(v)
+		? v.map(canon)
+		: v && typeof v === 'object'
+		? Object.fromEntries(Object.keys(v).sort().filter((k) => v[k] != null).map((k) => [k, canon(v[k])]))
+		: v;
+const same = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 
 /**
  * Three-way merge after a 409: start from the server's document and keep every

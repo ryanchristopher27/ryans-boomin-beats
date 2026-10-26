@@ -79,3 +79,7 @@ export const exploreSession = persisted('exploreSession_v2', {
     selectedTags: [],
     selectedAspects: [],
 });
+
+// Whether the AI settings popover in the header is open; the DJ page opens it
+// from its "needs key" state.
+export const llmSettingsOpen = writable(false);
