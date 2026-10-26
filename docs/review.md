@@ -190,3 +190,82 @@ Critical: 0 | Warning: 4 | Suggestion: 4
 2. W4: tests to accompany the W2 fix.
 3. S1–S3: tidy-ups, cheap to do with the above.
 4. S4: fits SY3, where the iOS UI gets a sync section.
+
+# Review — W1–W4 web DJ (+ "Your Claude Code" provider)
+Date: 2026-10-25
+Triggered by: ad hoc (/review after W4)
+Scope: `src/web/frontend/src/lib/dj/`, `lib/components/dj/`, `routes/dj/`, `routes/+layout.svelte`
+(the engine and the mini player), the Header/stores/app.d.ts changes; commits 5519b2c..5f45294,
+plus the backend Claude Code provider (001e27e).
+Focus: All
+
+## Summary
+Every W1–W4 item in the plan is built, and the deviations are recorded in the plan's W results.
+Logic coverage is good: 39 vitest tests, including the engine tested against a fake SY1 backend.
+The two Critical findings both come from the web engine now living app-wide, in every tab and for
+as long as the page stays open. That is exactly the "host from a laptop all night" use case.
+**Critical: 2 | Warning: 4 | Suggestion: 3**
+
+## Plan Adherence
+- **W1:** logic port, sync client and vitest ports are done. Deliberate departure from the brief:
+  one `dj.js` engine over a single synced `doc` store instead of four store files. It was recorded
+  in the W1 result, and it makes every edit one push.
+- **W2:** grid, the seven widget types, the presets and Edit layout are done. The deviations
+  (Goal docked in Host, DJ controls in Board, Now playing minimum height 3) are recorded.
+- **W3:** mini player, ambience and audit are done.
+- **W4:** linking + Song profile, Recently played, keyboard move/resize and undo are done. The
+  reimplemented profile widget is recorded.
+- **Still open from the plan:** live-resize breakpoint switching is unverified, because the
+  browser pane was hidden.
+- **Goal "Exactly one device drives … never double-queue":** broken by C1 below for two tabs in
+  the same browser.
+
+## Code Quality
+- Clear separation between pure logic (`logic.js`, `layout.js`, `ambience.js`) and stateful code,
+  and all three pure modules have tests.
+- Comments explain *why* (quota, Spotify quirks, iOS parity) consistently.
+- Gaps: grid wrapper behaviour (save/add/nudge) and the components have no automated tests. Both
+  bugs found while building W2 lived there and were caught only by hand.
+
+## Security
+- **XSS:** no `{@html}` anywhere. Track text and reasons render as text. Image URLs only go into
+  `<img src>` and a CORS image load.
+- **Claude Code:**
+  - `create_subprocess_exec` runs with no shell.
+  - The prompt goes over stdin.
+  - `--tools ""`, `--strict-mcp-config` and project-only settings mean prompt injection from track
+    names can't act.
+  - Disabled on Vercel.
+  - The local backend still sits behind CORS preflight for JSON and custom headers.
+- **LLM key:** sent only to the app's own backend, for `dj/suggest` and `song/profile`. Storing it
+  in localStorage is the existing BYOK design and was not re-flagged.
+- No secrets in the diff. Nothing new is logged.
+
+## Findings
+
+### Critical
+| # | Location | Issue | Recommendation | Status |
+|---|---|---|---|---|
+| C1 | `lib/dj/dj.js` (device id in localStorage) | Two tabs in one browser share the same `dj_device_id`, so **both** think they're the primary. Both send the same Up next track to Spotify (a double-queue). Each then sees the other's sends as guest requests, breaking the plan's "exactly one device drives" goal. Opening a second tab (DJ page + Explore) is enough. | Elect one driving tab per browser with the Web Locks API (`navigator.locks.request('boomin-beats-dj-driver', …)`, held until the tab closes). Driving actions check `isPrimary && tabLeader`; the next tab takes over when the leader closes. | Open |
+| C2 | `lib/spotifyAuth.js`, `routes/+layout.svelte` | The Spotify token is only refreshed on page load. A DJ page left open goes stale about 1 hour into a party, and the engine then 401s on every poll: no playback state, no top-ups. | Re-hydrate on a timer, with a margin before expiry (e.g. every 60s, refreshing within 2 min of `expires_at`), and also as soon as the engine sees a 401. | Open |
+
+### Warning
+| # | Location | Issue | Recommendation | Status |
+|---|---|---|---|---|
+| W1 | `components/dj/SongProfile.svelte` (`$: load(key, song)`) | Re-runs on every player poll, because `song` is a new object each time. While a profile is loading (≈16s with Claude Code), each poll starts **another** `/song/profile/` call, so about 8 LLM + Last.fm calls per song. | Skip `load` when the key is unchanged (track a `loadingKey`). | Open |
+| W2 | `lib/dj/dj.js` `pull()` (and iOS `DJSync.pull`) | A local edit made while the GET is in flight is overwritten by `apply(server)` and never pushed, because doc == base afterwards. Small window, but the edit is silently lost. | Snapshot the doc before the GET. If it changed by the time the response lands, apply `merge(snapshot, current, server)` and push. | Open |
+| W3 | `lib/dj/dj.js` `push()` | Only 200 and 409 are handled. A 422 (client/server schema drift) or a persistent 5xx drops every push silently, and the UI still says "synced". | Set `sync.status = 'error'` with a short message on other statuses, and stop claiming synced. | Open |
+| W4 | `routes/+layout.svelte` | The engine starts when a token appears but never stops. After sign-out it keeps polling and 401s every few seconds. | `$: $access_token ? dj.start() : dj.stop()` (client only). | Open |
+
+### Suggestion
+| # | Location | Issue | Recommendation | Status |
+|---|---|---|---|---|
+| S1 | `components/dj/Grid.svelte` | `save`/`add`/`nudge` have no automated test. Both W2 grid bugs (lost size on add, inclusive breakpoints) were found only by hand. | Add a jsdom vitest for the wrapper, or a Playwright smoke test of Edit layout → Done → reload. | Open |
+| S2 | `lib/dj/dj.js` (doc hydration) | `{...emptyDoc(), ...stored}` is a shallow merge, so a stored doc from an older shape can lack nested fields (e.g. `options.avoidArtists`) and crash `.some`. | Deep-merge the stored doc onto `emptyDoc()` section by section. | Open |
+| S3 | `services/claude_code.py` | No limit on concurrent `claude` processes. A burst (several tabs, profile + suggest) spawns one each. | A module-level `asyncio.Semaphore(2)` around `run`. | Open |
+
+## Resolved This Session
+- None yet. C1, C2 and W1 are bounded fixes, offered inline.
+
+## Carried to /iterate
+- W2 (pull race, on web and iOS), W3, W4, S1–S3.
