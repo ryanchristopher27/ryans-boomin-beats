@@ -183,10 +183,16 @@ class SearchEndpoint(unittest.TestCase):
                          [('Money Trees', 'Kendrick Lamar'), ('MONEY TREES', 'Rilès')])
         self.assertEqual(r.json()['tracks'][0]['id'], 'USUM71210785')
 
-    def test_a_lastfm_hit_deezer_lacks_still_shows(self):
-        r = self.run_search('rare', [{'title': 'Rare Cut', 'artist': 'Someone', 'listeners': 10}])
+    def test_a_lastfm_hit_deezer_lacks_still_shows_with_lastfms_cover(self):
+        r = self.run_search('rare', [{'title': 'Rare Cut', 'artist': 'Someone', 'listeners': 10, 'image': 'https://lastfm/cover.png'}])
         t = r.json()['tracks'][0]
-        self.assertEqual((t['id'], t['isrc'], t['title']), ('lfm:rarecut|someone', None, 'Rare Cut'))
+        self.assertEqual((t['id'], t['isrc'], t['title'], t['image']), ('lfm:rarecut|someone', None, 'Rare Cut', 'https://lastfm/cover.png'))
+
+    def test_lastfm_placeholder_star_is_no_cover(self):
+        from services.lastfm_client import _image
+        star = 'https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png'
+        self.assertEqual(_image([{'#text': 'https://a/small.png', 'size': 'small'}, {'#text': star, 'size': 'large'}]), 'https://a/small.png')
+        self.assertEqual(_image([{'#text': star}]), '')
 
     def test_asking_for_a_reupload_keeps_it(self):
         lastfm = [{'title': 'Redbone (Slowed)', 'artist': 'Someone', 'listeners': 10}]

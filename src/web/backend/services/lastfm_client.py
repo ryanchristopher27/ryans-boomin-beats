@@ -9,6 +9,19 @@ log = logging.getLogger(__name__)
 BASE_URL = 'https://ws.audioscrobbler.com/2.0/'
 
 
+# Last.fm's stand-in when it has no art (a grey star): treat as no image.
+_PLACEHOLDER = '2a96cbd8b46e442fc41c2b86b821562f'
+
+
+def _image(images) -> str:
+    """The largest real image URL from Last.fm's [{'#text': url, 'size': ...}] list."""
+    for img in reversed(images or []):
+        url = (img or {}).get('#text') or ''
+        if url and _PLACEHOLDER not in url:
+            return url
+    return ''
+
+
 async def track_search(query: str, limit: int = 15) -> list[dict]:
     """[{title, artist, listeners}] ranked by Last.fm (by popularity), or []
     on any failure. Type-ahead uses it because Deezer's search can bury the
@@ -26,7 +39,8 @@ async def track_search(query: str, limit: int = 15) -> list[dict]:
     out = []
     for t in tracks if isinstance(tracks, list) else [tracks]:
         try:
-            out.append({'title': t['name'], 'artist': t['artist'], 'listeners': int(t.get('listeners') or 0)})
+            out.append({'title': t['name'], 'artist': t['artist'], 'listeners': int(t.get('listeners') or 0),
+                        'image': _image(t.get('image'))})
         except (KeyError, TypeError, ValueError):
             continue
     return out

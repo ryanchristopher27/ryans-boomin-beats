@@ -153,6 +153,8 @@ private struct SearchResponse: Decodable {
         let artists: [String]
         let image: String
         var isrc: String?
+
+        var imageURL: URL? { URL(string: image) }
     }
     let tracks: [Result]
 }
@@ -165,7 +167,15 @@ private struct AddTrackView: View {
         return Button {
             add(result)
         } label: {
-            HStack {
+            HStack(spacing: 12) {
+                AsyncImage(url: result.imageURL) { image in
+                    image.resizable().aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 4).fill(.quaternary)
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(result.title).foregroundStyle(.primary).lineLimit(1)
                     Text(note ?? result.artists.joined(separator: ", "))

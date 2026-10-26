@@ -18,7 +18,7 @@ from services import deezer, lastfm_client
 router = APIRouter()
 
 RESULTS = 10
-ENRICH = 6  # Deezer lookups per query: art + ISRC for the top of the list (cached)
+ENRICH = 8  # Deezer lookups per query: cover + ISRC for the Last.fm hits shown (cached)
 # A Last.fm hit this popular, confirmed on Deezer, leads the list. Mid-word
 # queries only get whole-word junk from Last.fm ("Septem" by Hexis for
 # "septem"), which never reaches this, so Deezer's prefix matches lead instead.
@@ -74,10 +74,11 @@ def _relevant(title: str, artist: str, query: str) -> bool:
     return all(any(w.startswith(t) for w in words) for t in re.findall(r'[0-9a-z]+', query.casefold()))
 
 
-def _bare(title: str, artist: str) -> dict:
-    """A Last.fm hit Deezer couldn't fill in: still shown, resolved by title on tap."""
+def _bare(title: str, artist: str, image: str = '') -> dict:
+    """A Last.fm hit Deezer couldn't fill in: still shown (with Last.fm's cover
+    when it has one), resolved by title on tap."""
     return {'id': f'lfm:{_key(title, artist)}'[:64], 'isrc': None, 'title': title, 'artists': [artist],
-            'album': '', 'image': '', 'track_url': '', 'duration_ms': 0, 'explicit': False}
+            'album': '', 'image': image, 'track_url': '', 'duration_ms': 0, 'explicit': False}
 
 
 @router.get("/search/")
@@ -134,5 +135,5 @@ async def search(searchValue: str = Query(..., min_length=1, max_length=200)):
     # 3. The rest of Last.fm's hits, for songs too niche for Deezer's search.
     for h in top:
         song = found.get((h['title'], h['artist']))
-        keep(deezer.as_track(song) if song else _bare(h['title'], h['artist']))
+        keep(deezer.as_track(song) if song else _bare(h['title'], h['artist'], h.get('image', '')))
     return {'type': 'searchSongs', 'tracks': tracks}
