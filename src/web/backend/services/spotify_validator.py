@@ -2,6 +2,7 @@ import asyncio
 
 from spotipy import Spotify
 
+from services import track_cache
 from services.spotify_client import app_client, search
 
 
@@ -52,25 +53,61 @@ def _search_one(spotify: Spotify, title: str, artist: str, fallback: bool = True
     return track
 
 
+# Searches in flight at once. Spotify also rate-limits over a rolling 30s
+# window, and firing a whole suggestion round (20+ searches) at once invites it.
+_MAX_CONCURRENT = 4
+
+
 async def validate_songs(suggestions: list[dict], fallback: bool = True) -> tuple[list[dict], list[dict]]:
-    spotify = await asyncio.to_thread(app_client)
+    """Look each suggestion up on Spotify, cheapest source first: this process's
+    cache, then the shared Supabase cache (services/track_cache.py), then a
+    search. New results go back to the shared cache for every other instance."""
+    resolved: dict[tuple[str, str, bool], dict | None] = {}
+    pending = {}
+    for s in suggestions:
+        k = (s['title'].casefold(), s['artist'].casefold(), fallback)
+        if k in _CACHE:
+            resolved[k] = _CACHE[k]
+        else:
+            pending[k] = s
+    if pending:
+        digests = {k: track_cache.key(s['title'], s['artist'], fallback) for k, s in pending.items()}
+        shared = await asyncio.to_thread(track_cache.get_many, list(set(digests.values())))
+        for k, d in digests.items():
+            if d in shared:
+                resolved[k] = _CACHE[k] = shared[d]
+        to_search = {k: s for k, s in pending.items() if k not in resolved}
+        if to_search:
+            spotify = await asyncio.to_thread(app_client)
+            gate = asyncio.Semaphore(_MAX_CONCURRENT)
 
-    async def check(suggestion: dict):
-        track = await asyncio.to_thread(_search_one, spotify, suggestion['title'], suggestion['artist'], fallback)
-        return suggestion, track
+            async def search_one(s: dict):
+                async with gate:
+                    return await asyncio.to_thread(_search_one, spotify, s['title'], s['artist'], fallback)
 
-    results = await asyncio.gather(*[check(s) for s in suggestions])
+            found = await asyncio.gather(*[search_one(s) for s in to_search.values()], return_exceptions=True)
+            fresh = {}
+            for k, t in zip(to_search, found):
+                if not isinstance(t, BaseException):
+                    resolved[k] = t
+                    fresh[digests[k]] = t
+            await asyncio.to_thread(track_cache.put_many, fresh)
+            # A 429 (or other failure) still fails the call, after saving what did come back.
+            errors = [t for t in found if isinstance(t, BaseException)]
+            if errors:
+                raise errors[0]
 
     matched, failed = [], []
-    for suggestion, track in results:
+    for s in suggestions:
+        track = resolved.get((s['title'].casefold(), s['artist'].casefold(), fallback))
         if track:
             matched.append({
-                'title': suggestion['title'],
-                'artist': suggestion['artist'],
-                'reason': suggestion.get('reason', ''),
+                'title': s['title'],
+                'artist': s['artist'],
+                'reason': s.get('reason', ''),
                 'spotify': track,
             })
         else:
-            failed.append(suggestion)
+            failed.append(s)
 
     return matched, failed

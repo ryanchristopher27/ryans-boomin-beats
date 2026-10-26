@@ -199,8 +199,9 @@ private struct AddTrackView: View {
             // Debounced: re-runs (and cancels the previous search) on each keystroke.
             .task(id: query) {
                 let q = query.trimmingCharacters(in: .whitespaces)
-                guard !q.isEmpty else { results = []; return }
-                try? await Task.sleep(for: .milliseconds(300))
+                // Each search spends Spotify's small daily quota (tracker e2df2d).
+                guard q.count >= 3 else { results = []; return }
+                try? await Task.sleep(for: .milliseconds(350))
                 guard !Task.isCancelled else { return }
                 do {
                     let response: SearchResponse = try await APIClient(session: session).get("search/", query: ["searchValue": q])

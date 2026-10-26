@@ -299,6 +299,30 @@ def select_tracks(
     return result
 
 
+async def fill_moves(moves, exclude, per_move, avoid_artists=(), clean=False, validate=None):
+    """Validate only as many picks as each move needs. The prompt over-asks
+    (_OVERASK spares per move), but most picks match, so look up the first
+    `per_move` of each move and go further down a move's list only to replace
+    a pick that failed a check. Roughly halves Spotify searches per round,
+    which spend a small daily quota (tracker e2df2d)."""
+    validate = validate or validate_songs
+    matched, tried = [], set()
+    while True:
+        result = select_tracks(moves, matched, exclude, per_move, avoid_artists, clean)
+        have = {r['move']: len(r['tracks']) for r in result}
+        batch = []
+        for move, entries in moves.items():
+            short = per_move - have.get(move, 0)
+            if short > 0:
+                batch += [e for e in entries if (e['title'], e['artist']) not in tried][:short]
+        if not batch:
+            return result
+        tried.update((e['title'], e['artist']) for e in batch)
+        # No title-only fallback: select_tracks drops other artists' songs anyway.
+        found, _ = await validate(batch, fallback=False)
+        matched += found
+
+
 def _spotify_recent(token: str, limit: int = 20) -> list[TrackRef]:
     """The user's last plays from Spotify, so history survives an app relaunch
     (the client only remembers what it saw this session). Best effort."""
@@ -360,12 +384,8 @@ async def suggest(
         if not moves:
             return {'moves': [], 'tags': tags, 'error': _CUT_OFF}
 
-    flat = [e for entries in moves.values() for e in entries]
-    # No title-only fallback: select_tracks drops other artists' songs anyway.
-    matched, _ = await validate_songs(flat, fallback=False)
-
     exclude = {r.id for r in [body.now_playing, *all_recent, *body.upcoming, *body.avoid_tracks] if r.id}
-    result = select_tracks(moves, matched, exclude, body.per_move, body.avoid_artists, body.clean)
+    result = await fill_moves(moves, exclude, body.per_move, body.avoid_artists, body.clean)
     return {
         'moves': result,
         'tags': tags,

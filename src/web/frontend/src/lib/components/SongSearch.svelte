@@ -12,12 +12,14 @@
 
 	function onInput() {
 		clearTimeout(debounceTimer);
-		debounceTimer = setTimeout(searchSongs, 220);
+		// Each search spends Spotify's small daily search quota (tracker e2df2d),
+		// so wait for a real pause and at least 3 characters.
+		debounceTimer = setTimeout(searchSongs, 350);
 	}
 
 	async function searchSongs() {
 		const q = searchValue.trim();
-		if (!q) {
+		if (q.length < 3) {
 			tracks = [];
 			open = false;
 			return;

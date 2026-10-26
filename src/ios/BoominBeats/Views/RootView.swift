@@ -25,24 +25,36 @@ struct MainTabs: View {
     @State private var suggestions: SuggestionStore?
     @State private var djSettings = DJSettings()
     @State private var sync: DJSync?
+    @State private var tab = MainTab.nowPlaying
+
+    enum MainTab { case nowPlaying, queue, profile }
+
+    /// Suggestions cost an LLM call and ~10-25 Spotify searches from a small
+    /// daily quota (tracker e2df2d), so fetch them only while the moves are on
+    /// screen, or when Autofill/Driver need picks to queue.
+    private var wantsSuggestions: Bool {
+        tab == .nowPlaying || djSettings.mode.autopilotTarget > 0
+    }
 
     var body: some View {
-        TabView {
-            Tab("Now Playing", systemImage: "play.circle") { NowPlayingView() }
-            Tab("Queue", systemImage: "list.bullet") { QueueView() }
+        TabView(selection: $tab) {
+            Tab("Now Playing", systemImage: "play.circle", value: MainTab.nowPlaying) { NowPlayingView() }
+            Tab("Queue", systemImage: "list.bullet", value: MainTab.queue) { QueueView() }
                 .badge(queue?.requests.count ?? 0)
-            Tab("Profile", systemImage: "person.crop.circle") { ProfileView() }
+            Tab("Profile", systemImage: "person.crop.circle", value: MainTab.profile) { ProfileView() }
         }
         .environment(nowPlaying)
         .environment(queue)
         .environment(suggestions)
         .environment(djSettings)
         .environment(sync)
-        // Prefetch at this level, not in a tab, so suggestions are ready whichever
-        // tab is showing. Re-keyed on track change, which cancels a stale load.
-        .task(id: nowPlaying?.state?.track?.id) { await prefetch() }
+        // Prefetch at this level, not in a tab. Re-keyed on track change (which
+        // cancels a stale load) and on coming back to Now Playing.
+        .task(id: "\(nowPlaying?.state?.track?.id ?? "")|\(wantsSuggestions)") {
+            if wantsSuggestions { await prefetch() }
+        }
         // Switching into Autofill/Driver should act now, not at the next track.
-        .onChange(of: djSettings.mode) { Task { await prefetch() } }
+        .onChange(of: djSettings.mode) { if wantsSuggestions { Task { await prefetch() } } }
         // Restarts on every foreground/background flip; polling only runs while
         // active, since iOS suspends the app in the background anyway.
         .task(id: scenePhase == .active) {
