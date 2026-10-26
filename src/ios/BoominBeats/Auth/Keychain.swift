@@ -14,6 +14,8 @@ enum Keychain {
         case deviceKey = "device_key"
         case llmProvider = "llm_provider"
         case llmKey = "llm_key"
+        /// Scratch slot for the debug launch self-test, so it never touches real secrets.
+        case selfTest = "keychain_selftest"
     }
 
     enum Error: Swift.Error, LocalizedError {

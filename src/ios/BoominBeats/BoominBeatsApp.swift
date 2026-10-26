@@ -31,9 +31,11 @@ enum Diagnostics {
     static func keychainSelfTest() {
         let probe = "selftest-\(UUID().uuidString.prefix(8))"
         do {
-            try Keychain.write(probe, for: .deviceKey)
-            let read = try Keychain.read(.deviceKey)
-            try Keychain.delete(.deviceKey)
+            // Its own slot: this used to round-trip through .deviceKey, which
+            // deleted the real device key on every debug launch.
+            try Keychain.write(probe, for: .selfTest)
+            let read = try Keychain.read(.selfTest)
+            try Keychain.delete(.selfTest)
             log.info("KEYCHAIN OK write/read/delete round-trip; matched=\(read == probe, privacy: .public)")
         } catch let error as Keychain.Error {
             log.error("KEYCHAIN FAILED \(error.errorDescription ?? "no description", privacy: .public)")
