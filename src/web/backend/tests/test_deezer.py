@@ -120,27 +120,63 @@ class FindMany(unittest.TestCase):
 
 
 class SearchEndpoint(unittest.TestCase):
-    """Q3: type-ahead is Deezer, costs no Spotify search, returns resolvable keys."""
+    """Type-ahead: Last.fm ranks (originals first), Deezer fills in, re-uploads
+    drop, and no Spotify search is spent. Last.fm and Deezer are faked."""
 
-    def test_results_are_keyed_by_isrc_and_need_no_spotify(self):
+    def run_search(self, q, lastfm, deezer_search=(), deezer_found=None, deezer_down=False):
         from fastapi.testclient import TestClient
         import main
-        from services import spotify_client
-        dz = fake({('/search', 'redbone'): {'data': [track(5, 'Redbone', 'Childish Gambino', isrc='USYAH1600107'),
-                                                     track(6, 'Redbone (Live)', 'Someone', isrc=None)]}})
+        from services import lastfm_client, spotify_client
+
+        async def fake_lastfm(query, limit=15):
+            return lastfm
+
+        async def fake_find_many(songs):
+            return {(x['title'], x['artist']): (deezer_found or {}).get(x['title']) for x in songs}
+        dz = fake({('/search', ''): {'error': {'code': 700}}} if deezer_down else {('/search', q): {'data': list(deezer_search)}})
         before = spotify_client.searches_made
-        with mock.patch.object(deezer, 'client', return_value=dz):
-            body = TestClient(main.app).get('/search/', params={'searchValue': 'redbone'}).json()
-        self.assertEqual([t['id'] for t in body['tracks']], ['USYAH1600107', 'dz:6'])
-        self.assertEqual(body['tracks'][0]['track_url'], '')  # no Spotify link until resolved
-        self.assertEqual(spotify_client.searches_made, before)
+        with mock.patch.object(lastfm_client, 'track_search', side_effect=fake_lastfm), \
+                mock.patch.object(deezer, 'find_many', side_effect=fake_find_many), \
+                mock.patch.object(deezer, 'client', return_value=dz):
+            r = TestClient(main.app).get('/search/', params={'searchValue': q})
+        self.assertEqual(spotify_client.searches_made, before)  # never Spotify
+        return r
 
-    def test_deezer_down_is_a_503(self):
-        from fastapi.testclient import TestClient
-        import main
-        dz = fake({('/search', ''): {'error': {'code': 700}}})
-        with mock.patch.object(deezer, 'client', return_value=dz):
-            self.assertEqual(TestClient(main.app).get('/search/', params={'searchValue': 'x'}).status_code, 503)
+    def song(self, title, artist, isrc):
+        return {'deezer_id': 1, 'title': title, 'artists': [artist], 'album': 'A', 'image': 'img',
+                'explicit': False, 'isrc': isrc, 'duration_ms': 1000}
+
+    def test_the_original_comes_first_and_reuploads_drop(self):
+        lastfm = [{'title': 'Money Trees', 'artist': 'Kendrick Lamar', 'listeners': 2210951},
+                  {'title': 'Money Trees', 'artist': 'Kendrick Lamar, Jay Rock', 'listeners': 56847},  # same song
+                  {'title': 'Money Trees (Sped Up)', 'artist': 'sped up viral', 'listeners': 9000}]
+        deezer_search = [track(9, 'money trees (sped up version)', 'sped up viral'), track(3, 'MONEY TREES', 'Rilès', isrc='FR0000000001')]
+        r = self.run_search('money trees', lastfm, deezer_search, {'Money Trees': self.song('Money Trees', 'Kendrick Lamar', 'USUM71210785')})
+        self.assertEqual([(t['title'], t['artists'][0]) for t in r.json()['tracks']],
+                         [('Money Trees', 'Kendrick Lamar'), ('MONEY TREES', 'Rilès')])
+        self.assertEqual(r.json()['tracks'][0]['id'], 'USUM71210785')
+
+    def test_a_lastfm_hit_deezer_lacks_still_shows(self):
+        r = self.run_search('rare', [{'title': 'Rare Cut', 'artist': 'Someone', 'listeners': 10}])
+        t = r.json()['tracks'][0]
+        self.assertEqual((t['id'], t['isrc'], t['title']), ('lfm:rarecut|someone', None, 'Rare Cut'))
+
+    def test_asking_for_a_reupload_keeps_it(self):
+        lastfm = [{'title': 'Redbone (Slowed)', 'artist': 'Someone', 'listeners': 10}]
+        self.assertEqual(len(self.run_search('redbone slowed', lastfm).json()['tracks']), 1)
+
+    def test_one_recording_under_several_credits_shows_once(self):
+        lastfm = [{'title': 'Tadow', 'artist': a, 'listeners': 1} for a in ('Masego', 'Masego, FKJ', 'Fkj & Masego')]
+        tadow = self.song('Tadow', 'Masego', 'QM24S1703810')
+        r = self.run_search('tadow', lastfm, [track(1, 'Tadow', 'Masego', isrc='QM24S1703810')], {'Tadow': tadow})
+        self.assertEqual([t['id'] for t in r.json()['tracks']], ['QM24S1703810'])
+
+    def test_lastfm_down_falls_back_to_deezer(self):
+        r = self.run_search('redbone', [], [track(5, 'Redbone', 'Childish Gambino', isrc='USYAH1600107')])
+        self.assertEqual([t['id'] for t in r.json()['tracks']], ['USYAH1600107'])
+
+    def test_both_down_is_a_503(self):
+        self.assertEqual(self.run_search('x', [], deezer_down=True).status_code, 503)
 
 
 if __name__ == '__main__':

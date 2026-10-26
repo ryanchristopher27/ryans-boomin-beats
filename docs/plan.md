@@ -3298,3 +3298,20 @@ one.
 polling every ~5.5–6s (was ~2s), with no errors. `ba361a1` silences httpx's per-request INFO
 lines, which had been logging Spotify user ids and search terms in request URLs. Its deployment
 logs nothing while serving the simulator's polls normally.
+
+### Type-ahead fix: originals first (2026-10-25, tracker 713432)
+**Problem:** Deezer's search buried originals under covers and sped-up re-uploads. Kendrick Lamar's
+"Money Trees" wasn't in its top 50, though the track is on Deezer.
+
+**Fix:** `/search/` now asks Last.fm `track.search` first, which ranks by popularity:
+- Merge duplicate credits, and drop re-uploads unless the query asks for them.
+- Fill in the top 6 from Deezer: art, ISRC and explicit flag, with the top-tracks fallback, cached.
+  Dedupe again by the resolved id, since one recording appears under several credits.
+- Top up from Deezer's own (filtered) search for songs too niche for Last.fm.
+- Deezer alone if Last.fm is down; 503 only if both are.
+- Still 0 Spotify searches.
+
+**Live:** Money Trees → Kendrick Lamar first. Redbone → Childish Gambino; September → Earth, Wind
+& Fire; Tadow → Masego (once); Electric → Alina Baraz. Cold queries take 0.5–2s; cached ~300ms.
+
+**Also:** the Last.fm client moved to HTTPS, since its API key travels in the query string.

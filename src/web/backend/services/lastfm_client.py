@@ -5,7 +5,31 @@ from config import LASTFM_API_KEY
 
 log = logging.getLogger(__name__)
 
-BASE_URL = 'http://ws.audioscrobbler.com/2.0/'
+# HTTPS: the API key travels in the query string.
+BASE_URL = 'https://ws.audioscrobbler.com/2.0/'
+
+
+async def track_search(query: str, limit: int = 15) -> list[dict]:
+    """[{title, artist, listeners}] ranked by Last.fm (by popularity), or []
+    on any failure. Type-ahead uses it because Deezer's search can bury the
+    original under re-uploads (Money Trees wasn't in its top 50)."""
+    if not LASTFM_API_KEY:
+        return []
+    params = {'method': 'track.search', 'track': query, 'api_key': LASTFM_API_KEY, 'format': 'json', 'limit': limit}
+    try:
+        async with httpx.AsyncClient() as client:
+            data = (await client.get(BASE_URL, params=params, timeout=4.0)).json()
+        tracks = data['results']['trackmatches']['track']
+    except Exception as e:
+        log.info('[lastfm] search failed: %s', e)
+        return []
+    out = []
+    for t in tracks if isinstance(tracks, list) else [tracks]:
+        try:
+            out.append({'title': t['name'], 'artist': t['artist'], 'listeners': int(t.get('listeners') or 0)})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
 
 
 async def track_info(title: str, artist: str) -> dict:

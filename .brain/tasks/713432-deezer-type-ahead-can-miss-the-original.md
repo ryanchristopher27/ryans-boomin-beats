@@ -3,11 +3,11 @@ id: 713432
 source: review:ryans-boomin-beats:deezer-typeahead-misses-originals
 title: "Deezer type-ahead can miss the original (Money Trees: covers/sped-up fill top 10)"
 type: issue
-status: backlog
+status: review
 assignee: 
 scoped_dir: .
 created: 2026-10-26T02:36:31Z
-updated: 2026-10-26T02:36:31Z
+updated: 2026-10-26T02:53:43Z
 ---
 
 ## Brief
@@ -19,3 +19,5 @@ Medium · /search/ · filter re-upload/cover variants from results, and offer 'S
 
 ## Updates
 - 2026-10-26T02:36:31Z · created
+- 2026-10-26T02:53:43Z · status: backlog → doing (fixing)
+- 2026-10-26T02:53:43Z · status: doing → review (fixed + live-checked; deploy pending)
