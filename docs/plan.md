@@ -2917,3 +2917,43 @@ Web-specific choices:
 
 **Found and fixed on both clients:** a participant's add waited for the next track change before
 the primary sent it. The primary now tops up after adopting remote state.
+
+### W2 result (2026-10-25)
+The DJ page is at `/dj/` (a new nav link), built on the W1 engine. gridstack 13.3.0 is wrapped in
+`lib/components/dj/Grid.svelte`: Svelte owns each widget's DOM, gridstack only positions it.
+
+**Widgets:**
+- Now playing: becomes a one-row banner when the widget is short.
+- DJ controls: includes an avoid list you can manage.
+- Goal.
+- Next moves.
+- Single move, one widget per move kind.
+- Up next: reorder by dragging, or with Alt+Up/Down on a row's handle. ✦ marks DJ picks, and there's
+  an Add song search.
+- Requests: a badge count, and Keep/Later/Decline.
+
+**Layout:**
+- Presets: Host (the default), Board and Focus, plus "Your layout" once edited.
+- Edit layout gives drag, resize, remove and an Add widget menu. Done saves to `djLayout.v1`; Esc
+  cancels.
+
+**Checks:** 33 vitest tests pass. svelte-check is clean on the new files. The frontend detector is
+clean; it was verified against a known hit.
+
+**Live check** in the browser pane at 1440×900: Host, Board and Focus all lay out correctly, with
+suggestions stubbed in the page because Spotify search was locked out. Add widget, Done, reload
+persistence, Esc cancel and a real mouse drag all work.
+
+**Deviations from the brief:**
+- Host docks Goal inside DJ controls, which the brief allowed, so the album art gets the height.
+- Board also includes DJ controls, so the mode stays reachable.
+- Now playing's minimum height is 3, not 5, for Board's banner.
+
+**Not verified:** the column breakpoints on a live resize. The pane was hidden, which pauses
+ResizeObserver, so it needs a check in a visible window.
+
+**Fixed along the way:**
+- A widget added in edit mode saved without an id or size: gridstack's `makeWidget` options replace
+  the gs-* attributes rather than merging with them.
+- A false "other device" notice: the server fills defaults like `addedByDJ: null`, so the doc
+  comparison now ignores key order and nulls.
