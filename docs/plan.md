@@ -2985,3 +2985,32 @@ fixed:
 - A keyboard alternative to dragging widgets (W4's keyboard move/resize).
 - Undo for remove/decline (iOS has none either).
 - Live-resize breakpoint switching is still unverified, because the pane keeps going hidden.
+
+### W4 result (2026-10-25)
+- **Linking:** suggestion, Up next and Recently played rows are buttons that select a song, and the
+  selected row is tinted. The **Song profile** widget follows the selection, and otherwise shows
+  what's playing. It has a "Show now playing" button to go back.
+  - *Deviation:* the widget reuses the `/song/profile/` endpoint and `SongRadar`, not
+    `SongProfile.svelte`, because that component writes Explore's session store and would nest a
+    card in a widget.
+- **Recently played:** the session's synced history, with + to queue a song again.
+- **Keyboard move/resize:** in edit mode, a widget's handle moves it with the arrow keys and resizes
+  it with Shift+arrows, announced through `aria-live`.
+- **Undo** (deferred from W3): a 6s toast after Remove in Up next and after Decline on a request.
+- **Prefetch gating**, found live: after W3 every open tab prefetched suggestions on each song
+  change. That used up Groq's 200k tokens a day and spent 20–50 Spotify searches per round.
+  Suggestions now load only while a DJ page is open, or in Autofill/Driver. This also helps the
+  search-quota bug (e2df2d).
+
+**Checks:** 39 vitest tests pass. svelte-check has 19 errors, all in other files (20 before). The
+detector is clean on the new files. The live check covered adding both widgets, keyboard nudge with
+its announcement, and selecting a row and going back.
+
+### Also added 2026-10-25: "Your Claude Code" AI provider
+The local backend runs the owner's `claude` CLI on their Claude subscription, so there's no key and
+no bill. It mirrors Trip Fairy's helper: no tools, no MCP servers, project settings only, an empty
+temp directory as the working folder, the prompt over stdin, and no saved session.
+- It's off on Vercel, off where the CLI is missing, and off when `CLAUDE_CODE=0` is set.
+- Choose it in the web app's AI settings. It works only while the backend runs on this Mac.
+- **Live:** connecting takes ~3s; a full DJ suggestion round takes ~16s (Groq ~6s) and parses
+  cleanly.
