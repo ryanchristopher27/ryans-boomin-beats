@@ -3057,3 +3057,151 @@ reported that as "Session expired. Log in again." It now says "The server didn't
 device's key. Check Device key in Settings."
 
 **Left for SY2:** the owner's physical iPhone on cellular.
+
+---
+
+# Plan — Quota-Safe Lookups (Deezer display, Spotify at choose time, ISRC identity)
+Date: 2026-10-25
+Status: Active
+Brainstorm: docs/brainstorm.md, "Spotify Quota: Look Up at Queue Time, Songs by ISRC (2026-10-25)"
+
+## Overview
+Spotify search is the Development Mode quota bucket that runs out, and Extended Quota (an
+organization with ≥250k MAU) is out of reach. This plan moves every *showing* of songs onto
+Deezer, which needs no key and no Spotify quota, and keeps Spotify search for the moment a song is
+*chosen*: queued, saved, or added to a playlist. Songs gain an `isrc`, the provider-neutral key
+that makes the Spotify lookup exact today and lets Apple Music slot in later (the brainstorm's
+direction F). It connects to the DJ (DJ0–DJ6), sync (SY1–SY3) and web DJ (W1–W4) plans, and closes
+tracker e2df2d.
+
+## Goals & Success Criteria
+| Goal | Success criteria |
+|---|---|
+| A night fits the quota | A 4h / ~60-song session uses **≤ ~1.5 Spotify searches per queued song**, counted in Q4. No search 429 during a normal night |
+| Showing costs nothing | DJ rounds, type-ahead and playlist generation make **zero** Spotify searches |
+| Same quality | Picks are still checked (exists, right artist), with art and explicit flag. Wrong-artist matches drop (ISRC lookups are exact) |
+| Clear misses | A song that isn't on Spotify shows "Not on Spotify" at tap; autopilot moves to its next candidate |
+| Ready for Apple Music | Queue, avoid, feedback and cache entries carry `isrc` |
+
+## Scope
+### In Scope
+- Backend:
+  - a Deezer client: search + artist match + cache
+  - a resolve service and endpoint (ISRC → Spotify track, title fallback, market-aware)
+  - `isrc` on player and recently-played tracks
+  - optional `isrc` fields in the sync schema
+- DJ: `/dj/suggest/` validates with Deezer. iOS and web picks resolve on tap (with a spinner);
+  autopilot resolves before it adds.
+- Search: `/search/` returns Deezer results. Web SongSearch (Add song, Explore) and iOS Add to
+  Queue resolve the chosen song.
+- Playlist builder: generation validates with Deezer; results resolve on add/queue/save.
+- A search counter to measure the result.
+
+### Out of Scope
+- Apple Music / MusicKit (direction F)
+- The Odesli fallback (direction D) and library-first candidates (direction E)
+- Backfilling `isrc` on existing synced rows
+- Changing Clean only beyond the post-resolve explicit check
+- Taste and profile endpoints (they don't search)
+
+## Tech Stack & Architecture
+**Deezer** (`services/deezer.py`, httpx):
+- `GET https://api.deezer.com/search?q=<title> <artist>&limit=5`, then pick the first result whose
+  artist matches (the same fold rule as `_artist_matches`). The strict `artist:"…" track:"…"` syntax
+  missed obvious songs in testing, so the loose query plus our own match is the rule.
+- Returns `{deezer_id, title, artists, image, explicit, isrc}`. Track search results may lack
+  `isrc`; then one `GET /track/{id}` fills it, and is cached.
+- Limits: about 50 requests / 5s per IP. Use a semaphore (4) and back off on the 4 error code.
+
+**Resolve** (`services/track_resolver.py`, `POST /tracks/resolve/`):
+- Takes `[{isrc?, title, artist}]` and returns `[{track | null}]`.
+- Order: process cache → `track_lookup` → Spotify `q=isrc:<isrc>` (one search, exact) → title +
+  artist search only when there's no ISRC.
+- Uses the app client with `market=<user country>`, so the first match is playable. The country
+  comes from `/me`, cached next to the user id in `spotify_identity`.
+- A known miss is cached for 7 days, like today.
+- Behind the same 4-in-flight cap and search lockout.
+
+**One cache table, namespaced keys:** `track_lookup` (already live) keeps one row per key. The
+hashed key gains a namespace, `deezer|title|artist` or `spotify|isrc|<isrc>|<market>`, and `track`
+holds that source's record. No migration.
+
+**Identity:**
+- Optional `isrc: str | None` (max 15 characters) on `QueueItem`, `GuestRequest`, `TrackRef` and
+  `AvoidedTrack` in `routers/dj_state.py`, and in the iOS/web models.
+- Picks from `/dj/suggest/` no longer have a Spotify `id`. Clients key them by `isrc` (or Deezer
+  id); "queued" and dedupe checks use `isrc` when present.
+- `player.py` `_track()` and recently-played add `isrc` from `external_ids`. Exclusion in
+  `select_tracks` matches on `isrc`, then on folded title + artist.
+
+**Clean only:** after resolve, if the Spotify version is explicit while Clean only is on, treat it as
+a miss ("Explicit version only").
+
+## Milestones
+| # | Milestone | Description | Dependencies |
+|---|---|---|---|
+| Q0 | Spikes | Run after the quota resets. Check that Spotify `isrc:` search returns the right, playable track (several versions, market). Test Deezer coverage and artist matching on ~50 real picks, including "feat." credits. Measure Deezer latency. Read Deezer's API terms | — |
+| Q1 | Backend: Deezer + resolve + identity | `deezer.py` (search, match, ISRC fill, cache); `track_resolver.py` + `POST /tracks/resolve/` (market-aware, cached); `isrc` on player/recent tracks and in the sync schema; a search counter; tests with fakes | Q0 |
+| Q2 | DJ on Deezer | `/dj/suggest/` validates via Deezer (`fill_moves` with a Deezer validator), picks keyed by `isrc`, exclusion by `isrc`/title. iOS + web: + resolves with a spinner, "Not on Spotify", the clean check; autopilot resolves before adding; queue items carry `isrc`; tests | Q1 |
+| Q3 | Search + playlist builder on Deezer | `/search/` → Deezer. Web SongSearch (Add song, Explore) and iOS Add to Queue resolve on select. `generate-playlist` validates via Deezer. PlaylistResult resolves in a batch on add/queue/save, and hearts look up lazily | Q1 |
+| Q4 | Measure + close | Count Spotify searches over a real session (target ≤ ~1.5 per queued song, 0 for showing); deploy; close e2df2d | Q2, Q3 |
+
+Q2 and Q3 can run in parallel after Q1.
+
+## Task Breakdown
+(mid-level; deepens when each milestone starts)
+- **Q0:**
+  - Spotify `GET /search?q=isrc:USYAH1600107&type=track&market=US`, for 5 ISRCs with several
+    releases.
+  - Deezer probe on 50 picks from a Groq/Claude round.
+  - Deezer terms: note the commercial-use limits for the later launch.
+- **Q1:**
+  - Files: `services/deezer.py`, `services/track_resolver.py`, `routers/tracks.py`,
+    `services/track_cache.py` (namespaced `key()`), `services/spotify_identity.py` (country),
+    `routers/player.py` (`isrc`), `routers/dj_state.py` (optional `isrc`).
+  - Tests: `tests/test_deezer.py`, `tests/test_resolver.py`.
+  - The counter: a process counter of real Spotify searches, logged per request and exposed in
+    `/` health, so Q4 can read it.
+- **Q2:**
+  - Backend: `routers/dj.py`.
+  - iOS: `SuggestionStore.swift` (Pick without a Spotify id), `NowPlayingView.swift` (+ resolve,
+    spinner), `QueueStore.swift` / `SyncDoc.swift` (`isrc`), autopilot.
+  - Web: `lib/dj/dj.js` (`add` resolves; autopilot), `PickRow.svelte` (spinner, miss state),
+    `logic.js` (queued-by-isrc).
+- **Q3:**
+  - Backend: `routers/search.py`, `routers/llm_playlist.py`.
+  - Web: `SongSearch.svelte` (add resolves), `PlaylistResult.svelte` (batch resolve; key by isrc).
+  - iOS: `QueueView.swift` `AddTrackView`.
+- **Q4:** a real session with the counter; the result goes in the plan; deploy.
+
+## Risks & Mitigations
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| Spotify `isrc:` search filter not supported in Dev Mode, or returns unplayable versions | Low–Med | High | Q0 spike first. Market-aware pick; title + artist fallback |
+| Deezer misses or wrong artist ("feat.", aliases) | Med | Med | Q0 measures it. Fold match on any credited artist; misses drop like today's Spotify misses |
+| Deezer shared-IP limit on Vercel | Med | Med | Cache every lookup (30d/7d); semaphore; back off on error code 4; picks degrade to "not checked" |
+| Deezer terms block a commercial launch | Med (later) | Med | Fine for personal use. Re-check before launch; swap display data to Apple Music (F) |
+| Clean only: a Deezer pick is clean but the Spotify version is explicit | Med | Low | Post-resolve explicit check → "Explicit version only" |
+| Pick IDs change shape (no Spotify id), breaking client keys | Med | Med | One `pickKey()` helper per client; tests on queued/dedupe |
+| Tap latency (resolve ~0.3–1s) | Low | Low | Spinner (owner-approved); cache hits are instant |
+
+## Dependencies
+- Deezer public API (no key). Spotify Web API (app client, search for resolves only).
+- Supabase `track_lookup` (live). Last.fm stays for tags and the song profile.
+
+## Open Questions
+- Q0 decides whether the `isrc:` filter is reliable enough to skip the title fallback when an ISRC
+  exists.
+- Whether to show Deezer's 30s preview in the pick row. Not planned, but free.
+
+## Decisions Log
+| Decision | Choice | Reasoning | Date |
+|---|---|---|---|
+| Scope | A + B + C | The same pattern on all three surfaces leaves Spotify search for choosing only (owner) | 2026-10-25 |
+| Resolve timing | When a song is added or chosen, with a spinner on tap | Every queue item keeps a Spotify id, so the queue, sync and request logic don't change (owner OK'd the spinner) | 2026-10-25 |
+| Cache storage (OQ1) | One `track_lookup` table, namespaced keys | No migration; one TTL policy; the `track` jsonb already holds any shape | 2026-10-25 |
+| Existing synced rows (OQ2) | No backfill; `isrc` is optional | They already have Spotify ids; new rows carry `isrc` | 2026-10-25 |
+| Market (OQ3) | The user's `/me` country, cached with the user id, as `market` and in the cache key | The first ISRC match must be playable for the person queueing it; a small circle may span countries | 2026-10-25 |
+| Autopilot resolves (OQ4) | On the primary device only, as today | Keeps sends single (the review C1 invariant) | 2026-10-25 |
+| Art / tags (OQ5) | Deezer for pick art; Last.fm stays for tags and profile | Deezer art is per release; Last.fm tags already drive the prompt | 2026-10-25 |
+| Milestone prefix | `Q#` | Distinct from P/DJ/SY/W in the tracker | 2026-10-25 |
