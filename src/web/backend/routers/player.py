@@ -39,6 +39,8 @@ def _track(item: dict | None) -> dict | None:
         'explicit': item.get('explicit', False),
         'track_url': (item.get('external_urls') or {}).get('spotify', ''),
         'release_date': album.get('release_date', ''),
+        # Provider-neutral identity (plan Q1); full track objects carry it.
+        'isrc': (item.get('external_ids') or {}).get('isrc'),
     }
 
 

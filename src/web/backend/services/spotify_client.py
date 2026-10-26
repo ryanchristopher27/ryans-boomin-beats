@@ -105,7 +105,12 @@ def search_lockout_remaining() -> int:
     return max(0, int(_search_locked_until - time.monotonic()))
 
 
-def search(spotify: Spotify, **kwargs) -> dict:
+# Real Spotify searches this process has made (plan Q4 measures quota use with
+# it; each is also logged, so Vercel's logs count across instances).
+searches_made = 0
+
+
+def search(spotify: Spotify, purpose: str = '', **kwargs) -> dict:
     """spotify.search(), but skipped entirely while Spotify has us locked out.
 
     Raises the same SpotifyException 429 a real lockout does, so callers and
@@ -115,6 +120,9 @@ def search(spotify: Spotify, **kwargs) -> dict:
     if remaining:
         raise SpotifyException(429, -1, 'Spotify search is rate-limited',
                                reason='LOCAL_LOCKOUT', headers={'Retry-After': str(remaining)})
+    global searches_made
+    searches_made += 1
+    log.info('[spotify] search #%d %s', searches_made, purpose or '-')
     try:
         return spotify.search(**kwargs)
     except SpotifyException as e:

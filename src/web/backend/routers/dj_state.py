@@ -22,6 +22,8 @@ router = APIRouter()
 
 _Text = Annotated[str, StringConstraints(max_length=300)]
 _Id = Annotated[str, StringConstraints(max_length=64)]
+# Provider-neutral song identity (plan Q1); optional, so rows synced before it stay valid.
+_Isrc = Annotated[str, StringConstraints(max_length=15)] | None
 
 
 class _Strict(BaseModel):
@@ -32,6 +34,7 @@ class _Strict(BaseModel):
 
 class TrackRef(_Strict):
     id: _Id
+    isrc: _Isrc = None
     title: _Text
     artists: list[_Text] = Field(default=[], max_length=20)
     image: Annotated[str, StringConstraints(max_length=500)] = ''
@@ -40,6 +43,7 @@ class TrackRef(_Strict):
 class QueueItem(_Strict):
     id: _Id
     trackID: _Id
+    isrc: _Isrc = None
     title: _Text
     artists: list[_Text] = Field(default=[], max_length=20)
     image: Annotated[str, StringConstraints(max_length=500)] = ''
@@ -50,6 +54,7 @@ class QueueItem(_Strict):
 class GuestRequest(_Strict):
     id: _Id
     trackID: _Id
+    isrc: _Isrc = None
     title: _Text
     artists: list[_Text] = Field(default=[], max_length=20)
     image: Annotated[str, StringConstraints(max_length=500)] = ''
@@ -65,6 +70,7 @@ class Queue(_Strict):
 
 class AvoidedTrack(_Strict):
     id: _Id
+    isrc: _Isrc = None
     title: _Text
     artist: _Text
 

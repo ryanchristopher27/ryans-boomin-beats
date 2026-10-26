@@ -36,14 +36,14 @@ def _search_one(spotify: Spotify, title: str, artist: str, fallback: bool = True
         return _CACHE[key]
 
     # Pass 1: strict — title + artist
-    result = search(spotify, q=f'track:{title} artist:{artist}', limit=1, type='track')
+    result = search(spotify, purpose='validate', q=f'track:{title} artist:{artist}', limit=1, type='track')
     items = result['tracks']['items']
     track = _format_track(items[0]) if items else None
 
     # Pass 2: loose — title only. Callers that reject other artists' songs
     # anyway (the DJ) pass fallback=False and save the search.
     if track is None and fallback:
-        result = search(spotify, q=f'track:{title}', limit=1, type='track')
+        result = search(spotify, purpose='validate:fallback', q=f'track:{title}', limit=1, type='track')
         items = result['tracks']['items']
         track = _format_track(items[0]) if items else None
 

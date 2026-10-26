@@ -8,7 +8,7 @@ router = APIRouter()
 @router.get("/search/")
 def search(searchValue: str = Query(...)):
     spotify = app_client()
-    result = guarded_search(spotify, q='track:' + searchValue)
+    result = guarded_search(spotify, purpose='typeahead', q='track:' + searchValue)
 
     tracks = []
     for track in result['tracks']['items']:

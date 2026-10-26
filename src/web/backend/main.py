@@ -9,8 +9,12 @@ from spotipy import SpotifyException
 
 from config import ALLOWED_ORIGINS, DEVICE_KEY
 from routers import search, profile
-from routers import llm_connect, llm_playlist, spotify_actions, song_profile, player, dj, dj_state
+from routers import llm_connect, llm_playlist, spotify_actions, song_profile, player, dj, dj_state, tracks
+from services import spotify_client
 
+# Without this, every log.info in services/ was dropped (Python's default is
+# WARNING); the search counter (plan Q4) relies on INFO reaching the logs.
+logging.basicConfig(level=logging.INFO, format='%(levelname)s %(name)s %(message)s')
 log = logging.getLogger(__name__)
 
 app = FastAPI(title="Boomin Beats API")
@@ -65,6 +69,12 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {"status": "ok", "docs": "/docs"}
+
+
+@app.get("/stats")
+def stats():
+    """Spotify searches this instance has made (plan Q4). Behind the device key."""
+    return {'spotify_searches': spotify_client.searches_made}
 
 
 # Upstream timeouts and connection failures are not SpotifyExceptions — a read
@@ -134,3 +144,4 @@ app.include_router(song_profile.router)
 app.include_router(player.router)
 app.include_router(dj.router)
 app.include_router(dj_state.router)
+app.include_router(tracks.router)

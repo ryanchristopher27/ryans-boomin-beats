@@ -23,9 +23,13 @@ MISS_FOR = timedelta(days=7)
 _http: httpx.Client | None = None
 
 
-def key(title: str, artist: str, fallback: bool) -> str:
-    raw = f'{title.casefold().strip()}|{artist.casefold().strip()}|{int(fallback)}'
-    return hashlib.sha256(raw.encode()).hexdigest()
+def key(*parts) -> str:
+    """Hashed row key. A leading namespace keeps sources apart in one table
+    (plan Q1): `key('deezer', title, artist)`, `key('isrc', isrc)`. The legacy
+    Spotify title search keeps its original shape `(title, artist, fallback)`
+    so rows cached before Q1 stay valid."""
+    norm = [str(int(p)) if isinstance(p, bool) else str(p).casefold().strip() for p in parts]
+    return hashlib.sha256('|'.join(norm).encode()).hexdigest()
 
 
 def _client() -> httpx.Client | None:

@@ -64,6 +64,7 @@ _MAX_REFS = 50
 
 class TrackRef(BaseModel):
     id: Annotated[str, StringConstraints(max_length=64)] = ''
+    isrc: Annotated[str, StringConstraints(max_length=15)] | None = None
     title: _Text
     artist: _Text
 
@@ -336,7 +337,8 @@ def _spotify_recent(token: str, limit: int = 20) -> list[TrackRef]:
     for it in items:
         t = it.get('track') or {}
         if t.get('id') and t.get('artists'):
-            refs.append(TrackRef(id=t['id'], title=t.get('name', ''), artist=t['artists'][0].get('name', '')))
+            refs.append(TrackRef(id=t['id'], isrc=(t.get('external_ids') or {}).get('isrc'),
+                                 title=t.get('name', ''), artist=t['artists'][0].get('name', '')))
     return refs
 
 
