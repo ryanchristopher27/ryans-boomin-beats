@@ -3014,3 +3014,25 @@ temp directory as the working folder, the prompt over stdin, and no saved sessio
 - Choose it in the web app's AI settings. It works only while the backend runs on this Mac.
 - **Live:** connecting takes ~3s; a full DJ suggestion round takes ~16s (Groq ~6s) and parses
   cleanly.
+
+### Spotify search quota fix (2026-10-25, tracker e2df2d)
+**Cause:** Development Mode has an unpublished quota. It's counted per *developer account* (since
+2026-07-23, shared across all Client IDs) and grouped by endpoint. Search runs out daily, and the
+reset has come around 21:20 local. Extended quota needs a registered organization with at least
+250k MAU, so the fix has to be using less. Each DJ round validated 20–28 picks, on every song
+change, from every device and tab.
+
+**Fix:**
+- A shared `track_lookup` cache in Supabase (migration `20261026005535`). Matches are kept 30 days,
+  misses 7.
+- Early-stop validation (`fill_moves`).
+- At most 4 searches in flight.
+- Prefetch gating on iOS and the web.
+- Typeahead waits for 3+ characters and a 350ms pause.
+
+**Tests:** 8 in `test_search_budget.py`. A live round trip against the real table worked (write,
+read, delete).
+
+**Still to do:**
+- The hosted backend gets this on the next merge to `main`.
+- Measure a normal night once the quota resets.
