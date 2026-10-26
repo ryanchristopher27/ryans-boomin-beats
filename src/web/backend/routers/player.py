@@ -8,9 +8,12 @@ Command routes answer 200 with {'error': ...} for expected player failures, the
 same convention as /spotify/queue/, so clients can show a message rather than
 treating "no device" as a crash.
 """
+import hashlib
 import logging
+import time
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
 from spotipy import SpotifyException
 
 from config import SYNC_ENABLED
@@ -20,6 +23,41 @@ from services.spotify_client import user_client
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# --- Player rate limiting (tracker 477d21) ---
+# Spotify rate-limits player calls too: production logged 1,157 /me/player 429s
+# in 38 minutes while several devices and tabs each polled every ~2s. Spotify's
+# limits are app-wide, so once it says wait, nobody on this instance calls it
+# until Retry-After passes; clients get a 503 with `retry_after` and back off.
+_MAX_LOCKOUT = 120
+_player_locked_until = 0.0
+# Several tabs of one account poll the same state; within this window they
+# share one Spotify call instead of each spending one.
+STATE_TTL = 1.5
+_state_cache: dict[str, tuple[float, dict]] = {}
+_STATE_CACHE_MAX = 500
+
+
+def _rate_limited(seconds: float) -> JSONResponse:
+    wait = max(1, int(seconds + 0.999))
+    return JSONResponse(
+        status_code=503,
+        content={'detail': 'Spotify is busy. Retrying shortly.', 'retry_after': wait},
+        headers={'Retry-After': str(wait)},
+    )
+
+
+def _lock_player(e: SpotifyException) -> float:
+    global _player_locked_until
+    try:
+        wait = int((e.headers or {}).get('Retry-After', 5))
+    except (TypeError, ValueError):
+        wait = 5
+    wait = min(max(wait, 1), _MAX_LOCKOUT)
+    _player_locked_until = time.monotonic() + wait
+    # The reason says which limit: QUOTA_EXCEEDED (daily bucket) vs a rolling rate limit.
+    log.warning('[spotify] player rate-limited for %ss (reason=%s)', wait, e.reason)
+    return wait
 
 
 def _track(item: dict | None) -> dict | None:
@@ -82,6 +120,9 @@ def player_error(e: SpotifyException) -> dict:
     if e.http_status == 401:
         # Expired token: the client should refresh and retry, not see a server fault.
         raise HTTPException(status_code=401, detail='Spotify session expired. Log in again.')
+    if e.http_status == 429:
+        _lock_player(e)
+        return {'error': 'rate_limited'}
     if e.http_status == 404:
         return {'error': 'no_active_device'}
     if e.http_status == 403:
@@ -96,11 +137,24 @@ def player_state(
     token: str = Depends(get_spotify_token),
     x_dj_device: str | None = Header(default=None, max_length=64),
 ):
-    try:
-        playback = user_client(token).current_playback()
-    except SpotifyException as e:
-        return player_error(e)
-    state = normalize_playback(playback)
+    remaining = _player_locked_until - time.monotonic()
+    if remaining > 0:
+        return _rate_limited(remaining)
+    key = hashlib.sha256(token.encode()).hexdigest()
+    hit = _state_cache.get(key)
+    if hit and time.monotonic() - hit[0] < STATE_TTL:
+        state = dict(hit[1])
+    else:
+        try:
+            playback = user_client(token).current_playback()
+        except SpotifyException as e:
+            if e.http_status == 429:
+                return _rate_limited(_lock_player(e))
+            return player_error(e)
+        state = normalize_playback(playback)
+        if len(_state_cache) >= _STATE_CACHE_MAX:
+            _state_cache.clear()
+        _state_cache[key] = (time.monotonic(), dict(state))
     if x_dj_device and SYNC_ENABLED:
         state['dj'] = dj_status(token, x_dj_device)
     return state
@@ -138,6 +192,8 @@ def player_queue(token: str = Depends(get_spotify_token)):
 
 
 def _command(token: str, action: str) -> dict:
+    # The client re-reads state right after a command; don't serve it the cached pre-command state.
+    _state_cache.pop(hashlib.sha256(token.encode()).hexdigest(), None)
     spotify = user_client(token)
     fn = {
         'play': spotify.start_playback,

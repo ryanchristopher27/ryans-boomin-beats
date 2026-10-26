@@ -148,4 +148,14 @@ struct QueueLogicTests {
         let picks = SuggestionStore.autopilotCandidates(moves: moves, adventurousness: 0.1, excluding: ["h1", "l1"])
         #expect(picks.first?.id == "d1")
     }
+
+    // MARK: player polling (tracker 477d21)
+
+    @Test func pollsEveryFiveSecondsAndBacksOff() {
+        #expect(NowPlayingModel.pollDelay(active: true, playing: true, remaining: 120, driving: true, failures: 0) == 5)
+        #expect(NowPlayingModel.pollDelay(active: true, playing: true, remaining: 3, driving: true, failures: 0) == 3.3)
+        #expect(NowPlayingModel.pollDelay(active: true, playing: true, remaining: 3, driving: false, failures: 0) == 5)
+        #expect(NowPlayingModel.pollDelay(active: false, playing: false, remaining: nil, driving: true, failures: 0) == 10)
+        #expect([1, 2, 3, 4, 5, 6].map { NowPlayingModel.pollDelay(active: true, playing: true, remaining: 100, driving: true, failures: $0) } == [5, 10, 20, 40, 60, 60])
+    }
 }

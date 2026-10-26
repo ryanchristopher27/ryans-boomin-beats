@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import HTTPException  # noqa: E402
 from spotipy import SpotifyException  # noqa: E402
 
+from routers import player  # noqa: E402
 from routers.player import normalize_playback, player_error  # noqa: E402
 
 
@@ -89,6 +90,62 @@ class PlayerError(unittest.TestCase):
     def test_other_status_raises(self):
         with self.assertRaises(HTTPException):
             player_error(SpotifyException(500, -1, 'boom'))
+
+
+class RateLimits(unittest.TestCase):
+    """Tracker 477d21: player 429s back everyone off; tabs share one call."""
+
+    def setUp(self):
+        from unittest import mock
+        from fastapi.testclient import TestClient
+        import main
+        from services.spotify_auth import get_spotify_token
+        player._player_locked_until = 0.0
+        player._state_cache.clear()
+        self.calls = 0
+        self.fail_with = None
+        outer = self
+
+        class FakeSpotify:
+            def current_playback(self):
+                outer.calls += 1
+                if outer.fail_with:
+                    raise outer.fail_with
+                return None
+
+            def pause_playback(self):
+                pass
+            start_playback = next_track = previous_track = pause_playback
+        self.patch = mock.patch.object(player, 'user_client', return_value=FakeSpotify())
+        self.patch.start()
+        main.app.dependency_overrides[get_spotify_token] = lambda: 'tok'
+        self.client = TestClient(main.app)
+        self.addCleanup(self.patch.stop)
+        self.addCleanup(main.app.dependency_overrides.clear)
+
+    def test_tabs_polling_together_share_one_spotify_call(self):
+        for _ in range(3):
+            self.assertEqual(self.client.get('/player/state/').json(), {'active': False})
+        self.assertEqual(self.calls, 1)
+
+    def test_a_429_backs_everyone_off_for_retry_after(self):
+        self.fail_with = SpotifyException(429, -1, 'too many', headers={'Retry-After': '7'})
+        r = self.client.get('/player/state/')
+        self.assertEqual((r.status_code, r.json()['retry_after'], r.headers['Retry-After']), (503, 7, '7'))
+        player._state_cache.clear()
+        r = self.client.get('/player/state/')  # still locked: Spotify isn't called again
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(self.calls, 1)
+
+    def test_a_command_clears_the_cached_state(self):
+        self.client.get('/player/state/')
+        self.client.post('/player/pause/')
+        self.client.get('/player/state/')
+        self.assertEqual(self.calls, 2)
+
+    def test_lockouts_are_capped(self):
+        self.fail_with = SpotifyException(429, -1, 'too many', headers={'Retry-After': '86400'})
+        self.assertEqual(self.client.get('/player/state/').json()['retry_after'], player._MAX_LOCKOUT)
 
 
 if __name__ == '__main__':

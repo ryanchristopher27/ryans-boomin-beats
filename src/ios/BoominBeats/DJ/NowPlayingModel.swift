@@ -58,6 +58,8 @@ final class NowPlayingModel {
     /// When `state` was fetched; progress is interpolated from here between polls.
     private var fetchedAt = Date()
     private var lastRequestPoll = Date.distantPast
+    /// Consecutive failed polls, for backoff (tracker 477d21).
+    private var failures = 0
 
     private let client: APIClient
     private let queue: QueueStore
@@ -123,9 +125,11 @@ final class NowPlayingModel {
                 lastRequestPoll = Date()
                 await queue.pollRequests(smartShuffle: s.smartShuffle ?? false)
             }
+            failures = 0
         } catch {
             message = (error as? APIClient.Error)?.errorDescription ?? error.localizedDescription
             messageFromPoll = true
+            failures += 1
         }
     }
 
@@ -172,11 +176,23 @@ final class NowPlayingModel {
         await refresh()
     }
 
+    /// Spotify rate-limits /me/player per app (tracker 477d21: every device polling
+    /// every 2 s drew 1,157 429s in 38 minutes), and progress is interpolated
+    /// locally, so poll every 5 s. The driver also wakes just after the track
+    /// should end, so the next song is handled promptly. Failures back off
+    /// 5, 10, 20, 40, 60 s.
+    nonisolated static func pollDelay(active: Bool, playing: Bool, remaining: Double?, driving: Bool, failures: Int) -> Double {
+        if failures > 0 { return min(60, 5 * pow(2, Double(failures - 1))) }
+        guard active else { return 10 }
+        guard playing, let remaining else { return 5 }
+        if driving, remaining < 5.5 { return max(0.3, remaining + 0.3) }
+        return 5
+    }
+
     private func nextDelay() -> Double {
-        guard let state, state.active else { return 5 }
-        guard isPlaying, let duration = state.track?.durationMs else { return 2 }
-        let remaining = Double(duration - progressMs(at: Date())) / 1000
-        return min(2, max(0.3, remaining + 0.3))
+        let remaining = state?.track.map { Double($0.durationMs - progressMs(at: Date())) / 1000 }
+        return Self.pollDelay(active: state?.active ?? false, playing: isPlaying, remaining: remaining,
+                              driving: queue.isPrimary, failures: failures)
     }
 
     private static let noDevice = "Open Spotify on any device to start playback."

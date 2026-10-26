@@ -3267,3 +3267,29 @@ Childish Gambino's song (2nd of 8). Its `track:` filter is worse.
   driving.
 - **Fixed on the way:** the debug launch self-test was deleting the iOS device key on every launch
   (0639617).
+
+### Player polling fix (2026-10-25, tracker 477d21)
+**Cause:**
+- Every device and web tab polled `/me/player` every ~2s while a song played.
+- A Spotify 429 became a plain 500, with `Retry-After` dropped and no client backoff.
+- Production logged 1,157 player 429s in 38 minutes. Vercel Hobby keeps 1 hour of logs, so
+  Spotify's reason for them (quota vs rolling limit) wasn't recoverable. It's logged from now on.
+
+**Backend:**
+- A player 429 locks this instance's player calls for `Retry-After` (capped at 120s), app-wide,
+  and answers 503 with `retry_after`.
+- Player state is cached for 1.5s per token, so tabs share one Spotify call; commands clear the
+  entry.
+- Commands map 429 to `{error: 'rate_limited'}`.
+
+**Clients (web and iOS):**
+- Poll every 5s while playing; the driver wakes just after a song should end.
+- 10s when nothing is playing; 15s for a web tab that isn't the leading tab.
+- Back off on failures: `retry_after`, else 5/10/20/40/60s.
+
+**Trade-off (owner to confirm):** cross-device sync now shows changes within about 5s, not the
+original ~3s goal. Roughly 2.5× fewer player calls per device, and same-account tabs collapse into
+one.
+
+**Live:** a second poll within 1.5s came from the cache (same progress, no Spotify call). Tests:
+4 backend, 1 web engine, 1 iOS.

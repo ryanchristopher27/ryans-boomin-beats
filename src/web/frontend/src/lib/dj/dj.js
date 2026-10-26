@@ -15,6 +15,13 @@ const FOREGROUND_DEPTH = 1;
 /** While hidden, browsers throttle timers (down to ~1/min), so keep more lined up. */
 const BACKGROUND_DEPTH = 5;
 const REQUEST_POLL_MS = 10000;
+// Player polling (tracker 477d21): Spotify rate-limits /me/player per app, and
+// every device and tab polling every 2 s drew 1,157 429s in 38 minutes.
+// Progress is interpolated locally, so polls only need to catch changes.
+const POLL_MS = 5000; // sync and track changes show within ~5 s
+const TAB_FOLLOWER_POLL_MS = 15000; // another tab of this browser is driving
+const IDLE_POLL_MS = 10000; // nothing playing
+const MAX_BACKOFF_MS = 60000;
 
 export function safeStorage() {
 	return {
@@ -103,6 +110,8 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	let fetchedAt = now();
 	let lastRequestPoll = 0;
 	let messageFromPoll = false;
+	let failures = 0;
+	let backoffMs = 0;
 	let suggestedFor = null;
 	const cache = new Map();
 	/** @type {string | null} */
@@ -526,8 +535,13 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		if (r.status !== 200) {
 			player.update((p) => ({ ...p, message: r.data?.detail ?? "Couldn't reach the server." }));
 			messageFromPoll = true;
+			// Back off: Spotify's Retry-After when the server passes it on, else 5, 10, 20, 40, 60 s.
+			failures++;
+			backoffMs = Math.min(MAX_BACKOFF_MS, r.data?.retry_after ? r.data.retry_after * 1000 : POLL_MS * 2 ** (failures - 1));
 			return;
 		}
+		failures = 0;
+		backoffMs = 0;
 		const s = r.data;
 		const previous = get(player).state?.track;
 		// History and skips are recorded by the primary; others get them via sync.
@@ -676,11 +690,17 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	let running = false;
 
 	function nextDelay() {
+		if (backoffMs) return backoffMs;
 		const s = get(player).state;
-		if (!s?.active) return 5000;
-		if (!s.is_playing || !s.track) return 2000;
-		// Wake just after the track should end so the change shows promptly.
-		return Math.min(2000, Math.max(300, s.track.duration_ms - progressMs() + 300));
+		if (!s?.active) return IDLE_POLL_MS;
+		// Another tab of this browser drives; this one only mirrors (review C1).
+		if (isPrimary && !tabLeader) return TAB_FOLLOWER_POLL_MS;
+		if (!s.is_playing || !s.track) return POLL_MS;
+		// The driver wakes just after the track should end, so the next song is
+		// handled promptly; everyone else just polls.
+		const remaining = s.track.duration_ms - progressMs();
+		if (drives() && remaining < POLL_MS + 500) return Math.max(300, remaining + 300);
+		return POLL_MS;
 	}
 
 	async function loop() {
@@ -736,6 +756,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		// sync
 		claimPrimary,
 		dismissNotice: () => setSync({ notice: null }),
+		nextDelay,
 		// queue
 		add,
 		addPick,

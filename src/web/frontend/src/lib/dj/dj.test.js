@@ -251,6 +251,28 @@ describe('web DJ engine', () => {
 		expect(g(a.doc).queue.upcoming).toEqual([]);
 	});
 
+	test('polling: 5 s while playing, near-end wake for the driver, backoff on 503 (477d21)', async () => {
+		const server = fakeServer();
+		const a = tab(server, 'a');
+		await a.refresh(); // playing, 1 s into a 200 s track
+		expect(a.nextDelay()).toBe(5000);
+
+		server.playing = { ...track('now'), duration_ms: 4000 };
+		await a.refresh(); // 3 s left: the driver wakes just after the end
+		expect(a.nextDelay()).toBe(3300);
+
+		const real = server.request;
+		const busy = createDJ({ request: async () => ({ status: 503, data: { detail: 'Spotify is busy.', retry_after: 7 } }), storage: memoryStorage(), label: 'x', hasLLM: () => false, debounceMs: 0, locks: null });
+		await busy.refresh();
+		expect(busy.nextDelay()).toBe(7000);
+		const down = createDJ({ request: async () => ({ status: 500, data: null }), storage: memoryStorage(), label: 'y', hasLLM: () => false, debounceMs: 0, locks: null });
+		for (const want of [5000, 10000, 20000, 40000, 60000, 60000]) {
+			await down.refresh();
+			expect(down.nextDelay()).toBe(want);
+		}
+		expect(real).toBe(server.request);
+	});
+
 	test('a new tab adopts the shared queue and says so', async () => {
 		const server = fakeServer();
 		const a = tab(server, 'a');
