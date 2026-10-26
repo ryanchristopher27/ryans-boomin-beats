@@ -3253,3 +3253,17 @@ Childish Gambino's song (2nd of 8). Its `track:` filter is worse.
 **Also:**
 - The old Spotify validator (`services/spotify_validator.py`) was deleted, since nothing uses it.
 - Deploy order: the backend goes first, because the sync schema now accepts `isrc`.
+
+### Production check (2026-10-25, after deploy 7a4892f)
+- **Deezer from Vercel:** works. A simulator search ran through production in under a second; the
+  logs show the Deezer call and **no** Spotify search.
+- **Gap, filed:** Deezer search never lists Kendrick Lamar's original "Money Trees" (covers and
+  sped-up re-uploads fill the top 10). Type-ahead needs a re-upload filter plus a "Search Spotify"
+  fallback that costs 1 search.
+- **New finding, filed as High:** production's error report showed **1,157 `/me/player` 429s**
+  (20:35–21:13 CDT, previous deployment), about one per 2s poll. Several pollers were hitting the
+  same Spotify app: the simulator via production, and the web tabs via the local backend. Player
+  calls are rate-limited too, not just search. Next step: back off on 429, and poll slower when not
+  driving.
+- **Fixed on the way:** the debug launch self-test was deleting the iOS device key on every launch
+  (0639617).
