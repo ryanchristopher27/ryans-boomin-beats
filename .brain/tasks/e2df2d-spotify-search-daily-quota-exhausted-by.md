@@ -7,7 +7,7 @@ status: backlog
 assignee: 
 scoped_dir: .
 created: 2026-10-25T19:09:28Z
-updated: 2026-10-25T22:36:32Z
+updated: 2026-10-26T00:33:13Z
 ---
 
 ## Brief
@@ -20,3 +20,4 @@ High. /dj/suggest/ validation. 2026-10-25: search 429 QUOTA_EXCEEDED, resets aro
 ## Updates
 - 2026-10-25T19:09:28Z · created
 - 2026-10-25T22:36:32Z · comment: Partial mitigation: per-process search lockout honours Retry-After, so a locked-out instance makes zero search calls (live: 2nd+ searches refused in 0 ms). Root cause (searches per suggestion, prefetch frequency) still open.
+- 2026-10-26T00:33:13Z · comment: 2026-10-25 W4: web prefetch now gated to an open DJ page or Autofill/Driver (was every tab, every song). iOS still prefetches per track in Co-pilot.
