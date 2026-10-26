@@ -18,7 +18,7 @@ router = APIRouter()
 
 class ConnectRequest(BaseModel):
     provider: str
-    api_key: str
+    api_key: str = ''
 
 
 @router.post("/llm/connect/")
@@ -44,6 +44,12 @@ async def llm_connect(body: ConnectRequest):
             from groq import Groq
             client = Groq(api_key=body.api_key)
             client.models.list()
+        elif provider == 'claude-code':
+            from services import claude_code
+            if not claude_code.available():
+                return {'error': 'Your Claude Code only works when the backend runs on your own Mac, with Claude Code installed.'}
+            # A real round trip: proves the CLI is signed in, not just installed.
+            await claude_code.run('Reply with just OK.', 'Reply with just OK.')
     except Exception as e:
         log.info('[llm-connect] %s validation failed: %s', provider, e)
         return {'error': str(e)}

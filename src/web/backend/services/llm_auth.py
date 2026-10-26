@@ -10,7 +10,9 @@ from dataclasses import dataclass
 
 from fastapi import Header, HTTPException
 
-SUPPORTED_PROVIDERS = ('claude', 'openai', 'groq')
+SUPPORTED_PROVIDERS = ('claude', 'openai', 'groq', 'claude-code')
+# 'Your Claude Code' runs the owner's local CLI login (services/claude_code.py); no key.
+KEYLESS = ('claude-code',)
 
 _NOT_CONNECTED = (
     'LLM not connected. Send X-LLM-Provider and X-LLM-Key headers '
@@ -32,7 +34,15 @@ def _normalize(provider: str | None, api_key: str | None) -> LLMCredentials:
             status_code=400,
             detail=f'Unknown provider {name!r}. Expected one of: {", ".join(SUPPORTED_PROVIDERS)}.',
         )
+    if name in KEYLESS:
+        from services import claude_code
+        if not claude_code.available():
+            raise HTTPException(status_code=400, detail='Your Claude Code only works when the backend runs on your own Mac.')
     return LLMCredentials(provider=name, api_key=key)
+
+
+def _present(provider: str | None, key: str | None) -> bool:
+    return bool(provider) and (bool(key) or (provider or '').strip().lower() in KEYLESS)
 
 
 def get_llm_credentials(
@@ -40,7 +50,7 @@ def get_llm_credentials(
     x_llm_key: str | None = Header(default=None),
 ) -> LLMCredentials:
     """Required credentials — 401 when absent. Use on LLM-only endpoints."""
-    if not x_llm_provider or not x_llm_key:
+    if not _present(x_llm_provider, x_llm_key):
         raise HTTPException(status_code=401, detail=_NOT_CONNECTED)
     return _normalize(x_llm_provider, x_llm_key)
 
@@ -51,6 +61,6 @@ def get_optional_llm_credentials(
 ) -> LLMCredentials | None:
     """Optional credentials — None when absent, for endpoints that degrade
     gracefully without an LLM (the song profile still returns Last.fm data)."""
-    if not x_llm_provider or not x_llm_key:
+    if not _present(x_llm_provider, x_llm_key):
         return None
     return _normalize(x_llm_provider, x_llm_key)

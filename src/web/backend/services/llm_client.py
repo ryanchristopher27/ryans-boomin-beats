@@ -13,6 +13,8 @@ class LLMClient:
             return await self._generate_openai(messages, system_prompt)
         if self.provider == 'groq':
             return await self._generate_groq(messages, system_prompt)
+        if self.provider == 'claude-code':
+            return await self._generate_claude_code(messages, system_prompt)
         raise ValueError(f'Unknown provider: {self.provider}')
 
     async def _generate_claude(self, messages: list[dict], system_prompt: str) -> str:
@@ -26,6 +28,15 @@ class LLMClient:
             messages=messages,
         )
         return response.content[0].text
+
+    async def _generate_claude_code(self, messages: list[dict], system_prompt: str) -> str:
+        from services import claude_code
+        # One-shot CLI call: a multi-turn history goes in as a labelled transcript.
+        if len(messages) == 1:
+            prompt = messages[0]['content']
+        else:
+            prompt = '\n\n'.join(f"{m['role'].capitalize()}: {m['content']}" for m in messages)
+        return await claude_code.run(prompt, system_prompt)
 
     async def _generate_openai(self, messages: list[dict], system_prompt: str) -> str:
         import openai

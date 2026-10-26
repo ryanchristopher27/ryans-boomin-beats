@@ -149,7 +149,7 @@ async def song_profile(
     provider = creds.provider if creds else None
     api_key = creds.api_key if creds else None
 
-    if provider and api_key:
+    if creds:
         lastfm_data, analysis = await asyncio.gather(
             lastfm_client.track_info(title, artist),
             _llm_analysis(title, artist, [], provider, api_key),

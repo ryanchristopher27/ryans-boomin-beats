@@ -9,6 +9,10 @@
 	let loading = false;
 	let errorMsg = '';
 
+	// 'Your Claude Code' uses the CLI login on this Mac; there's no key to paste.
+	const NAMES = { claude: 'Claude', openai: 'OpenAI', groq: 'Groq', 'claude-code': 'Your Claude Code' };
+	$: keyless = provider === 'claude-code';
+
 	async function connect() {
 		loading = true;
 		errorMsg = '';
@@ -18,12 +22,13 @@
 			const res = await fetch(`${PUBLIC_API_URL}/llm/connect/`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ provider, api_key: apiKey }),
+				body: JSON.stringify({ provider, api_key: keyless ? '' : apiKey }),
 			});
 			const data = await res.json();
 			if (data.connected) {
-				$llmConfig = { provider, apiKey, connected: true };
-				localStorage.setItem('llmConfig', JSON.stringify({ provider, apiKey, connected: true }));
+				const key = keyless ? '' : apiKey;
+				$llmConfig = { provider, apiKey: key, connected: true };
+				localStorage.setItem('llmConfig', JSON.stringify({ provider, apiKey: key, connected: true }));
 				onClose();
 			} else {
 				errorMsg = data.error || 'Connection failed.';
@@ -51,7 +56,7 @@
 	{#if $llmConfig.connected}
 		<div class="connected-state">
 			<div class="connected-label">
-				Connected · <span class="provider-name">{$llmConfig.provider === 'claude' ? 'Claude' : $llmConfig.provider === 'groq' ? 'Groq' : 'OpenAI'}</span>
+				Connected · <span class="provider-name">{NAMES[$llmConfig.provider] ?? $llmConfig.provider}</span>
 			</div>
 			<button class="disconnect-btn" on:click={disconnect}>Disconnect</button>
 		</div>
@@ -69,20 +74,28 @@
 				<input type="radio" bind:group={provider} value="groq" />
 				Groq (free)
 			</label>
+			<label class="radio-label">
+				<input type="radio" bind:group={provider} value="claude-code" />
+				Your Claude Code (this Mac)
+			</label>
 		</div>
 
-		<input
-			class="key-input"
-			type="password"
-			placeholder={provider === 'claude' ? 'sk-ant-...' : provider === 'groq' ? 'gsk_...' : 'sk-...'}
-			bind:value={apiKey}
-		/>
+		{#if keyless}
+			<p class="note">Uses your Claude subscription through the Claude Code CLI on this Mac. Works while the backend runs locally.</p>
+		{:else}
+			<input
+				class="key-input"
+				type="password"
+				placeholder={provider === 'claude' ? 'sk-ant-...' : provider === 'groq' ? 'gsk_...' : 'sk-...'}
+				bind:value={apiKey}
+			/>
+		{/if}
 
 		{#if errorMsg}
 			<div class="error">{errorMsg}</div>
 		{/if}
 
-		<button class="connect-btn" on:click={connect} disabled={!apiKey || loading}>
+		<button class="connect-btn" on:click={connect} disabled={(!keyless && !apiKey) || loading}>
 			{loading ? 'Connecting...' : 'Connect'}
 		</button>
 	{/if}
@@ -96,6 +109,13 @@
 		padding: 16px;
 		width: 280px;
 		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+	}
+
+	.note {
+		margin: 0 0 12px;
+		font-size: 0.8rem;
+		line-height: 1.45;
+		color: var(--text-muted);
 	}
 
 	.panel-header {

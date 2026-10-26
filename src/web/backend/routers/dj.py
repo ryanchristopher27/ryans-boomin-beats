@@ -21,6 +21,7 @@ from spotipy import SpotifyException
 from services import lastfm_client
 from services.llm_auth import LLMCredentials, get_llm_credentials
 from services.llm_client import LLMClient
+from services.claude_code import ClaudeCodeError
 from services.llm_json import LLMParseError, extract_json
 from services.spotify_auth import get_spotify_token
 from services.spotify_client import user_client
@@ -347,7 +348,9 @@ async def suggest(
         raw = await client.generate([{'role': 'user', 'content': build_prompt(body, tags)}], SYSTEM_PROMPT)
     except Exception as e:
         log.warning('[dj] %s request failed: %s', creds.provider, e)
-        return {'moves': [], 'tags': tags, 'error': f'{creds.provider} request failed: {e}'}
+        # Claude Code's messages are written for the user (e.g. "sign in again").
+        message = str(e) if isinstance(e, ClaudeCodeError) else f'{creds.provider} request failed: {e}'
+        return {'moves': [], 'tags': tags, 'error': message}
 
     try:
         moves = normalize_moves(extract_json(raw, context='dj'), moves_for(body.goal))

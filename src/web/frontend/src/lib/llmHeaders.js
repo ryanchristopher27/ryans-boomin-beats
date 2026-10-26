@@ -8,6 +8,8 @@ import { llmConfig } from '../stores.js';
 /** @returns {Record<string, string>} */
 export function llmHeaders() {
 	const { provider, apiKey } = get(llmConfig) ?? {};
+	// 'Your Claude Code' runs on the local CLI login, so it has no key.
+	if (provider === 'claude-code') return { 'X-LLM-Provider': provider };
 	if (!provider || !apiKey) return {};
 	return {
 		'X-LLM-Provider': provider,
