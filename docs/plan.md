@@ -3205,3 +3205,51 @@ Q2 and Q3 can run in parallel after Q1.
 | Autopilot resolves (OQ4) | On the primary device only, as today | Keeps sends single (the review C1 invariant) | 2026-10-25 |
 | Art / tags (OQ5) | Deezer for pick art; Last.fm stays for tags and profile | Deezer art is per release; Last.fm tags already drive the prompt | 2026-10-25 |
 | Milestone prefix | `Q#` | Distinct from P/DJ/SY/W in the tracker | 2026-10-25 |
+
+### Q0–Q4 results (2026-10-25)
+**Q0 spikes:**
+- **Deezer:** 60 real DJ picks from three Claude Code rounds. With the shipped matcher (exact title
+  after stripping suffixes, artist on any credit, re-uploads rejected, artist top-tracks fallback),
+  it found **58/60**. The 2 misses were invented songs (the wrong artist for "Bartier Cardi", and a
+  non-existent "Sailing Soul(s)"). Every hit carried an ISRC; p50 300ms.
+- **Deezer gaps found along the way:**
+  - The strict `artist:"…" track:"…"` syntax returns nothing.
+  - Search ranking can hide a real song (Money Trees lost to a sped-up re-upload), hence the
+    top-tracks fallback.
+  - A 60-request burst hit Deezer's per-IP limit (code 4), hence sliding-window pacing (40 per 5s)
+    and retry.
+- **Deezer terms:** non-commercial, private or family scope only. Fine for the small circle; a
+  public launch needs Deezer's approval or Apple Music (direction F).
+- **Spotify `isrc:`** works in Development Mode, one search per song. Compilations are listed first
+  (Redbone's album came 8th), so the resolver prefers album, then single, then compilation.
+  Re-uploads can share the ISRC (September's only "single" was "sped up + slowed"), so they're
+  skipped. The explicit flag matched Deezer for 6/6.
+
+**Two more Development Mode facts (Q4 live):**
+- Track objects come **without `external_ids`** (and without `popularity`). Spotify-side tracks
+  therefore never carry an ISRC; picks get theirs from Deezer, and exclusion falls back to title +
+  artist.
+- `market=from_token` requires the **user-read-private** scope (403 otherwise).
+- *Deviation from the plan:* the resolver uses the app's credentials with a fixed market
+  (`SPOTIFY_MARKET`, default US) instead of the user's `/me` country. Ceiling: a friend abroad
+  could get an unplayable version.
+
+**Q4 measurement** (local backend, live Spotify, Claude Code):
+
+| Step | Spotify searches | Before |
+|---|---|---|
+| DJ suggestion round (9 picks) | **0** | ~10–14 |
+| Type-ahead query | **0** | 1 per pause |
+| 3 picks looked up | **3** | — |
+| Same 3 again | **0** (4ms, cache) | — |
+
+That's **0 for showing, 1 per queued song**, inside the ≤1.5 target. The playlist builder makes 0
+at generation and 1 per added song (unit-tested; not run live, to avoid writing to a real
+playlist).
+
+**Known quirk:** Deezer type-ahead ranks artist names, so "redbone" lists the band Redbone before
+Childish Gambino's song (2nd of 8). Its `track:` filter is worse.
+
+**Also:**
+- The old Spotify validator (`services/spotify_validator.py`) was deleted, since nothing uses it.
+- Deploy order: the backend goes first, because the sync schema now accepts `isrc`.

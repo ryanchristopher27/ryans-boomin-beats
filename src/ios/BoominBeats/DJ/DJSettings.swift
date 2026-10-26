@@ -4,6 +4,7 @@ struct AvoidedTrack: Codable, Identifiable, Hashable {
     let id: String
     let title: String
     let artist: String
+    var isrc: String?
 }
 
 /// Optional steering (DJ6). Not a precomputed path: every suggestion round asks

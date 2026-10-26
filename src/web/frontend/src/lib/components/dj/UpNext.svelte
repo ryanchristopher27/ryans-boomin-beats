@@ -12,6 +12,14 @@
 	const ctx = djContext();
 	const { selected } = ctx;
 
+	// Search results come from Deezer (Q3): adding one looks it up on Spotify.
+	let searchMiss = '';
+	async function pickSong(t) {
+		searchMiss = '';
+		const r = await dj.addPick(t);
+		if (!r.ok) searchMiss = r.reason === 'not_on_spotify' ? `${t.title} isn't on Spotify.` : r.reason === 'explicit' ? `Only an explicit version of ${t.title} is on Spotify.` : "Couldn't add that right now.";
+	}
+
 	function remove(item, i) {
 		dj.removeUpcoming(item.id);
 		offerUndo(ctx, `Removed ${item.title}.`, () => dj.restoreUpcoming(item, i));
@@ -42,7 +50,8 @@
 <div class="upnext">
 	{#if adding}
 		<div class="search">
-			<SongSearch placeholder="Add a song…" onSelect={(t) => dj.add(t)} />
+			<SongSearch placeholder="Add a song…" onSelect={pickSong} />
+			{#if searchMiss}<p class="hint warn" role="status">{searchMiss}</p>{/if}
 		</div>
 	{/if}
 
@@ -221,6 +230,10 @@
 	.dj {
 		color: var(--accent);
 		display: inline-flex;
+	}
+
+	.hint.warn {
+		color: var(--warning);
 	}
 
 	.hint {

@@ -12,12 +12,14 @@ function fakeStorage() {
 
 describe('hydrateToken', () => {
 	beforeEach(() => {
-		globalThis.localStorage = fakeStorage();
+		vi.stubGlobal('localStorage', fakeStorage());
 		localStorage.setItem('spotify_access_token', 'old');
 		localStorage.setItem('spotify_refresh_token', 'r1');
 		localStorage.setItem('spotify_expires_at', String(Date.now() - 1000)); // expired
 	});
-	afterEach(() => vi.unstubAllGlobals());
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
 
 	test('concurrent callers share one refresh', async () => {
 		const fetch = vi.fn(async () => ({ json: async () => ({ access_token: 'new', refresh_token: 'r2', expires_in: 3600 }) }));

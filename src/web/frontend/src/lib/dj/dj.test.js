@@ -18,6 +18,12 @@ function fakeServer() {
 			return { status: 200, data: { active: true, is_playing: true, progress_ms: 1000, track: s.playing, dj: { version: s.row?.version ?? 0, primary: s.row?.primary ?? null } } };
 		}
 		if (path === 'player/queue/') return { status: 200, data: { queue: s.queued.map(track) } };
+		if (path === 'tracks/resolve/') {
+			s.resolves = (s.resolves ?? 0) + 1;
+			const song = json.songs[0];
+			const known = { USAAA0000001: { id: 'sp1', explicit: false }, USAAA0000002: { id: 'sp2', explicit: true } }[song.isrc];
+			return { status: 200, data: { tracks: [known ? { ...known, title: song.title, artists: ['A'], image: '', isrc: song.isrc } : null] } };
+		}
 		if (path === 'spotify/queue/') {
 			s.queued.push(...json.track_ids);
 			return { status: 200, data: { queued: 1 } };
@@ -225,6 +231,24 @@ describe('web DJ engine', () => {
 		await a2.flush();
 		expect(g(a2.sync).status).toBe('error');
 		expect(g(a2.sync).error).toBe('bad field');
+	});
+
+	test('a DJ pick is looked up on Spotify only when queued (plan Q2)', async () => {
+		const server = fakeServer();
+		const a = tab(server, 'a');
+		await a.refresh();
+		const pick = (isrc, title) => ({ id: isrc, isrc, title, artists: ['A'], image: '', reason: '' });
+
+		expect(await a.addPick(pick('USAAA0000001', 'good'))).toEqual({ ok: true });
+		const item = g(a.doc).queue.sent[0];
+		expect([item.trackID, item.isrc]).toEqual(['sp1', 'USAAA0000001']); // the Spotify id, plus the ISRC
+		expect(server.queued).toEqual(['sp1']);
+
+		expect(await a.addPick(pick('USZZZ9999999', 'missing'))).toEqual({ ok: false, reason: 'not_on_spotify' });
+		a.setClean(true);
+		expect(await a.addPick(pick('USAAA0000002', 'explicit'))).toEqual({ ok: false, reason: 'explicit' });
+		expect(server.resolves).toBe(3);
+		expect(g(a.doc).queue.upcoming).toEqual([]);
 	});
 
 	test('a new tab adopts the shared queue and says so', async () => {

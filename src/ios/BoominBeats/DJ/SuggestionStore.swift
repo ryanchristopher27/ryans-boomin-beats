@@ -36,19 +36,20 @@ struct MoveSuggestions: Decodable {
         }
     }
 
+    /// A suggestion checked against Deezer (plan Q2). `id` is its ISRC (or
+    /// `dz:<id>`), not a Spotify id: queueing it resolves one via
+    /// `QueueStore.addPick`, the only Spotify search a pick costs.
     struct Pick: Decodable, Identifiable {
         let id: String
         let title: String
         let artists: [String]
         let image: String
         let reason: String
+        var isrc: String?
+        var explicit: Bool?
 
         var artistLine: String { artists.joined(separator: ", ") }
         var imageURL: URL? { URL(string: image) }
-
-        var queueItem: QueueItem {
-            QueueItem(trackID: id, title: title, artists: artists, image: image)
-        }
     }
 
     let moves: [Move]
@@ -59,15 +60,17 @@ private struct TrackRef: Encodable {
     let id: String
     let title: String
     let artist: String
+    /// Picks are excluded by ISRC since Q2 (no Spotify ids to compare).
+    var isrc: String?
 
     init(_ track: Track) {
-        id = track.id; title = track.title; artist = track.artists.first ?? ""
+        id = track.id; title = track.title; artist = track.artists.first ?? ""; isrc = track.isrc
     }
     init(_ item: QueueItem) {
-        id = item.trackID; title = item.title; artist = item.artists.first ?? ""
+        id = item.trackID; title = item.title; artist = item.artists.first ?? ""; isrc = item.isrc
     }
     init(_ avoided: AvoidedTrack) {
-        id = avoided.id; title = avoided.title; artist = avoided.artist
+        id = avoided.id; title = avoided.title; artist = avoided.artist; isrc = avoided.isrc
     }
 }
 
@@ -248,13 +251,12 @@ final class SuggestionStore {
         var candidates = Self.autopilotCandidates(
             moves: moves,
             adventurousness: settings.adventurousness,
-            excluding: Set((queue.sent + queue.upcoming).map(\.trackID)),
+            excluding: queue.queuedKeys,
             lead: settings.goal.map { $0.kind == .drift ? "drift" : "toward" }
         )
+        // Each add is one Spotify lookup; a miss just moves on to the next candidate.
         while queue.aheadCount < target, !candidates.isEmpty {
-            var item = candidates.removeFirst().queueItem
-            item.addedByDJ = true
-            await queue.add(item)
+            _ = await queue.addPick(candidates.removeFirst(), cleanOnly: settings.cleanOnly, addedByDJ: true)
         }
     }
 }

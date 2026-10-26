@@ -3,11 +3,11 @@ id: 29e5d9
 source: plan:ryans-boomin-beats:Q3
 title: Q3 — Search + playlist builder on Deezer
 type: task
-status: backlog
+status: review
 assignee: 
 scoped_dir: .
 created: 2026-10-26T01:57:57Z
-updated: 2026-10-26T01:57:57Z
+updated: 2026-10-26T02:27:29Z
 ---
 
 ## Brief
@@ -19,3 +19,5 @@ updated: 2026-10-26T01:57:57Z
 
 ## Updates
 - 2026-10-26T01:57:57Z · created
+- 2026-10-26T02:15:45Z · status: backlog → doing (building)
+- 2026-10-26T02:27:29Z · status: doing → review (built + verified)

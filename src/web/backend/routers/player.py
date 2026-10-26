@@ -39,7 +39,10 @@ def _track(item: dict | None) -> dict | None:
         'explicit': item.get('explicit', False),
         'track_url': (item.get('external_urls') or {}).get('spotify', ''),
         'release_date': album.get('release_date', ''),
-        # Provider-neutral identity (plan Q1); full track objects carry it.
+        # Provider-neutral identity (plan Q1). Development Mode strips
+        # external_ids from track objects (Q4 live check), so this is None for
+        # now; picks get their ISRC from Deezer, and exclusion falls back to
+        # title + artist.
         'isrc': (item.get('external_ids') or {}).get('isrc'),
     }
 

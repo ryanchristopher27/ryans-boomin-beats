@@ -60,7 +60,11 @@
 
 	<div class="info">
 		<div class="title">
-			<a href={song.spotify.track_url} target="_blank" rel="noreferrer" draggable="false" on:click|stopPropagation>{song.spotify.title}</a>
+			{#if song.spotify.track_url}
+				<a href={song.spotify.track_url} target="_blank" rel="noreferrer" draggable="false" on:click|stopPropagation>{song.spotify.title}</a>
+			{:else}
+				<span>{song.spotify.title}</span>
+			{/if}
 		</div>
 		<div class="artist">{song.spotify.artists.join(', ')}</div>
 		<div class="album">{song.spotify.album}</div>

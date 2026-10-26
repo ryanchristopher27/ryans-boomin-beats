@@ -33,14 +33,15 @@ struct SyncDoc: Codable, Equatable {
         let title: String
         let artists: [String]
         let image: String
+        var isrc: String?
 
         init(_ track: Track) {
-            id = track.id; title = track.title; artists = track.artists; image = track.image
+            id = track.id; title = track.title; artists = track.artists; image = track.image; isrc = track.isrc
         }
 
         var track: Track {
             Track(id: id, title: title, artists: artists, image: image, album: "",
-                  durationMs: 0, explicit: false, trackURL: "", releaseDate: nil)
+                  durationMs: 0, explicit: false, trackURL: "", releaseDate: nil, isrc: isrc)
         }
     }
 

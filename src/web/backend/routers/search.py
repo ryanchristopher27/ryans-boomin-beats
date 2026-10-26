@@ -1,25 +1,16 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
-from services.spotify_client import app_client, search as guarded_search
+from services import deezer
 
 router = APIRouter()
 
 
 @router.get("/search/")
-def search(searchValue: str = Query(...)):
-    spotify = app_client()
-    result = guarded_search(spotify, purpose='typeahead', q='track:' + searchValue)
-
-    tracks = []
-    for track in result['tracks']['items']:
-        images = track['album']['images']
-        image = images[-1]['url'] if images else ''
-        tracks.append({
-            'title': track['name'],
-            'artists': [a['name'] for a in track['artists']],
-            'id': track['id'],
-            'album': track['album']['name'],
-            'image': image,
-        })
-
-    return {'type': 'searchSongs', 'tracks': tracks}
+async def search(searchValue: str = Query(..., min_length=1, max_length=200)):
+    """Type-ahead on Deezer since Q3: no Spotify quota per keystroke. Results
+    carry an ISRC key; the chosen one resolves via POST /tracks/resolve/."""
+    try:
+        songs = await deezer.client().search(searchValue, limit=10)
+    except deezer.DeezerUnavailable:
+        raise HTTPException(status_code=503, detail="Search isn't available right now. Try again in a moment.")
+    return {'type': 'searchSongs', 'tracks': [deezer.as_track(s) for s in songs]}

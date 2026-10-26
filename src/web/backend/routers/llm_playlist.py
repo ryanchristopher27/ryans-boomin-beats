@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from services.llm_auth import LLMCredentials, get_llm_credentials
 from services.llm_client import LLMClient
 from services.llm_json import LLMParseError, extract_json
-from services.spotify_validator import validate_songs
+from services import deezer
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ _ARRAY_KEYS = ('playlist', 'songs', 'tracks', 'results', 'items')
 def _normalize_suggestions(data) -> list[dict]:
     """Coerce a parsed model response into a list of {title, artist, reason} dicts.
 
-    validate_songs() indexes suggestion['title'] directly, so anything malformed
+    deezer.validate() indexes suggestion['title'] directly, so anything malformed
     here becomes a KeyError/TypeError mid-request. Filter to well-formed entries.
     """
     if isinstance(data, dict):
@@ -126,7 +126,9 @@ async def generate_playlist(
             failed = []
             continue
 
-        new_matched, failed = await validate_songs(suggestions)
+        # Checked on Deezer since Q3: generating a playlist spends no Spotify
+        # search. Songs resolve to Spotify ids only when added, saved or queued.
+        new_matched, failed = await deezer.validate(suggestions)
         for song in new_matched:
             track_id = song.get('spotify', {}).get('id')
             if track_id and track_id not in seen_ids:
@@ -141,7 +143,7 @@ async def generate_playlist(
     }]
 
     if not matched and last_error is None:
-        last_error = 'No suggested songs could be matched on Spotify.'
+        last_error = 'None of the suggested songs could be found.'
 
     return {
         'requested': body.count,

@@ -27,6 +27,7 @@ class ResolveBody(BaseModel):
 
 
 @router.post('/tracks/resolve/')
-async def resolve(body: ResolveBody, token: str = Depends(get_spotify_token)):
-    tracks = await track_resolver.resolve(token, [s.model_dump() for s in body.songs])
+async def resolve(body: ResolveBody, _token: str = Depends(get_spotify_token)):
+    # Signed-in users only: each song can cost a Spotify search from the shared quota.
+    tracks = await track_resolver.resolve([s.model_dump() for s in body.songs])
     return {'tracks': tracks}

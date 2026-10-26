@@ -175,17 +175,37 @@ export function isEmptyDoc(doc) {
 
 /** A track reduced to what the shared doc stores (the server's TrackRef). */
 export function trackRef(t) {
-	return { id: t.id, title: t.title, artists: t.artists ?? [], image: t.image ?? '' };
+	return { id: t.id, title: t.title, artists: t.artists ?? [], image: t.image ?? '', ...(t.isrc ? { isrc: t.isrc } : {}) };
 }
 
 /** A new queue entry. `id` names the entry, not the track, so a song can be queued twice. */
 export function queueItem(t, extra = {}) {
-	return { id: crypto.randomUUID(), trackID: t.trackID ?? t.id, title: t.title, artists: t.artists ?? [], image: t.image ?? '', skipOnArrival: false, ...extra };
+	return {
+		id: crypto.randomUUID(),
+		trackID: t.trackID ?? t.id,
+		title: t.title,
+		artists: t.artists ?? [],
+		image: t.image ?? '',
+		skipOnArrival: false,
+		...(t.isrc ? { isrc: t.isrc } : {}),
+		...extra
+	};
 }
 
 /** A guest request (the server's GuestRequest: no skip flag). */
 export function guestRequest(t) {
-	return { id: crypto.randomUUID(), trackID: t.id, title: t.title, artists: t.artists ?? [], image: t.image ?? '' };
+	return { id: crypto.randomUUID(), trackID: t.id, title: t.title, artists: t.artists ?? [], image: t.image ?? '', ...(t.isrc ? { isrc: t.isrc } : {}) };
+}
+
+/** Every key a queued song answers to, so a pick (keyed by ISRC since Q2) and
+ * a Spotify track (keyed by id) both count as "already queued". */
+export function queuedKeys(items) {
+	const keys = new Set();
+	for (const i of items) {
+		keys.add(i.trackID);
+		if (i.isrc) keys.add(i.isrc);
+	}
+	return keys;
 }
 
 /** Most recent first, deduped, capped. */

@@ -5,6 +5,7 @@
 	import { flip } from 'svelte/animate';
 	import { llmSettingsOpen } from '../../../stores.js';
 	import { MOVE_SUMMARY, moveLabel } from '$lib/dj/layout.js';
+	import { queuedKeys } from '$lib/dj/logic.js';
 	import Icon from './Icon.svelte';
 	import PickRow from './PickRow.svelte';
 
@@ -17,7 +18,7 @@
 
 	$: s = $suggestions;
 	$: moves = kind ? s.moves.filter((m) => m.move === kind) : s.moves;
-	$: queued = new Set([...$doc.queue.sent, ...$doc.queue.upcoming].map((i) => i.trackID));
+	$: queued = queuedKeys([...$doc.queue.sent, ...$doc.queue.upcoming]);
 	$: hasTrack = !!$player.state?.track;
 	$: goal = $doc.options.goal;
 

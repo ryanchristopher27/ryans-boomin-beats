@@ -12,7 +12,14 @@
 	const menuId = `pick-menu-${Math.random().toString(36).slice(2)}`;
 	let menu;
 	let anchor;
-	let justAdded = false;
+	/** idle | adding | added | not_on_spotify | explicit | unavailable */
+	let status = 'idle';
+	$: done = queued || status === 'added';
+	const MISS = {
+		not_on_spotify: 'Not on Spotify',
+		explicit: 'Explicit version only',
+		unavailable: "Couldn't add that right now"
+	};
 
 	// The menu lives in the top layer (popover), so the widget's scroll box can't
 	// clip it; place it under the button when it opens.
@@ -24,8 +31,9 @@
 	}
 
 	async function add() {
-		justAdded = true;
-		await dj.add(pick);
+		status = 'adding';
+		const r = await dj.addPick(pick);
+		status = r.ok ? 'added' : r.reason;
 	}
 
 	function avoid(what) {
@@ -42,14 +50,29 @@
 		<span class="text">
 			<span class="title">{pick.title}</span>
 			<span class="artist">{pick.artists.join(', ')}</span>
-			<span class="reason" title={pick.reason}>{pick.reason}</span>
+			{#if MISS[status]}
+				<span class="miss" role="status">{MISS[status]}</span>
+			{:else}
+				<span class="reason" title={pick.reason}>{pick.reason}</span>
+			{/if}
 		</span>
 	</button>
 	<button class="icon-btn" bind:this={anchor} popovertarget={menuId} aria-label="More options for {pick.title}" title="More options">
 		<Icon name="dots" size={18} />
 	</button>
-	<button class="icon-btn add" class:done={queued || justAdded} on:click={add} disabled={queued || justAdded} aria-label={queued || justAdded ? `${pick.title} is queued` : `Queue ${pick.title}`}>
-		<Icon name={queued || justAdded ? 'check' : 'plus'} size={18} />
+	<button
+		class="icon-btn add"
+		class:done
+		on:click={add}
+		disabled={done || status === 'adding' || status === 'not_on_spotify' || status === 'explicit'}
+		aria-busy={status === 'adding'}
+		aria-label={done ? `${pick.title} is queued` : status === 'adding' ? `Adding ${pick.title}` : `Queue ${pick.title}`}
+	>
+		{#if status === 'adding'}
+			<span class="spinner" aria-hidden="true" />
+		{:else}
+			<Icon name={done ? 'check' : 'plus'} size={18} />
+		{/if}
 	</button>
 	<div class="menu" id={menuId} popover="auto" bind:this={menu} on:toggle={place}>
 		<button on:click={() => avoid('song')}>Never suggest this song</button>
@@ -125,6 +148,33 @@
 		line-clamp: 2;
 		-webkit-box-orient: vertical;
 		overflow: hidden;
+	}
+
+	.miss {
+		margin-top: 3px;
+		font-size: 13px;
+		color: var(--warning);
+	}
+
+	.spinner {
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		border: 2px solid rgba(255, 255, 255, 0.2);
+		border-top-color: var(--accent);
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.spinner {
+			animation-duration: 2.4s;
+		}
 	}
 
 	.add.done {

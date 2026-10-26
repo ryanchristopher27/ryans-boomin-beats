@@ -4,6 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 CLIENT_ID = os.environ['SPOTIFY_CLIENT_ID']
+# Market for choose-time Spotify lookups (plan Q1): the version returned must be
+# playable here. A fixed market because `from_token` needs the user-read-private
+# scope, which the apps don't request (Q4 live check: 403).
+SPOTIFY_MARKET = os.environ.get('SPOTIFY_MARKET', 'US')
 CLIENT_SECRET = os.environ['SPOTIFY_CLIENT_SECRET']
 REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', 'http://127.0.0.1:5173/profile')
 SCOPE = 'user-library-read user-top-read playlist-read-private'

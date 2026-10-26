@@ -71,6 +71,7 @@ def _song(t: dict) -> dict:
         'deezer_id': t['id'],
         'title': t.get('title', ''),
         'artists': [t.get('artist', {}).get('name', '')],
+        'album': album.get('title', ''),
         'image': album.get('cover_medium') or album.get('cover') or '',
         'explicit': bool(t.get('explicit_lyrics')),
         'isrc': t.get('isrc') or None,
@@ -159,6 +160,37 @@ def client() -> Deezer:
     if _deezer is None:
         _deezer = Deezer()
     return _deezer
+
+
+def as_track(song: dict) -> dict:
+    """A Deezer song in the shape clients already render as a track (Q3). `id`
+    is a key, not a Spotify id: the ISRC, or `dz:<id>` without one. Clients
+    resolve it at choose time via POST /tracks/resolve/."""
+    return {
+        'id': song['isrc'] or f"dz:{song['deezer_id']}",
+        'isrc': song['isrc'],
+        'title': song['title'],
+        'artists': song['artists'],
+        'album': song.get('album', ''),
+        'image': song['image'],
+        'track_url': '',
+        'duration_ms': song['duration_ms'],
+        'explicit': song['explicit'],
+    }
+
+
+async def validate(suggestions: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Check playlist suggestions on Deezer: (matched, failed), with `spotify` holding
+    the as_track() match, so the playlist builder spends no Spotify search (Q3)."""
+    found = await find_many(suggestions)
+    matched, failed = [], []
+    for s in suggestions:
+        song = found.get((s['title'], s['artist']))
+        if song:
+            matched.append({'title': s['title'], 'artist': s['artist'], 'reason': s.get('reason', ''), 'spotify': as_track(song)})
+        else:
+            failed.append(s)
+    return matched, failed
 
 
 async def find_many(songs: list[dict], dz: Deezer | None = None) -> dict[tuple[str, str], dict | None]:

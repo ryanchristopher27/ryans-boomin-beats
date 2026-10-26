@@ -119,5 +119,29 @@ class FindMany(unittest.TestCase):
         self.assertEqual(asyncio.run(deezer.find_many(songs[:1], broken))[('Electric', 'Alina Baraz')]['deezer_id'], 2)
 
 
+class SearchEndpoint(unittest.TestCase):
+    """Q3: type-ahead is Deezer, costs no Spotify search, returns resolvable keys."""
+
+    def test_results_are_keyed_by_isrc_and_need_no_spotify(self):
+        from fastapi.testclient import TestClient
+        import main
+        from services import spotify_client
+        dz = fake({('/search', 'redbone'): {'data': [track(5, 'Redbone', 'Childish Gambino', isrc='USYAH1600107'),
+                                                     track(6, 'Redbone (Live)', 'Someone', isrc=None)]}})
+        before = spotify_client.searches_made
+        with mock.patch.object(deezer, 'client', return_value=dz):
+            body = TestClient(main.app).get('/search/', params={'searchValue': 'redbone'}).json()
+        self.assertEqual([t['id'] for t in body['tracks']], ['USYAH1600107', 'dz:6'])
+        self.assertEqual(body['tracks'][0]['track_url'], '')  # no Spotify link until resolved
+        self.assertEqual(spotify_client.searches_made, before)
+
+    def test_deezer_down_is_a_503(self):
+        from fastapi.testclient import TestClient
+        import main
+        dz = fake({('/search', ''): {'error': {'code': 700}}})
+        with mock.patch.object(deezer, 'client', return_value=dz):
+            self.assertEqual(TestClient(main.app).get('/search/', params={'searchValue': 'x'}).status_code, 503)
+
+
 if __name__ == '__main__':
     unittest.main()

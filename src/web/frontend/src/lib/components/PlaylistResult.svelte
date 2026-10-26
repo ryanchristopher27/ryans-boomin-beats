@@ -3,7 +3,7 @@
 	import SongCard from './SongCard.svelte';
 	import { access_token, pendingAdd, playlistsPanelOpen } from '../../stores.js';
 	import { spotifyHeaders } from '../spotifyHeaders.js';
-	import { getSavedStates, setTrackSaved } from '$lib/playlistActions.js';
+	import { getSavedStates, rememberSongs, setTrackSaved, toSpotifyIds } from '$lib/playlistActions.js';
 
 	export let playlist = [];
 	export let requested = 0;
@@ -20,6 +20,8 @@
 	let savedKey = '';
 
 	$: dedupedPlaylist = playlist.filter((s, i, arr) => arr.findIndex(x => x.spotify.id === s.spotify.id) === i);
+	// Results are Deezer-checked (Q3); their ids resolve to Spotify only when used.
+	$: rememberSongs(dedupedPlaylist.map((s) => s.spotify));
 	$: hasChecked = checkedIds.size > 0;
 	$: allIds = dedupedPlaylist.map(s => s.spotify.id);
 	$: selectedIds = allIds.filter(id => checkedIds.has(id));
@@ -67,10 +69,20 @@
 		actionError = '';
 		queueSuccess = false;
 		try {
+			const { ids, missing, error } = await toSpotifyIds(allIds);
+			if (error === 'auth') {
+				actionError = 'Log in to Spotify on the Profile page to queue songs.';
+				return;
+			}
+			if (error || !ids.length) {
+				actionError = error ? "Couldn't look these songs up on Spotify right now." : "None of these songs are on Spotify.";
+				return;
+			}
+			if (missing) actionError = `${missing} song${missing > 1 ? "s aren't" : " isn't"} on Spotify and was skipped.`;
 			const res = await fetch(`${PUBLIC_API_URL}/spotify/queue/`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...spotifyHeaders() },
-				body: JSON.stringify({ track_ids: allIds }),
+				body: JSON.stringify({ track_ids: ids }),
 			});
 			const data = await res.json();
 			if (res.status === 401) {

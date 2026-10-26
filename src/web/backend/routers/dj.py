@@ -25,7 +25,7 @@ from services.claude_code import ClaudeCodeError
 from services.llm_json import LLMParseError, extract_json
 from services.spotify_auth import get_spotify_token
 from services.spotify_client import user_client
-from services.spotify_validator import validate_songs
+from services import deezer
 
 log = logging.getLogger(__name__)
 
@@ -244,9 +244,9 @@ def salvage_truncated(raw: str) -> dict | None:
 
 
 def _artist_matches(suggested: str, spotify_artists: list[str]) -> bool:
-    """validate_songs falls back to a title-only search, which can land on a
-    different artist's song of the same name. For a DJ that's a wrong track,
-    so require the suggested artist to appear among the matched artists."""
+    """A catalogue match can be a different artist's song of the same name.
+    For a DJ that's a wrong track, so require the suggested artist to appear
+    among the matched artists."""
     s = _fold(suggested)
     return bool(s) and any(s in _fold(a) or _fold(a) in s for a in spotify_artists if _fold(a))
 
@@ -256,6 +256,12 @@ def _fold(name: str) -> str:
     return re.sub(r'[^0-9a-z]', '', name.casefold())
 
 
+def song_key(title: str, artist: str) -> str:
+    """Folded title|artist, for matching songs that have no ISRC."""
+    lead = artist.split(',')[0]
+    return f'{_fold(title)}|{_fold(lead)}'
+
+
 def select_tracks(
     moves: dict[str, list[dict]],
     matched: list[dict],
@@ -263,13 +269,20 @@ def select_tracks(
     per_move: int,
     avoid_artists: list[str] = (),
     clean: bool = False,
+    exclude_keys: set[str] = frozenset(),
 ) -> list[dict]:
-    """Attach validated Spotify tracks to their moves, dropping wrong-artist
+    """Attach checked catalogue tracks to their moves, dropping wrong-artist
     matches, excluded tracks, do-not-play artists, explicit tracks when clean,
     and duplicates across moves. The prompt asks for all of this too; these
-    filters are the guarantee."""
+    filters are the guarantee.
+
+    `matched[i]['spotify']` is the catalogue match. Since Q2 the DJ's comes
+    from Deezer: its `id` is the ISRC (or `dz:<id>` without one), so
+    `exclude_ids` holds ISRCs, and `exclude_keys` (folded title|artist) covers
+    songs without one. Picks carry no Spotify id; clients resolve on tap."""
     by_key = {(m['title'], m['artist']): m for m in matched}
     seen = set(exclude_ids)
+    seen_keys = set(exclude_keys)
     avoid = {_fold(a) for a in avoid_artists if _fold(a)}
     result = []
     for move, entries in moves.items():
@@ -279,19 +292,22 @@ def select_tracks(
             if not m:
                 continue
             sp = m['spotify']
-            if sp['id'] in seen or not _artist_matches(e['artist'], sp['artists']):
+            key = song_key(sp['title'], sp['artists'][0] if sp['artists'] else e['artist'])
+            if sp['id'] in seen or key in seen_keys or not _artist_matches(e['artist'], sp['artists']):
                 continue
             if clean and sp.get('explicit'):
                 continue
             if any(_fold(a) in avoid for a in sp['artists']):
                 continue
             seen.add(sp['id'])
+            seen_keys.add(key)
             tracks.append({
                 'id': sp['id'],
                 'title': sp['title'],
                 'artists': sp['artists'],
                 'image': sp['image'],
                 'reason': e['reason'],
+                **({'isrc': sp.get('isrc'), 'explicit': bool(sp.get('explicit'))} if 'isrc' in sp else {}),
             })
             if len(tracks) == per_move:
                 break
@@ -300,16 +316,37 @@ def select_tracks(
     return result
 
 
-async def fill_moves(moves, exclude, per_move, avoid_artists=(), clean=False, validate=None):
+async def deezer_validate(batch: list[dict], fallback: bool = False) -> tuple[list[dict], list[dict]]:
+    """fill_moves' validator since Q2: check picks against Deezer, not Spotify,
+    so a suggestion round spends no Spotify search quota (plan Q2)."""
+    found = await deezer.find_many(batch)
+    matched, failed = [], []
+    for e in batch:
+        song = found.get((e['title'], e['artist']))
+        if song:
+            matched.append({**e, 'spotify': {
+                'id': song['isrc'] or f"dz:{song['deezer_id']}",
+                'isrc': song['isrc'],
+                'title': song['title'],
+                'artists': song['artists'],
+                'image': song['image'],
+                'explicit': song['explicit'],
+            }})
+        else:
+            failed.append(e)
+    return matched, failed
+
+
+async def fill_moves(moves, exclude, per_move, avoid_artists=(), clean=False, validate=None, exclude_keys=frozenset()):
     """Validate only as many picks as each move needs. The prompt over-asks
-    (_OVERASK spares per move), but most picks match, so look up the first
+    (_OVERASK spares per move), but most picks match, so check the first
     `per_move` of each move and go further down a move's list only to replace
-    a pick that failed a check. Roughly halves Spotify searches per round,
-    which spend a small daily quota (tracker e2df2d)."""
-    validate = validate or validate_songs
+    a pick that failed a check. Since Q2 the checks are Deezer's, so a round
+    spends no Spotify search quota at all (tracker e2df2d)."""
+    validate = validate or deezer_validate
     matched, tried = [], set()
     while True:
-        result = select_tracks(moves, matched, exclude, per_move, avoid_artists, clean)
+        result = select_tracks(moves, matched, exclude, per_move, avoid_artists, clean, exclude_keys)
         have = {r['move']: len(r['tracks']) for r in result}
         batch = []
         for move, entries in moves.items():
@@ -319,7 +356,6 @@ async def fill_moves(moves, exclude, per_move, avoid_artists=(), clean=False, va
         if not batch:
             return result
         tried.update((e['title'], e['artist']) for e in batch)
-        # No title-only fallback: select_tracks drops other artists' songs anyway.
         found, _ = await validate(batch, fallback=False)
         matched += found
 
@@ -386,10 +422,14 @@ async def suggest(
         if not moves:
             return {'moves': [], 'tags': tags, 'error': _CUT_OFF}
 
-    exclude = {r.id for r in [body.now_playing, *all_recent, *body.upcoming, *body.avoid_tracks] if r.id}
-    result = await fill_moves(moves, exclude, body.per_move, body.avoid_artists, body.clean)
+    # Played, queued and avoided songs are excluded by ISRC, or by title+artist
+    # for refs without one (picks no longer have Spotify ids to compare).
+    refs = [body.now_playing, *all_recent, *body.upcoming, *body.avoid_tracks]
+    exclude = {r.isrc for r in refs if r.isrc}
+    exclude_keys = {song_key(r.title, r.artist) for r in refs if r.title}
+    result = await fill_moves(moves, exclude, body.per_move, body.avoid_artists, body.clean, exclude_keys=exclude_keys)
     return {
         'moves': result,
         'tags': tags,
-        'error': None if result else 'No suggestions could be matched on Spotify.',
+        'error': None if result else 'None of the suggestions could be found this time. Try again.',
     }

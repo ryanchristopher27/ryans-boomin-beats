@@ -69,6 +69,25 @@ struct SyncTests {
     }
 }
 
+/// Plan Q2: picks come from Deezer keyed by ISRC; queue items keep the Spotify id plus the ISRC.
+struct ISRCTests {
+    @Test func aPickDecodesItsISRCAndExplicitFlag() throws {
+        let body = #"{"moves":[{"move":"hold","tracks":[{"id":"USUM71210785","isrc":"USUM71210785","explicit":true,"title":"Money Trees","artists":["Kendrick Lamar"],"image":"","reason":"r"}]}],"error":null}"#
+        let pick = try #require(try JSONDecoder().decode(MoveSuggestions.self, from: Data(body.utf8)).moves.first?.tracks.first)
+        #expect(pick.isrc == "USUM71210785")
+        #expect(pick.explicit == true)
+    }
+
+    @Test func aQueuedISRCSyncsUnderTheServersFieldName() throws {
+        var doc = SyncDoc()
+        doc.queue.upcoming = [QueueItem(trackID: "sp1", title: "t", artists: [], image: "", isrc: "USUM71210785")]
+        let json = try #require(try JSONSerialization.jsonObject(with: SyncDoc.encoder.encode(doc)) as? [String: Any])
+        let item = try #require(((json["queue"] as? [String: Any])?["upcoming"] as? [[String: Any]])?.first)
+        #expect(item["isrc"] as? String == "USUM71210785")
+        #expect(item["trackID"] as? String == "sp1")
+    }
+}
+
 private extension QueueItem {
     var asTrackStub: Track {
         Track(id: trackID, title: title, artists: artists, image: image, album: "",

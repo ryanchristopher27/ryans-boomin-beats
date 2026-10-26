@@ -15,6 +15,8 @@ struct QueueItem: Codable, Identifiable, Equatable {
     /// Added by Autofill/Driver rather than the host (DJ4). Optional so queues
     /// saved before DJ4 still decode — synthesized Codable ignores defaults.
     var addedByDJ: Bool?
+    /// Provider-neutral identity (plan Q2); optional, so older queues decode.
+    var isrc: String?
 
     var artistLine: String { artists.joined(separator: ", ") }
     var imageURL: URL? { URL(string: image) }
@@ -28,6 +30,7 @@ struct GuestRequest: Codable, Identifiable, Equatable {
     let title: String
     let artists: [String]
     let image: String
+    var isrc: String?
 
     var artistLine: String { artists.joined(separator: ", ") }
     var imageURL: URL? { URL(string: image) }
@@ -117,13 +120,48 @@ final class QueueStore {
     /// Skip it where it is and re-add a fresh copy at the end of Up Next.
     func playLater(_ item: QueueItem) async {
         markSkip(item)
-        upcoming.append(QueueItem(trackID: item.trackID, title: item.title, artists: item.artists, image: item.image))
+        upcoming.append(QueueItem(trackID: item.trackID, title: item.title, artists: item.artists, image: item.image, isrc: item.isrc))
         await topUp(to: Self.foregroundDepth)
     }
 
     private func markSkip(_ item: QueueItem) {
         guard let i = sent.firstIndex(where: { $0.id == item.id }) else { return }
         sent[i].skipOnArrival = true
+    }
+
+    /// Every key a queued song answers to: picks are keyed by ISRC since Q2,
+    /// Spotify tracks by id.
+    var queuedKeys: Set<String> {
+        var keys = Set<String>()
+        for item in sent + upcoming {
+            keys.insert(item.trackID)
+            if let isrc = item.isrc { keys.insert(isrc) }
+        }
+        return keys
+    }
+
+    enum PickResult: Equatable {
+        case added, notOnSpotify, explicitOnly, unavailable
+    }
+
+    /// Queue a DJ pick (plan Q2). Picks come from Deezer with no Spotify id, so
+    /// this spends the one Spotify search a song costs: resolve by ISRC, then add.
+    func addPick(_ pick: MoveSuggestions.Pick, cleanOnly: Bool, addedByDJ: Bool = false) async -> PickResult {
+        await addSong(isrc: pick.isrc, title: pick.title, artists: pick.artists, cleanOnly: cleanOnly, addedByDJ: addedByDJ)
+    }
+
+    /// Queue any Deezer-sourced song (DJ picks, Add to Queue search; plan Q3).
+    func addSong(isrc: String?, title: String, artists: [String], cleanOnly: Bool, addedByDJ: Bool = false) async -> PickResult {
+        let body = ResolveRequest(songs: [.init(isrc: isrc, title: title, artist: artists.first ?? "")])
+        guard let response: ResolveResponse = try? await client.post("tracks/resolve/", body: body) else { return .unavailable }
+        guard let track = response.tracks.first ?? nil else { return .notOnSpotify }
+        // Deezer's copy can be clean while Spotify only has the explicit one.
+        if cleanOnly, track.explicit { return .explicitOnly }
+        var item = QueueItem(trackID: track.id, title: track.title, artists: track.artists, image: track.image,
+                             isrc: isrc ?? track.isrc)
+        if addedByDJ { item.addedByDJ = true }
+        await add(item)
+        return .added
     }
 
     // MARK: - Playback events
@@ -196,7 +234,7 @@ final class QueueStore {
         )
         requests += found.map { i in
             let t = queue[i]
-            return GuestRequest(trackID: t.id, title: t.title, artists: t.artists, image: t.image)
+            return GuestRequest(trackID: t.id, title: t.title, artists: t.artists, image: t.image, isrc: t.isrc)
         }
         lastQueueView = view
     }
@@ -211,7 +249,7 @@ final class QueueStore {
     func later(_ request: GuestRequest) async {
         requests.removeAll { $0.id == request.id }
         guestSkips.append(request.trackID)
-        upcoming.append(QueueItem(trackID: request.trackID, title: request.title, artists: request.artists, image: request.image))
+        upcoming.append(QueueItem(trackID: request.trackID, title: request.title, artists: request.artists, image: request.image, isrc: request.isrc))
         await topUp(to: Self.foregroundDepth)
     }
 
@@ -400,6 +438,20 @@ final class QueueStore {
 private struct QueueRequest: Encodable {
     let trackIDs: [String]
     enum CodingKeys: String, CodingKey { case trackIDs = "track_ids" }
+}
+
+private struct ResolveRequest: Encodable {
+    struct Song: Encodable {
+        let isrc: String?
+        let title: String
+        let artist: String
+    }
+    let songs: [Song]
+}
+
+/// POST /tracks/resolve/: a Spotify track per song, or null when it isn't there.
+private struct ResolveResponse: Decodable {
+    let tracks: [Track?]
 }
 
 private struct QueueResult: Decodable {

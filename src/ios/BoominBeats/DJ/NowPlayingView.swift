@@ -5,7 +5,13 @@ struct NowPlayingView: View {
     @Environment(QueueStore.self) private var queue: QueueStore?
     @Environment(SuggestionStore.self) private var suggestions: SuggestionStore?
     @Environment(DJSettings.self) private var settings
-    @State private var queued: Set<String> = []
+    /// Per-pick result of tapping + (plan Q2: a pick is looked up on Spotify then).
+    @State private var pickStatus: [String: PickStatus] = [:]
+
+    enum PickStatus: Equatable {
+        case adding
+        case done(QueueStore.PickResult)
+    }
     @State private var editingDestination = false
     @State private var destinationDraft = ""
 
@@ -235,14 +241,18 @@ struct NowPlayingView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(pick.title).lineLimit(1)
                 Text(pick.artistLine).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                Text(pick.reason).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                if let miss = missText(pick) {
+                    Text(miss).font(.caption2).foregroundStyle(.orange)
+                } else {
+                    Text(pick.reason).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                }
             }
             Spacer()
             // A visible menu rather than a long-press: discoverable for a host
             // mid-party, and drivable from the Simulator.
             Menu {
                 Button("Never suggest this song", systemImage: "nosign") {
-                    settings.avoid(AvoidedTrack(id: pick.id, title: pick.title, artist: pick.artists.first ?? ""))
+                    settings.avoid(AvoidedTrack(id: pick.id, title: pick.title, artist: pick.artists.first ?? "", isrc: pick.isrc))
                     refresh(track)
                 }
                 if let artist = pick.artists.first {
@@ -255,14 +265,40 @@ struct NowPlayingView: View {
                 Image(systemName: "ellipsis.circle").font(.title2).foregroundStyle(.secondary)
             }
             .accessibilityLabel("More options for \(pick.title)")
+            pickButton(pick)
+        }
+    }
+
+    @ViewBuilder
+    private func pickButton(_ pick: MoveSuggestions.Pick) -> some View {
+        let status = pickStatus[pick.id]
+        let queued = status == .done(.added) || (queue?.queuedKeys.contains(pick.id) ?? false)
+        if status == .adding {
+            ProgressView()
+                .frame(width: 28, height: 28)
+                .accessibilityLabel("Adding \(pick.title)")
+        } else {
             Button {
-                queued.insert(pick.id)
-                Task { await queue?.add(pick.queueItem) }
+                pickStatus[pick.id] = .adding
+                Task {
+                    let result = await queue?.addPick(pick, cleanOnly: settings.cleanOnly) ?? .unavailable
+                    pickStatus[pick.id] = .done(result)
+                }
             } label: {
-                Image(systemName: queued.contains(pick.id) ? "checkmark.circle.fill" : "plus.circle")
+                Image(systemName: queued ? "checkmark.circle.fill" : "plus.circle")
                     .font(.title2)
             }
-            .disabled(queued.contains(pick.id))
+            .disabled(queued || status == .done(.notOnSpotify) || status == .done(.explicitOnly))
+            .accessibilityLabel(queued ? "\(pick.title) is queued" : "Queue \(pick.title)")
+        }
+    }
+
+    private func missText(_ pick: MoveSuggestions.Pick) -> String? {
+        switch pickStatus[pick.id] {
+        case .done(.notOnSpotify): return "Not on Spotify"
+        case .done(.explicitOnly): return "Explicit version only"
+        case .done(.unavailable): return "Couldn't add that right now"
+        default: return nil
         }
     }
 

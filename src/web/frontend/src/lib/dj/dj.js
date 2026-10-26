@@ -276,6 +276,27 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		await topUp(depth);
 	}
 
+	/**
+	 * Queue a DJ pick (plan Q2). Picks come from Deezer with no Spotify id, so
+	 * this spends the one Spotify search a song costs: resolve by ISRC, then add.
+	 * @returns {Promise<{ok: true} | {ok: false, reason: 'not_on_spotify' | 'explicit' | 'unavailable'}>}
+	 */
+	async function addPick(pick, extra = {}) {
+		let r;
+		try {
+			r = await request('POST', 'tracks/resolve/', { json: { songs: [{ isrc: pick.isrc ?? null, title: pick.title, artist: pick.artists?.[0] ?? '' }] } });
+		} catch {
+			return { ok: false, reason: 'unavailable' };
+		}
+		if (r.status !== 200) return { ok: false, reason: 'unavailable' };
+		const track = r.data?.tracks?.[0];
+		if (!track) return { ok: false, reason: 'not_on_spotify' };
+		// Deezer's copy can be clean while Spotify only has the explicit one.
+		if (d().options.clean && track.explicit) return { ok: false, reason: 'explicit' };
+		await add({ id: track.id, title: track.title, artists: track.artists, image: track.image, isrc: pick.isrc ?? track.isrc }, extra);
+		return { ok: true };
+	}
+
 	function moveUpcoming(from, to) {
 		edit((x) => {
 			const [it] = x.queue.upcoming.splice(from, 1);
@@ -467,7 +488,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 
 	function avoidTrack(t) {
 		if (d().options.avoidTracks.some((a) => a.id === t.id)) return;
-		edit((x) => x.options.avoidTracks.push({ id: t.id, title: t.title, artist: t.artists?.[0] ?? t.artist ?? '' }));
+		edit((x) => x.options.avoidTracks.push({ id: t.id, title: t.title, artist: t.artists?.[0] ?? t.artist ?? '', ...(t.isrc ? { isrc: t.isrc } : {}) }));
 	}
 
 	function avoidArtist(name) {
@@ -580,7 +601,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		else loadSuggestions(track);
 	}
 
-	const ref = (t) => ({ id: t.trackID ?? t.id ?? '', title: t.title, artist: t.artists?.[0] ?? t.artist ?? '' });
+	const ref = (t) => ({ id: t.trackID ?? t.id ?? '', isrc: t.isrc ?? null, title: t.title, artist: t.artists?.[0] ?? t.artist ?? '' });
 
 	async function loadSuggestions(track = get(player).state?.track, force = false) {
 		if (!track) return;
@@ -642,10 +663,11 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		const target = L.AUTOPILOT_TARGET[o.mode] ?? 0;
 		const s = get(suggestions);
 		if (!drives() || target === 0 || aheadCount() >= target || s.status !== 'loaded') return;
-		const queued = new Set([...d().queue.sent, ...d().queue.upcoming].map((i) => i.trackID));
+		const queued = L.queuedKeys([...d().queue.sent, ...d().queue.upcoming]);
 		const lead = o.goal ? (o.goal.kind === 'drift' ? 'drift' : 'toward') : null;
 		const candidates = L.autopilotCandidates(s.moves, o.adventurousness, queued, lead);
-		while (aheadCount() < target && candidates.length) await add(candidates.shift(), { addedByDJ: true });
+		// Each add is one Spotify lookup; a miss just moves on to the next candidate.
+		while (aheadCount() < target && candidates.length) await addPick(candidates.shift(), { addedByDJ: true });
 	}
 
 	// --- Lifecycle ---
@@ -716,6 +738,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		dismissNotice: () => setSync({ notice: null }),
 		// queue
 		add,
+		addPick,
 		moveUpcoming,
 		removeUpcoming,
 		restoreUpcoming,

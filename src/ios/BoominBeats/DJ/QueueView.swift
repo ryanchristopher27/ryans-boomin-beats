@@ -144,24 +144,73 @@ struct QueueView: View {
     }
 }
 
-/// Decodes GET /search/ (routers/search.py).
+/// Decodes GET /search/ (routers/search.py). Deezer results since Q3: `id` is
+/// an ISRC key, not a Spotify id, so adding one resolves it first.
 private struct SearchResponse: Decodable {
     struct Result: Decodable, Identifiable {
         let id: String
         let title: String
         let artists: [String]
         let image: String
+        var isrc: String?
     }
     let tracks: [Result]
 }
 
 private struct AddTrackView: View {
+    private func row(_ result: SearchResponse.Result) -> some View {
+        let state = status[result.id]
+        let isAdding = adding.contains(result.id)
+        let note = Self.note(state)
+        return Button {
+            add(result)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(result.title).foregroundStyle(.primary).lineLimit(1)
+                    Text(note ?? result.artists.joined(separator: ", "))
+                        .font(.caption)
+                        .foregroundStyle(note == nil ? Color.secondary : Color.orange)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if isAdding {
+                    ProgressView()
+                } else {
+                    Image(systemName: state == .added ? "checkmark.circle.fill" : "plus.circle")
+                }
+            }
+        }
+        .disabled(isAdding || state == .added || state == .notOnSpotify)
+    }
+
+    private func add(_ result: SearchResponse.Result) {
+        adding.insert(result.id)
+        Task {
+            let r = await queue?.addSong(isrc: result.isrc, title: result.title, artists: result.artists,
+                                         cleanOnly: settings.cleanOnly) ?? .unavailable
+            status[result.id] = r
+            adding.remove(result.id)
+        }
+    }
+
+    static func note(_ result: QueueStore.PickResult?) -> String? {
+        switch result {
+        case .notOnSpotify: return "Not on Spotify"
+        case .explicitOnly: return "Explicit version only"
+        case .unavailable: return "Couldn't add that right now"
+        default: return nil
+        }
+    }
+
     @Environment(SpotifySession.self) private var session
     @Environment(QueueStore.self) private var queue: QueueStore?
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var results: [SearchResponse.Result] = []
-    @State private var added: Set<String> = []
+    @Environment(DJSettings.self) private var settings
+    @State private var status: [String: QueueStore.PickResult] = [:]
+    @State private var adding: Set<String> = []
     @State private var error: String?
 
     var body: some View {
@@ -171,23 +220,7 @@ private struct AddTrackView: View {
                     Text(error).font(.footnote).foregroundStyle(.red)
                 }
                 ForEach(results) { result in
-                    Button {
-                        added.insert(result.id)
-                        let item = QueueItem(trackID: result.id, title: result.title, artists: result.artists, image: result.image)
-                        Task { await queue?.add(item) }
-                    } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(result.title).foregroundStyle(.primary).lineLimit(1)
-                                Text(result.artists.joined(separator: ", "))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            Image(systemName: added.contains(result.id) ? "checkmark.circle.fill" : "plus.circle")
-                        }
-                    }
+                    row(result)
                 }
             }
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Song name")

@@ -62,9 +62,11 @@ struct Track: Decodable, Identifiable {
     let explicit: Bool
     let trackURL: String
     let releaseDate: String?
+    /// Provider-neutral identity (plan Q1); present on player and recent tracks.
+    var isrc: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, title, artists, image, album, explicit
+        case id, title, artists, image, album, explicit, isrc
         case durationMs = "duration_ms"
         case trackURL = "track_url"
         case releaseDate = "release_date"

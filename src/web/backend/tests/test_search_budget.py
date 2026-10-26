@@ -15,7 +15,7 @@ from unittest import mock
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from routers.dj import fill_moves  # noqa: E402
-from services import spotify_validator, track_cache  # noqa: E402
+from services import track_cache  # noqa: E402
 
 
 def entry(title, artist='A'):
@@ -63,61 +63,38 @@ class EarlyStop(unittest.TestCase):
         self.assertEqual(result, [])
 
 
-class SharedCache(unittest.TestCase):
-    def setUp(self):
-        spotify_validator._CACHE.clear()
-        self.searches = []
-        self.stored = {}
-        patches = [
-            mock.patch.object(spotify_validator, 'app_client', return_value=object()),
-            mock.patch.object(spotify_validator, '_search_one', side_effect=self.fake_search),
-            mock.patch.object(track_cache, 'get_many', side_effect=lambda keys: {k: v for k, v in self.stored.items() if k in keys}),
-            mock.patch.object(track_cache, 'put_many', side_effect=self.stored.update),
-        ]
-        for p in patches:
-            p.start()
-            self.addCleanup(p.stop)
+class DeezerChecks(unittest.TestCase):
+    """Q2: picks are checked on Deezer; played/queued songs drop by ISRC or title."""
 
-    def fake_search(self, spotify, title, artist, fallback):
-        self.searches.append(title)
-        result = track(title) if title != 'nope' else None
-        spotify_validator._CACHE[(title.casefold(), artist.casefold(), fallback)] = result
-        return result
+    def run_round(self, moves, found, exclude=frozenset(), exclude_keys=frozenset(), clean=False):
+        from routers import dj
+        from services import deezer
 
-    def test_a_second_instance_reads_instead_of_searching(self):
-        batch = [entry('a'), entry('b'), entry('nope')]
-        matched, failed = asyncio.run(spotify_validator.validate_songs(batch, fallback=False))
-        self.assertEqual((len(matched), len(failed)), (2, 1))
-        self.assertEqual(len(self.searches), 3)
-        self.assertEqual(len(self.stored), 3)  # misses are shared too
+        async def fake_find_many(batch):
+            return {(e['title'], e['artist']): found.get(e['title']) for e in batch}
+        with mock.patch.object(deezer, 'find_many', side_effect=fake_find_many):
+            return asyncio.run(dj.fill_moves(moves, set(exclude), 2, clean=clean, exclude_keys=set(exclude_keys)))
 
-        spotify_validator._CACHE.clear()  # a fresh serverless instance
-        matched, failed = asyncio.run(spotify_validator.validate_songs(batch, fallback=False))
-        self.assertEqual((len(matched), len(failed)), (2, 1))
-        self.assertEqual(len(self.searches), 3)  # no new searches
+    def song(self, title, isrc, explicit=False, artist='A'):
+        return {'deezer_id': 1, 'title': title, 'artists': [artist], 'image': 'img', 'explicit': explicit, 'isrc': isrc}
 
+    def test_picks_carry_isrc_and_no_spotify_id(self):
+        result = self.run_round({'hold': [entry('a'), entry('b')]}, {'a': self.song('a', 'USAAA0000001'), 'b': self.song('b', None)})
+        tracks = result[0]['tracks']
+        self.assertEqual([t['id'] for t in tracks], ['USAAA0000001', 'dz:1'])
+        self.assertEqual(tracks[0]['isrc'], 'USAAA0000001')
 
-class Concurrency(unittest.TestCase):
-    def test_at_most_four_searches_in_flight(self):
-        spotify_validator._CACHE.clear()
-        lock, state = threading.Lock(), {'now': 0, 'peak': 0}
+    def test_played_songs_are_excluded_by_isrc_or_title(self):
+        from routers.dj import song_key
+        moves = {'hold': [entry('a'), entry('b'), entry('c')]}
+        found = {t: self.song(t, f'USAAA000000{i}') for i, t in enumerate('abc')}
+        result = self.run_round(moves, found, exclude={'USAAA0000000'}, exclude_keys={song_key('b', 'A')})
+        self.assertEqual([t['title'] for t in result[0]['tracks']], ['c'])
 
-        def slow_search(spotify, title, artist, fallback):
-            with lock:
-                state['now'] += 1
-                state['peak'] = max(state['peak'], state['now'])
-            time.sleep(0.05)
-            with lock:
-                state['now'] -= 1
-            return track(title)
-
-        with mock.patch.object(spotify_validator, 'app_client', return_value=object()), \
-                mock.patch.object(spotify_validator, '_search_one', side_effect=slow_search), \
-                mock.patch.object(track_cache, 'get_many', return_value={}), \
-                mock.patch.object(track_cache, 'put_many'):
-            asyncio.run(spotify_validator.validate_songs([entry(f's{i}') for i in range(12)], fallback=False))
-        self.assertLessEqual(state['peak'], 4)
-        self.assertGreater(state['peak'], 1)
+    def test_clean_uses_deezers_explicit_flag(self):
+        found = {'a': self.song('a', 'USAAA0000001', explicit=True), 'b': self.song('b', 'USAAA0000002')}
+        result = self.run_round({'hold': [entry('a'), entry('b')]}, found, clean=True)
+        self.assertEqual([t['title'] for t in result[0]['tracks']], ['b'])
 
 
 class Keys(unittest.TestCase):
