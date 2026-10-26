@@ -32,6 +32,16 @@ def available() -> bool:
 
 
 _sandbox: str | None = None
+# Each call is a whole CLI process; a burst (several tabs, a profile plus a
+# suggestion round) would otherwise spawn one per request (review S3).
+_gate: asyncio.Semaphore | None = None
+
+
+def _semaphore() -> asyncio.Semaphore:
+    global _gate
+    if _gate is None:
+        _gate = asyncio.Semaphore(2)
+    return _gate
 
 
 def _cwd() -> str:
@@ -65,6 +75,11 @@ def parse_result(code: int, out: str, err: str) -> str:
 async def run(prompt: str, system_prompt: str) -> str:
     if not available():
         raise ClaudeCodeError('Your Claude Code only works when the backend runs on your own Mac.')
+    async with _semaphore():
+        return await _run(prompt, system_prompt)
+
+
+async def _run(prompt: str, system_prompt: str) -> str:
     proc = await asyncio.create_subprocess_exec(
         'claude', '-p', '--output-format', 'json',
         '--tools', '', '--strict-mcp-config', '--setting-sources', 'project',

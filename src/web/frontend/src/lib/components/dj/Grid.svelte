@@ -4,7 +4,7 @@
 	// node to gridstack (`makeWidget`); removing un-registers it first.
 	import { onDestroy, onMount, tick } from 'svelte';
 	import 'gridstack/dist/gridstack.min.css';
-	import { COLUMNS, WIDGETS } from '$lib/dj/layout.js';
+	import { COLUMNS, WIDGETS, completeSaved, nudgeBox } from '$lib/dj/layout.js';
 
 	export let items = [];
 	export let editing = false;
@@ -60,14 +60,7 @@
 	/** Positions as 12-column coordinates, whatever the current breakpoint. */
 	export function save() {
 		const saved = /** @type {any[]} */ (grid.save(false, false, undefined, COLUMNS));
-		const byId = new Map(items.map((i) => [i.id, i]));
-		// A widget added this session can come back without a size; take it from the live node.
-		const live = new Map(grid.engine.nodes.map((n) => [n.id, n]));
-		return saved.map(({ id, x, y, w, h }) => {
-			const item = byId.get(id);
-			const node = live.get(id);
-			return { ...item, x: x ?? 0, y: y ?? 0, w: w ?? node?.w ?? WIDGETS[item.type].w, h: h ?? node?.h ?? WIDGETS[item.type].h };
-		});
+		return completeSaved(saved, items, new Map(grid.engine.nodes.map((n) => [n.id, n])));
 	}
 
 	export async function add(item) {
@@ -82,12 +75,7 @@
 	export function nudge(id, dx, dy, dw, dh) {
 		const node = grid.engine.nodes.find((n) => n.id === id);
 		if (!node) return;
-		const cols = grid.getColumn();
-		const w = Math.max(node.minW ?? 1, Math.min(cols, node.w + dw));
-		const h = Math.max(node.minH ?? 1, node.h + dh);
-		const x = Math.max(0, Math.min(cols - w, node.x + dx));
-		const y = Math.max(0, node.y + dy);
-		grid.update(node.el, { x, y, w, h });
+		grid.update(node.el, nudgeBox(node, dx, dy, dw, dh, grid.getColumn()));
 		return grid.engine.nodes.find((n) => n.id === id);
 	}
 

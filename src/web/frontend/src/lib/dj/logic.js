@@ -113,6 +113,19 @@ export function emptyDoc() {
 	};
 }
 
+/** A stored doc on top of the defaults, section by section, so a doc saved by an
+ * older version that lacks a field still has every array the engine reads (review S2). */
+export function withDefaults(stored) {
+	const e = emptyDoc();
+	if (!stored || typeof stored !== 'object') return e;
+	return {
+		queue: { ...e.queue, ...(stored.queue ?? {}) },
+		options: { ...e.options, ...(stored.options ?? {}) },
+		feedback: { ...e.feedback, ...(stored.feedback ?? {}) },
+		recent: Array.isArray(stored.recent) ? stored.recent : []
+	};
+}
+
 /** Every syncable field, as [section, key] (`recent` is top level). */
 /** @param {string | null} section @param {string[]} keys @returns {[string | null, string][]} */
 const fields = (section, keys) => keys.map((k) => [section, k]);

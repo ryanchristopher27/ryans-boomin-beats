@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { COLUMNS, PRESETS, WIDGETS, addable, itemsFor, loadLayout } from './layout.js';
+import { COLUMNS, PRESETS, WIDGETS, addable, completeSaved, itemsFor, loadLayout, nudgeBox } from './layout.js';
 
 describe('layout', () => {
 	test('presets fit the grid and respect minimum sizes', () => {
@@ -25,6 +25,19 @@ describe('layout', () => {
 		expect(saved).toEqual({ preset: 'board', custom });
 		expect(itemsFor(saved)).toEqual(PRESETS.board.items);
 		expect(itemsFor({ ...saved, preset: 'custom' })).toEqual(custom);
+	});
+	test('a widget added this session saves with a size (W2 bug)', () => {
+		const items = [{ id: 'requests', type: 'requests', x: 0, y: 0, w: 3, h: 4 }];
+		const saved = [{ id: 'requests', x: 0, y: 15 }]; // gridstack left w/h out
+		expect(completeSaved(saved, items, new Map([['requests', { w: 4, h: 5 }]]))[0]).toMatchObject({ w: 4, h: 5, y: 15 });
+		expect(completeSaved(saved, items)[0]).toMatchObject({ w: WIDGETS.requests.w, h: WIDGETS.requests.h });
+	});
+	test('keyboard nudges stay on the grid and above minimums', () => {
+		const box = { x: 9, y: 0, w: 3, h: 4, minW: 3, minH: 3 };
+		expect(nudgeBox(box, 1, 0, 0, 0, 12)).toMatchObject({ x: 9 }); // already at the right edge
+		expect(nudgeBox(box, 0, -1, 0, 0, 12)).toMatchObject({ y: 0 }); // already at the top
+		expect(nudgeBox(box, 0, 0, -1, -2, 12)).toMatchObject({ w: 3, h: 3 }); // minimums hold
+		expect(nudgeBox(box, 0, 0, 2, 0, 12)).toMatchObject({ w: 5, x: 7 }); // grows inward
 	});
 	test('the Add widget menu offers only what is missing', () => {
 		const ids = addable(PRESETS.focus.items).map((a) => a.id);

@@ -145,14 +145,24 @@ final class DJSync {
         guard !isSyncing else { return }
         isSyncing = true
         defer { isSyncing = false }
+        let before = snapshot()
         guard let (code, data) = try? await client.raw("GET", "dj/state"), code == 200,
               let env = try? SyncDoc.decoder.decode(SyncEnvelope.self, from: data) else { return }
         guard let server = env.state else { return }
-        if base == nil, !snapshot().isEmpty, server != snapshot() {
+        if base == nil, !before.isEmpty, server != before {
             notice = "Using the queue from your other device."
         }
+        // An edit that landed while the GET was in flight is kept on top of the
+        // server's copy and pushed, not overwritten (web review W2).
+        let current = snapshot()
+        let editedMeanwhile = base != nil && current != before
         adopt(server, version: env.version)
-        apply(server)
+        if editedMeanwhile {
+            apply(SyncDoc.merge(base: before, local: current, server: server))
+            localChanged()
+        } else {
+            apply(server)
+        }
         setPrimary(env.primary)
         status = .synced
     }

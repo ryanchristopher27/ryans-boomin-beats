@@ -246,26 +246,40 @@ as long as the page stays open. That is exactly the "host from a laptop all nigh
 ### Critical
 | # | Location | Issue | Recommendation | Status |
 |---|---|---|---|---|
-| C1 | `lib/dj/dj.js` (device id in localStorage) | Two tabs in one browser share the same `dj_device_id`, so **both** think they're the primary. Both send the same Up next track to Spotify (a double-queue). Each then sees the other's sends as guest requests, breaking the plan's "exactly one device drives" goal. Opening a second tab (DJ page + Explore) is enough. | Elect one driving tab per browser with the Web Locks API (`navigator.locks.request('boomin-beats-dj-driver', …)`, held until the tab closes). Driving actions check `isPrimary && tabLeader`; the next tab takes over when the leader closes. | Open |
-| C2 | `lib/spotifyAuth.js`, `routes/+layout.svelte` | The Spotify token is only refreshed on page load. A DJ page left open goes stale about 1 hour into a party, and the engine then 401s on every poll: no playback state, no top-ups. | Re-hydrate on a timer, with a margin before expiry (e.g. every 60s, refreshing within 2 min of `expires_at`), and also as soon as the engine sees a 401. | Open |
+| C1 | `lib/dj/dj.js` (device id in localStorage) | Two tabs in one browser share the same `dj_device_id`, so **both** think they're the primary. Both send the same Up next track to Spotify (a double-queue). Each then sees the other's sends as guest requests, breaking the plan's "exactly one device drives" goal. Opening a second tab (DJ page + Explore) is enough. | Elect one driving tab per browser with the Web Locks API (`navigator.locks.request('boomin-beats-dj-driver', …)`, held until the tab closes). Driving actions check `isPrimary && tabLeader`; the next tab takes over when the leader closes. | Fixed |
+| C2 | `lib/spotifyAuth.js`, `routes/+layout.svelte` | The Spotify token is only refreshed on page load. A DJ page left open goes stale about 1 hour into a party, and the engine then 401s on every poll: no playback state, no top-ups. | Re-hydrate on a timer, with a margin before expiry (e.g. every 60s, refreshing within 2 min of `expires_at`), and also as soon as the engine sees a 401. | Fixed |
 
 ### Warning
 | # | Location | Issue | Recommendation | Status |
 |---|---|---|---|---|
-| W1 | `components/dj/SongProfile.svelte` (`$: load(key, song)`) | Re-runs on every player poll, because `song` is a new object each time. While a profile is loading (≈16s with Claude Code), each poll starts **another** `/song/profile/` call, so about 8 LLM + Last.fm calls per song. | Skip `load` when the key is unchanged (track a `loadingKey`). | Open |
-| W2 | `lib/dj/dj.js` `pull()` (and iOS `DJSync.pull`) | A local edit made while the GET is in flight is overwritten by `apply(server)` and never pushed, because doc == base afterwards. Small window, but the edit is silently lost. | Snapshot the doc before the GET. If it changed by the time the response lands, apply `merge(snapshot, current, server)` and push. | Open |
-| W3 | `lib/dj/dj.js` `push()` | Only 200 and 409 are handled. A 422 (client/server schema drift) or a persistent 5xx drops every push silently, and the UI still says "synced". | Set `sync.status = 'error'` with a short message on other statuses, and stop claiming synced. | Open |
-| W4 | `routes/+layout.svelte` | The engine starts when a token appears but never stops. After sign-out it keeps polling and 401s every few seconds. | `$: $access_token ? dj.start() : dj.stop()` (client only). | Open |
+| W1 | `components/dj/SongProfile.svelte` (`$: load(key, song)`) | Re-runs on every player poll, because `song` is a new object each time. While a profile is loading (≈16s with Claude Code), each poll starts **another** `/song/profile/` call, so about 8 LLM + Last.fm calls per song. | Skip `load` when the key is unchanged (track a `loadingKey`). | Fixed |
+| W2 | `lib/dj/dj.js` `pull()` (and iOS `DJSync.pull`) | A local edit made while the GET is in flight is overwritten by `apply(server)` and never pushed, because doc == base afterwards. Small window, but the edit is silently lost. | Snapshot the doc before the GET. If it changed by the time the response lands, apply `merge(snapshot, current, server)` and push. | Fixed |
+| W3 | `lib/dj/dj.js` `push()` | Only 200 and 409 are handled. A 422 (client/server schema drift) or a persistent 5xx drops every push silently, and the UI still says "synced". | Set `sync.status = 'error'` with a short message on other statuses, and stop claiming synced. | Fixed |
+| W4 | `routes/+layout.svelte` | The engine starts when a token appears but never stops. After sign-out it keeps polling and 401s every few seconds. | `$: $access_token ? dj.start() : dj.stop()` (client only). | Fixed |
 
 ### Suggestion
 | # | Location | Issue | Recommendation | Status |
 |---|---|---|---|---|
-| S1 | `components/dj/Grid.svelte` | `save`/`add`/`nudge` have no automated test. Both W2 grid bugs (lost size on add, inclusive breakpoints) were found only by hand. | Add a jsdom vitest for the wrapper, or a Playwright smoke test of Edit layout → Done → reload. | Open |
-| S2 | `lib/dj/dj.js` (doc hydration) | `{...emptyDoc(), ...stored}` is a shallow merge, so a stored doc from an older shape can lack nested fields (e.g. `options.avoidArtists`) and crash `.some`. | Deep-merge the stored doc onto `emptyDoc()` section by section. | Open |
-| S3 | `services/claude_code.py` | No limit on concurrent `claude` processes. A burst (several tabs, profile + suggest) spawns one each. | A module-level `asyncio.Semaphore(2)` around `run`. | Open |
+| S1 | `components/dj/Grid.svelte` | `save`/`add`/`nudge` have no automated test. Both W2 grid bugs (lost size on add, inclusive breakpoints) were found only by hand. | Add a jsdom vitest for the wrapper, or a Playwright smoke test of Edit layout → Done → reload. | Fixed |
+| S2 | `lib/dj/dj.js` (doc hydration) | `{...emptyDoc(), ...stored}` is a shallow merge, so a stored doc from an older shape can lack nested fields (e.g. `options.avoidArtists`) and crash `.some`. | Deep-merge the stored doc onto `emptyDoc()` section by section. | Fixed |
+| S3 | `services/claude_code.py` | No limit on concurrent `claude` processes. A burst (several tabs, profile + suggest) spawns one each. | A module-level `asyncio.Semaphore(2)` around `run`. | Fixed |
 
 ## Resolved This Session
-- None yet. C1, C2 and W1 are bounded fixes, offered inline.
+All nine were fixed on 2026-10-25, each with a test:
+- **C1:** Web Locks elect one driving tab per browser (`drives() = isPrimary && tabLeader`); the
+  next tab takes over when the leader closes.
+- **C2:** the token is refreshed within 2 min of expiry, on a 60s timer and immediately after a
+  401.
+  - **Found while fixing it:** concurrent refreshes spent Spotify's rotating refresh token twice,
+    and the loser signed the user out. `hydrateToken` is now single-flight, and only
+    `invalid_grant` ends the session.
+- **W1:** Song profile loads once per song.
+- **W2:** `pull()` merges an edit made during the GET, on the web and in iOS `DJSync`.
+- **W3:** rejected pushes set `sync.status = 'error'`, shown in the banner.
+- **W4:** the engine stops on sign-out.
+- **S1:** the grid's save/nudge maths moved to the tested `completeSaved`/`nudgeBox`.
+- **S2:** `withDefaults` merges the stored doc section by section.
+- **S3:** at most 2 concurrent `claude` processes.
 
 ## Carried to /iterate
-- W2 (pull race, on web and iOS), W3, W4, S1–S3.
+- None.

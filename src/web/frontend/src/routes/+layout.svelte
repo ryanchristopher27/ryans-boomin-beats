@@ -15,11 +15,16 @@
 		if (!new URLSearchParams(window.location.search).has('code')) {
 			hydrateToken();
 		}
+		// Keep the Spotify token fresh while the page stays open (review C2);
+		// hydrateToken only refreshes within a couple of minutes of expiry.
+		const timer = setInterval(() => hydrateToken(), 60 * 1000);
+		return () => clearInterval(timer);
 	});
 
 	// The DJ engine runs app-wide once signed in, so a driving tab keeps
 	// driving (and the mini player stays live) on every page.
-	$: if ($access_token) getDJ()?.start();
+	// ...and stops on sign-out instead of polling with no token (review W4).
+	$: if (browser) $access_token ? getDJ()?.start() : getDJ()?.stop();
 </script>
 
 <div class="app" class:panel-open={$playlistsPanelOpen}>

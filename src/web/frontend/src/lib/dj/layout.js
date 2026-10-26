@@ -82,6 +82,26 @@ export function itemsFor({ preset, custom }) {
 	return structuredClone(preset === 'custom' && custom ? custom : PRESETS[preset]?.items ?? PRESETS.host.items);
 }
 
+/**
+ * gridstack's save() as layout items. A widget added this session can come back
+ * without a size (W2 bug), so fall back to the live node, then the type's default.
+ */
+export function completeSaved(saved, items, live = new Map()) {
+	const byId = new Map(items.map((i) => [i.id, i]));
+	return saved.map(({ id, x, y, w, h }) => {
+		const item = byId.get(id);
+		const node = live.get(id);
+		return { ...item, x: x ?? 0, y: y ?? 0, w: w ?? node?.w ?? WIDGETS[item.type].w, h: h ?? node?.h ?? WIDGETS[item.type].h };
+	});
+}
+
+/** Keyboard move/resize: shift a box by whole cells, kept on the grid and above its minimums. */
+export function nudgeBox(box, dx, dy, dw, dh, cols) {
+	const w = Math.max(box.minW ?? 1, Math.min(cols, box.w + dw));
+	const h = Math.max(box.minH ?? 1, box.h + dh);
+	return { x: Math.max(0, Math.min(cols - w, box.x + dx)), y: Math.max(0, box.y + dy), w, h };
+}
+
 /** Widgets not on the grid yet, for the Add widget menu. */
 export function addable(items) {
 	const ids = new Set(items.map((i) => i.id));

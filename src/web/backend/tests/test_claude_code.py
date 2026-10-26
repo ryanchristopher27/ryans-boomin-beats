@@ -66,5 +66,27 @@ class Envelope(unittest.TestCase):
         self.assertIn('/login', str(ctx.exception))
 
 
+class Concurrency(unittest.TestCase):
+    def test_at_most_two_cli_processes_at_once(self):
+        import asyncio
+        state = {'now': 0, 'peak': 0}
+
+        async def slow(prompt, system_prompt):
+            state['now'] += 1
+            state['peak'] = max(state['peak'], state['now'])
+            await asyncio.sleep(0.02)
+            state['now'] -= 1
+            return 'ok'
+
+        async def burst():
+            claude_code._gate = None  # a fresh semaphore on this event loop
+            await asyncio.gather(*[claude_code.run('p', 's') for _ in range(6)])
+
+        with mock.patch.object(claude_code, 'available', return_value=True), \
+                mock.patch.object(claude_code, '_run', side_effect=slow):
+            asyncio.run(burst())
+        self.assertEqual(state['peak'], 2)
+
+
 if __name__ == '__main__':
     unittest.main()

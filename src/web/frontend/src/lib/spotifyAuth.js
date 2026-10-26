@@ -88,23 +88,47 @@ export async function refreshAccessToken(refreshToken) {
  * Hydrate the access_token store from storage on app load, refreshing if
  * expired. Safe to call on every page. Returns true if a valid token is set.
  */
-export async function hydrateToken() {
+// Refresh this long before expiry, so a page left open (the DJ, all night)
+// never sends an expired token (review C2).
+const REFRESH_MARGIN_MS = 2 * 60 * 1000;
+
+let inflight = null;
+
+/**
+ * One refresh at a time: Spotify rotates refresh tokens, so two concurrent
+ * refreshes (page load, the keep-fresh timer, a 401) would spend the same token
+ * twice, and the loser's rejection used to sign the user out.
+ */
+export function hydrateToken({ force = false } = {}) {
+	inflight ??= hydrate(force).finally(() => (inflight = null));
+	return inflight;
+}
+
+async function hydrate(force) {
 	if (typeof localStorage === 'undefined') return false;
 	const stored = loadStoredToken();
 	if (!stored) return false;
 
-	if (Date.now() < stored.expiresAt) {
+	if (!force && Date.now() < stored.expiresAt - REFRESH_MARGIN_MS) {
 		access_token.set(stored.accessToken);
 		return true;
 	}
 
 	if (stored.refreshToken) {
-		const data = await refreshAccessToken(stored.refreshToken);
+		let data;
+		try {
+			data = await refreshAccessToken(stored.refreshToken);
+		} catch {
+			// Offline or Spotify unreachable: keep the session and try again later.
+			return false;
+		}
 		if (data.access_token) {
 			saveTokens(data);
 			access_token.set(data.access_token);
 			return true;
 		}
+		// Only a rejected refresh token ends the session; anything else is transient.
+		if (data.error !== 'invalid_grant') return false;
 	}
 
 	clearStoredTokens();

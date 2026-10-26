@@ -17,7 +17,13 @@
 	$: playing = $player.state?.track ?? null;
 	$: song = $selected ?? playing;
 	$: key = song ? `${song.title}::${song.artists?.[0] ?? ''}` : '';
-	$: load(key, song);
+	// Keyed on the song, not the object: the player poll hands over a new track
+	// object every few seconds, which would restart the load each time (review W1).
+	let requested = '';
+	$: if (key !== requested) {
+		requested = key;
+		load(key, song);
+	}
 
 	/** @type {{status: string, profile: any}} */
 	let state = { status: 'idle', profile: null };

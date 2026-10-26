@@ -48,8 +48,10 @@ function deviceLabel() {
  * @param {string} [deps.label]
  * @param {() => number} [deps.now]
  * @param {number} [deps.debounceMs]
+ * @param {(() => Promise<unknown>) | null} [deps.onUnauthorized] refresh the Spotify token after a 401
+ * @param {{request: (name: string, cb: () => Promise<unknown>) => unknown} | null} [deps.locks] Web Locks, to elect one driving tab per browser
  */
-export function createDJ({ request, hasLLM = () => true, storage = safeStorage(), label = deviceLabel(), now = () => Date.now(), debounceMs = 400 }) {
+export function createDJ({ request, hasLLM = () => true, storage = safeStorage(), label = deviceLabel(), now = () => Date.now(), debounceMs = 400, onUnauthorized = null, locks = /** @type {any} */ (globalThis.navigator)?.locks ?? null }) {
 	const load = (k) => {
 		try {
 			return JSON.parse(storage.get(k) ?? 'null');
@@ -62,16 +64,24 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	storage.set('dj_device_id', deviceID);
 
 	// --- Stores (what the UI renders) ---
-	const doc = writable({ ...L.emptyDoc(), ...(load('dj_doc') ?? {}) });
+	const doc = writable(L.withDefaults(load('dj_doc')));
 	doc.subscribe((d) => storage.set('dj_doc', JSON.stringify(d)));
 	/** @type {import('svelte/store').Writable<{state: any, message: string | null}>} */
 	const player = writable({ state: null, message: null });
 	// Start in the last known role, so a participant doesn't drive before its first poll.
 	let isPrimary = load('dj_is_primary') ?? true;
-	/** @type {import('svelte/store').Writable<{status: string, primary: any, notice: string | null, isPrimary: boolean, deviceID: string, label: string}>} */
-	const sync = writable({ status: 'unavailable', primary: null, notice: null, isPrimary, deviceID, label });
+	/** @type {import('svelte/store').Writable<{status: string, error: string | null, primary: any, notice: string | null, isPrimary: boolean, deviceID: string, label: string}>} */
+	const sync = writable({ status: 'unavailable', error: null, primary: null, notice: null, isPrimary, deviceID, label });
 	/** @type {import('svelte/store').Writable<{status: string, moves: any[], error: string | null}>} */
 	const suggestions = writable({ status: 'idle', moves: [], error: null });
+
+	// Tabs in one browser share a device id (localStorage), so without this every
+	// open tab would drive: double-queuing tracks and flagging each other's sends
+	// as guest requests (review C1). One tab holds the lock until it closes; the
+	// next waiting tab then takes over.
+	let tabLeader = !locks;
+	/** Whether this tab sends to Spotify: the primary device, and its leading tab. */
+	const drives = () => isPrimary && tabLeader;
 
 	const d = () => get(doc);
 	const setSync = (patch) => sync.update((s) => ({ ...s, ...patch }));
@@ -131,7 +141,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 			version = r.data.version;
 			base = local;
 			setPrimary(r.data.primary);
-			setSync({ status: 'synced' });
+			setSync({ status: 'synced', error: null });
 		} else if (r.status === 409) {
 			// Someone else saved first. Keep our changed fields on top of theirs.
 			const server = r.data.state ?? L.emptyDoc();
@@ -139,6 +149,9 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 			adopt(server, r.data.version);
 			apply(merged);
 			await push(attempt + 1);
+		} else {
+			// e.g. 422 (client/server schema drift) or sync down: don't claim "synced" (review W3).
+			setSync({ status: 'error', error: r.data?.detail ? String(r.data.detail).slice(0, 200) : `Sync failed (${r.status}).` });
 		}
 	}
 
@@ -157,15 +170,25 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		if (syncing) return;
 		syncing = true;
 		try {
+			const before = structuredClone(d());
 			const r = await request('GET', 'dj/state');
 			if (r.status !== 200 || !r.data.state) return;
-			if (!base && !L.isEmptyDoc(d()) && !L.docsEqual(r.data.state, d())) {
+			if (!base && !L.isEmptyDoc(before) && !L.docsEqual(r.data.state, before)) {
 				setSync({ notice: 'Using the queue from your other device.' });
 			}
+			const editedMeanwhile = base && !L.docsEqual(d(), before);
+			const local = structuredClone(d());
 			adopt(r.data.state, r.data.version);
 			setPrimary(r.data.primary);
-			setSync({ status: 'synced' });
-			await apply(r.data.state);
+			setSync({ status: 'synced', error: null });
+			if (editedMeanwhile) {
+				// An edit landed while the GET was in flight: keep it on top of the
+				// server's copy and push, instead of overwriting it (review W2).
+				await apply(L.merge(before, local, r.data.state));
+				changed();
+			} else {
+				await apply(r.data.state);
+			}
 		} catch {
 			/* next poll retries */
 		} finally {
@@ -326,7 +349,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 
 	/** Send tracks from Up Next until `n` non-skipped tracks are ahead in Spotify. Primary only. */
 	async function topUp(n) {
-		if (!isPrimary || toppingUp) return;
+		if (!drives() || toppingUp) return;
 		toppingUp = true;
 		try {
 			while (d().queue.sent.filter((s) => !s.skipOnArrival).length < n && d().queue.upcoming.length) {
@@ -357,7 +380,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	/** After every poll: act on a track change. Primary only. */
 	async function observeTrack(state) {
 		const trackID = state.track?.id;
-		if (!isPrimary || !trackID || trackID === lastTrackID) return;
+		if (!drives() || !trackID || trackID === lastTrackID) return;
 		lastTrackID = trackID;
 		// Guest skips first: after "Later" the guest's earlier copy is the one arriving.
 		const gi = d().queue.guestSkips.indexOf(trackID);
@@ -398,7 +421,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	/** On start / tab return: drop sent tracks that played meanwhile, using Spotify's queue. */
 	async function reconcile() {
 		const state = get(player).state;
-		if (!isPrimary || !state) return;
+		if (!drives() || !state) return;
 		lastTrackID = null;
 		await observeTrack(state);
 		const queue = await readQueue();
@@ -409,7 +432,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	}
 
 	async function pollRequests(smartShuffle) {
-		if (!isPrimary) return;
+		if (!drives()) return;
 		const queue = await readQueue();
 		if (queue) record(queue, smartShuffle);
 	}
@@ -475,6 +498,10 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		} catch {
 			r = { status: 0, data: null };
 		}
+		if (r.status === 401 && onUnauthorized) {
+			// The Spotify token expired mid-session (review C2): refresh, retry next poll.
+			await onUnauthorized().catch(() => {});
+		}
 		if (r.status !== 200) {
 			player.update((p) => ({ ...p, message: r.data?.detail ?? "Couldn't reach the server." }));
 			messageFromPoll = true;
@@ -483,7 +510,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		const s = r.data;
 		const previous = get(player).state?.track;
 		// History and skips are recorded by the primary; others get them via sync.
-		if (isPrimary && previous && previous.id !== s.track?.id) {
+		if (drives() && previous && previous.id !== s.track?.id) {
 			const skipped = progressMs() < previous.duration_ms / 2 && !autoSkipped.has(previous.id);
 			edit((x) => {
 				if (skipped) x.feedback.skipped = L.pushFront(x.feedback.skipped, L.trackRef(previous), 5);
@@ -614,7 +641,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		const o = d().options;
 		const target = L.AUTOPILOT_TARGET[o.mode] ?? 0;
 		const s = get(suggestions);
-		if (!isPrimary || target === 0 || aheadCount() >= target || s.status !== 'loaded') return;
+		if (!drives() || target === 0 || aheadCount() >= target || s.status !== 'loaded') return;
 		const queued = new Set([...d().queue.sent, ...d().queue.upcoming].map((i) => i.trackID));
 		const lead = o.goal ? (o.goal.kind === 'drift' ? 'drift' : 'toward') : null;
 		const candidates = L.autopilotCandidates(s.moves, o.adventurousness, queued, lead);
@@ -666,6 +693,13 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		globalThis.document?.removeEventListener('visibilitychange', onVisibility);
 		flush();
 	}
+
+	// Ask for the driving-tab lock last, once everything it may call exists.
+	locks?.request('boomin-beats-dj-driver', () => {
+		tabLeader = true;
+		if (isPrimary) startDriving();
+		return new Promise(() => {}); // held for the life of the tab
+	});
 
 	return {
 		doc,

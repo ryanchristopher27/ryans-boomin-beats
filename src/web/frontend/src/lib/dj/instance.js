@@ -3,12 +3,14 @@
 import { browser } from '$app/environment';
 import { createDJ } from './dj.js';
 import { hasLLM, request } from './api.js';
+import { hydrateToken } from '../spotifyAuth.js';
 
 /** @type {ReturnType<typeof createDJ> | null} */
 let dj = null;
 
 export function getDJ() {
 	if (!browser) return null;
-	dj ??= createDJ({ request, hasLLM });
+	// A 401 mid-session means the Spotify token lapsed: refresh it now.
+	dj ??= createDJ({ request, hasLLM, onUnauthorized: () => hydrateToken({ force: true }) });
 	return dj;
 }

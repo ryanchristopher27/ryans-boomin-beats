@@ -2,6 +2,7 @@
 // version + If-Match, 409 with the current document, the primary role.
 import { describe, expect, test } from 'vitest';
 import { get } from 'svelte/store';
+const g = get;
 import { createDJ } from './dj.js';
 
 const track = (id) => ({ id, title: id, artists: ['A'], image: '', duration_ms: 200000 });
@@ -50,7 +51,7 @@ function memoryStorage() {
 const tab = (server, name) => {
 	const storage = memoryStorage();
 	storage.set('dj_device_id', name);
-	return createDJ({ request: server.request(name), storage, label: name, hasLLM: () => false, debounceMs: 0 });
+	return createDJ({ request: server.request(name), storage, label: name, hasLLM: () => false, debounceMs: 0, locks: null });
 };
 
 describe('web DJ engine', () => {
@@ -140,7 +141,7 @@ describe('web DJ engine', () => {
 		const server = fakeServer();
 		const storage = memoryStorage();
 		storage.set('dj_device_id', 'a');
-		const a = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0 });
+		const a = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0, locks: null });
 		const asks = () => server.calls.filter((c) => c.path === 'dj/suggest/').length;
 		await a.refresh();
 		expect(asks()).toBe(0); // Co-pilot, no DJ page open
@@ -152,6 +153,80 @@ describe('web DJ engine', () => {
 		expect(asks()).toBe(2); // Driver queues picks itself
 	});
 
+	test('two tabs of one browser: only the tab holding the lock drives (review C1)', async () => {
+		const server = fakeServer();
+		// A minimal Web Locks: the first request holds the lock; later ones wait.
+		let held = false;
+		const waiting = [];
+		const locks = {
+			request: (_name, cb) => {
+				if (held) waiting.push(cb);
+				else {
+					held = true;
+					cb();
+				}
+			}
+		};
+		const shared = memoryStorage();
+		shared.set('dj_device_id', 'laptop');
+		const opts = { storage: shared, label: 'laptop', hasLLM: () => false, debounceMs: 0, locks };
+		const first = createDJ({ request: server.request('tab1'), ...opts });
+		const second = createDJ({ request: server.request('tab2'), ...opts });
+		await first.refresh();
+		await second.refresh();
+		await second.add(track('t1'));
+		await second.flush();
+		expect(server.calls.some((c) => c.device === 'tab2' && c.path === 'spotify/queue/')).toBe(false);
+		await first.flush();
+		await first.refresh();
+		expect(server.queued).toEqual(['t1']); // sent once, by the leading tab
+		expect(waiting.length).toBe(1); // the second tab takes over when the first closes
+	});
+
+	test('an edit made while a pull is in flight survives (review W2)', async () => {
+		const server = fakeServer();
+		const a = tab(server, 'a');
+		await a.refresh();
+		let editMidGet = false;
+		const real = server.request('b');
+		const storage = memoryStorage();
+		storage.set('dj_device_id', 'b');
+		const b = createDJ({
+			request: async (method, path, opts) => {
+				const r = await real(method, path, opts);
+				if (editMidGet && method === 'GET' && path === 'dj/state') {
+					editMidGet = false;
+					b.doc.update((x) => (x.queue.upcoming.push({ id: 'mid', trackID: 'mid', title: 'mid', artists: [], image: '', skipOnArrival: false }), x));
+				}
+				return r;
+			},
+			storage, label: 'b', hasLLM: () => false, debounceMs: 0, locks: null
+		});
+		await b.refresh(); // first sync: adopts v1
+		a.setMode('driver'); // a remote change, so b's next poll pulls
+		await a.flush();
+		editMidGet = true;
+		await b.refresh(); // the pull's GET returns after b's edit
+		await b.flush();
+		expect(g(b.doc).options.mode).toBe('driver');
+		expect(g(b.doc).queue.upcoming.map((i) => i.trackID)).toEqual(['mid']);
+		expect(server.row.state.queue.upcoming.map((i) => i.trackID)).toEqual(['mid']); // and it was pushed
+	});
+
+	test('a push the server rejects shows as an error, not "synced" (review W3)', async () => {
+		const server = fakeServer();
+		const a = tab(server, 'a');
+		await a.refresh();
+		const real = server.request;
+		server.request = () => async () => ({ status: 422, data: { detail: 'bad field' } });
+		const a2 = createDJ({ request: async (m, p, o) => (m === 'PUT' ? { status: 422, data: { detail: 'bad field' } } : real('a')(m, p, o)), storage: (() => { const s = memoryStorage(); s.set('dj_device_id', 'a'); return s; })(), label: 'a', hasLLM: () => false, debounceMs: 0, locks: null });
+		await a2.refresh(); // adopts v1
+		a2.setMode('driver');
+		await a2.flush();
+		expect(g(a2.sync).status).toBe('error');
+		expect(g(a2.sync).error).toBe('bad field');
+	});
+
 	test('a new tab adopts the shared queue and says so', async () => {
 		const server = fakeServer();
 		const a = tab(server, 'a');
@@ -161,7 +236,7 @@ describe('web DJ engine', () => {
 
 		const storage = memoryStorage();
 		storage.set('dj_doc', JSON.stringify({ queue: { sent: [], upcoming: [{ id: 'x', trackID: 'old', title: 'old', artists: [], image: '', skipOnArrival: false }], requests: [], guestSkips: [], keptGuests: [] } }));
-		const b = createDJ({ request: server.request('b'), storage, label: 'b', hasLLM: () => false, debounceMs: 0 });
+		const b = createDJ({ request: server.request('b'), storage, label: 'b', hasLLM: () => false, debounceMs: 0, locks: null });
 		await b.refresh();
 		expect(get(b.doc).options.mode).toBe('autofill');
 		expect(get(b.doc).queue.upcoming).toEqual([]);

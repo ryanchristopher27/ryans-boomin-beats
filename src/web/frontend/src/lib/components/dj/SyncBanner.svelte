@@ -15,7 +15,11 @@
 	}
 </script>
 
-{#if $sync.status === 'synced' && $sync.primary}
+{#if $sync.status === 'error'}
+	<div class="banner" role="status">
+		<span class="who warn" title={$sync.error ?? ''}><Icon name="alert" size={16} /> Changes aren't syncing to your other devices.</span>
+	</div>
+{:else if $sync.status === 'synced' && $sync.primary}
 	<div class="banner" role="status">
 		{#if $sync.isPrimary}
 			<span class="who"><Icon name="broadcast" size={16} /> Driving from this browser</span>
