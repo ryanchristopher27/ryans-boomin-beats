@@ -1222,3 +1222,116 @@ for DJ state.** Everything else (Spotify tokens, LLM keys) stays per-request and
 3. Heartbeat interval and the offline threshold (proposed 15s heartbeat / 60s offline).
 4. Migration: first launch after the update uploads the device's existing local queue, or starts
    empty.
+
+---
+
+# Spotify Quota: Look Up at Queue Time, Songs by ISRC (2026-10-25)
+
+## Problem / Opportunity
+Spotify's Development Mode quota is unpublished and counted per developer account (since
+2026-07-23, shared by all of an account's Client IDs). **Search** is the bucket that runs out; the
+player, queue and profile calls survived every lockout.
+
+Every screen that *shows* songs also searches Spotify:
+- DJ pick validation, about 10–14 searches per round even after the 2026-10-25 fixes
+- song search as you type (Add song, Explore)
+- the playlist builder's validation
+
+Extended Quota Mode requires a registered organization with ≥250k monthly active users, so raising
+the quota isn't an option. Showing songs must cost no Spotify quota, and only queueing one may.
+
+## Goals
+- A 4-hour, ~60-song night stays well inside the daily search quota: about 1 Spotify search per
+  queued song.
+- No loss of quality. Picks are still checked to exist with the right artist, and still show art,
+  artist and the explicit flag.
+- Song identity that doesn't depend on a provider (ISRC), so Apple Music can be added for a public
+  launch without migrating saved data.
+
+## Audience
+The owner plus a small circle (Development Mode allows the owner and 4 users). Public use is the
+later goal, through Apple Music (direction F).
+
+## Constraints
+- Queueing on Spotify needs a Spotify track ID, and only Spotify search provides one.
+- Deezer's public API: no key, about 50 requests per 5 seconds **per IP**. Its terms target
+  non-commercial use, which suits personal use; re-check before a public launch.
+- The synced document's schema is strict (`routers/dj_state.py`). Adding fields means a matching
+  server, iOS and web change.
+- A clean edit has its own ISRC, so "Clean only" keeps today's rule (skip explicit picks) instead of
+  swapping versions.
+
+## Evidence
+Deezer found **19 of 20** typical DJ picks with the right artist, plus the explicit flag, with no
+key (2026-10-25). The one miss was probably a "feat." credit defeating a naive artist match. Deezer
+track records include an ISRC; `bpm` is often 0.
+
+## Ideas & Directions
+
+### A. Look up on Spotify only when a song is added (chosen)
+- `/dj/suggest/` checks picks against **Deezer** (existence, artist match, art, explicit, ISRC)
+  instead of Spotify.
+- Tapping + (or autopilot adding a song) does one exact Spotify lookup by ISRC, cached in
+  `track_lookup`. A short spinner on the button is fine (owner, 2026-10-25).
+- The lookup happens **when the song is added to Up next**, not when it's sent to Spotify. Every
+  queue item then always has a Spotify `trackID`, so guest-request detection, skip-on-arrival and
+  sync don't change.
+- Misses (on Deezer, not on Spotify) show "Not on Spotify"; autopilot moves to its next candidate.
+
+### B. Deezer for typing and browsing (chosen)
+Add song, Explore and the playlist builder search **Deezer** as you type. A song is looked up on
+Spotify only when it's chosen: queued, added to a playlist or saved. The playlist builder does a
+batch of exact ISRC lookups at "add to playlist" time.
+
+### C. Songs identified by ISRC (chosen)
+- Picks, the synced queue, the cache and feedback entries gain an `isrc`. The Spotify `trackID`
+  stays as the playable handle.
+- One ISRC can map to several Spotify tracks (album, single, compilation, other regions): take the
+  first one playable in the user's market.
+- Fall back to a title + artist search only when a song has no ISRC.
+- The cache keys on ISRC, so a song is looked up once per 30 days across every device.
+
+### D. Odesli fallback while search is locked out (optional, later)
+Turns a Deezer link into a Spotify link on Odesli's quota. About 10 requests a minute without a key
+(a key is free by email). It would keep queueing working through a lockout.
+
+### E. Candidates from songs the app already knows (optional, later)
+Give the AI the user's top tracks, recently played and cached tracks, which already have Spotify
+IDs. Picks from that list cost no search.
+
+### F. Apple Music for the public launch (direction only)
+- MusicKit gives full queue control (insert, reorder, remove), which would replace the
+  app-owned-queue workaround.
+- It needs an Apple Music subscription per listener, MusicKit JS for the web, and the $99/yr Apple
+  Developer Program.
+- The ISRC identity from C is the bridge between the two providers.
+
+## Recommendations
+Build **A + B + C** as one plan: the same pattern on three surfaces, leaving Spotify search for
+queueing only. D and E are optional follow-ups; F is the public-launch direction.
+
+## Suggested Decisions
+- Deezer is the source for display and existence checks; Spotify is used only to resolve a song
+  being queued. *(confirmed)*
+- Resolve when the song is added to Up next; a spinner on tap is acceptable. *(confirmed)*
+- `isrc` is added alongside the Spotify `trackID`, not instead of it.
+- Clean only keeps the skip-explicit rule.
+- Deezer results are cached too, because of the shared-IP limit on Vercel.
+
+## Open Questions (for /plan)
+1. Does `track_lookup` store both kinds of row (title|artist → Deezer match, ISRC → Spotify track),
+   or should there be a second table?
+2. Rows synced before this change have no `isrc`. Leave them as they are (they already have Spotify
+   IDs), or backfill?
+3. The lookup's market: does `market=from_token` stay right when the hosted backend serves other
+   people in the small circle?
+4. Where autopilot's resolve lives: on the primary device only (as today), which keeps sends single?
+5. Last.fm vs Deezer for art and tags. Keep Last.fm for tags and use Deezer for art?
+6. Not in this scope, but it gates "small circle on iPhone": TestFlight needs the paid Apple
+   Developer Program (the same card question as hosting).
+
+## Next Steps (what /plan needs)
+- Milestones across the backend (Deezer client and cache, `/dj/suggest/`, resolve endpoint), iOS
+  and web (picks, tap to queue, Add song/Explore, playlist builder) and the schema (the `isrc`
+  field).
+- A measurable check: count Spotify searches over a real session.
