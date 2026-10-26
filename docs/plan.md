@@ -3375,3 +3375,5 @@ drop that kind of upload:
 - **One row per song per artist:** Deezer lists every release separately, so "Come and Get Your
   Love" appeared five times. Its results now dedupe by song and artist, which also collapses
   "Bad Blood (Taylor's Version)" into "Bad Blood".
+
+**Production check:** on 989ffcd, the simulator's "redbone" search (through production) shows a cover on every row and one "Come and Get Your Love".
