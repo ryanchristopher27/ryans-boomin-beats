@@ -2957,3 +2957,31 @@ ResizeObserver, so it needs a check in a visible window.
   the gs-* attributes rather than merging with them.
 - A false "other device" notice: the server fills defaults like `addedByDJ: null`, so the doc
   comparison now ignores key order and nulls.
+
+### W3 result (2026-10-25)
+**Mini player** (`MiniPlayer.svelte`): a fixed 64px bar on every page except `/dj/`. It shows the
+art, title and artists, a progress hairline, ⏮ ⏯ ⏭, the goal label and an Open DJ link. It sits
+beside the docked Playlists panel, and hides when signed out or when nothing is playing. The engine
+now starts in `+layout.svelte`, so a driving tab keeps driving on any page.
+
+**Ambience** (`lib/dj/ambience.js`, 4 tests): the cover is sampled at 16×16 on a canvas (`i.scdn.co`
+allows cross-origin reads). The colour is averaged in OKLab, weighted by chroma, then clamped to
+OKLCH L 0.18–0.24 and C ≤ 0.04. It crossfades over 400ms, and swaps instantly under reduced motion.
+Live check: KAYTRANADA's "Need It" gave `oklch(0.200 0.036 80)`, a warm brown.
+
+**Audit:** the frontend detector is clean, and a web-interface-guidelines pass found these, now
+fixed:
+- placeholders end with "…"
+- the destination input is named, with `autocomplete="off"`
+- `color-scheme: dark` is set
+- targets are 32/36px
+- the Add widget menu is anchored to its button
+- the duplicate "Up next" subheading is gone
+
+**Breakpoints:** fixed to match the brief. gridstack's `w` is inclusive, so a load at 1024px now gives
+8 columns.
+
+**Deferred to W4:**
+- A keyboard alternative to dragging widgets (W4's keyboard move/resize).
+- Undo for remove/decline (iOS has none either).
+- Live-resize breakpoint switching is still unverified, because the pane keeps going hidden.
