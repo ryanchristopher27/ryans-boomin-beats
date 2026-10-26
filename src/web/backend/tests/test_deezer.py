@@ -46,6 +46,29 @@ class Matching(unittest.TestCase):
         self.assertFalse(title_matches('Electric', 'Electricity'))
 
 
+class Reuploads(unittest.TestCase):
+    def test_labels_are_checked_not_whole_titles(self):
+        from services.deezer import is_reupload
+        self.assertTrue(is_reupload('Money Trees (Speed)'))
+        self.assertTrue(is_reupload('Money Trees (Cover)'))
+        self.assertTrue(is_reupload('September - Sped Up'))
+        self.assertTrue(is_reupload('Redbone [slowed + reverb]'))
+        self.assertFalse(is_reupload('Need for Speed'))
+        self.assertFalse(is_reupload('Undercover Lover'))
+        self.assertFalse(is_reupload('Electric (R3hab Remix)'))  # remixes are real releases
+
+    def test_reupload_accounts_and_album_labels(self):
+        from services.deezer import is_reupload
+        self.assertTrue(is_reupload('money trees', 'sped up viral'))
+        self.assertTrue(is_reupload('September', '', '', 'September (sped up + slowed)'))
+        self.assertFalse(is_reupload('Sped Up', 'Some Band'))  # a song merely named that, no label
+
+    def test_asking_for_a_version_allows_it(self):
+        from services.deezer import is_reupload
+        self.assertFalse(is_reupload('Redbone (Speed Up)', wanted='redbone sped up'))
+        self.assertTrue(is_reupload('Redbone (Speed Up)', wanted='redbone slowed'))
+
+
 class Find(unittest.TestCase):
     def test_search_hit_needs_title_and_artist(self):
         dz = fake({('/search', 'Electric Alina Baraz'): {'data': [
@@ -150,6 +173,7 @@ class SearchEndpoint(unittest.TestCase):
         lastfm = [{'title': 'Money Trees', 'artist': 'Kendrick Lamar', 'listeners': 2210951},
                   {'title': 'Money Trees', 'artist': 'Kendrick Lamar, Jay Rock', 'listeners': 56847},  # same song
                   {'title': 'Money Trees (Sped Up)', 'artist': 'sped up viral', 'listeners': 9000}]
+        # (Kendrick leads: popular and confirmed on Deezer, though Deezer's search lacks him.)
         deezer_search = [track(9, 'money trees (sped up version)', 'sped up viral'), track(3, 'MONEY TREES', 'Rilès', isrc='FR0000000001')]
         r = self.run_search('money trees', lastfm, deezer_search, {'Money Trees': self.song('Money Trees', 'Kendrick Lamar', 'USUM71210785')})
         self.assertEqual([(t['title'], t['artists'][0]) for t in r.json()['tracks']],
@@ -170,6 +194,19 @@ class SearchEndpoint(unittest.TestCase):
         tadow = self.song('Tadow', 'Masego', 'QM24S1703810')
         r = self.run_search('tadow', lastfm, [track(1, 'Tadow', 'Masego', isrc='QM24S1703810')], {'Tadow': tadow})
         self.assertEqual([t['id'] for t in r.json()['tracks']], ['QM24S1703810'])
+
+    def test_mid_word_lets_deezer_lead(self):
+        # Last.fm only has whole-word junk mid-word: unpopular, so Deezer's prefix matches lead.
+        lastfm = [{'title': 'Septem', 'artist': 'Hexis', 'listeners': 4000}]
+        deezer_search = [track(1, 'September', 'Earth, Wind & Fire', isrc='USSM17800845'),
+                         track(2, 'September (Speed)', 'Ren', isrc='FR0000000002')]
+        r = self.run_search('septem', lastfm, deezer_search)
+        self.assertEqual([t['title'] for t in r.json()['tracks']], ['September', 'Septem'])
+
+    def test_irrelevant_results_drop(self):
+        r = self.run_search('money tre', [{'title': 'HONEY (ARE U COMING?)', 'artist': 'Måneskin', 'listeners': 900000}],
+                            [track(3, 'MONEY TREES', 'Rilès', isrc='FR0000000001')])
+        self.assertEqual([t['title'] for t in r.json()['tracks']], ['MONEY TREES'])
 
     def test_lastfm_down_falls_back_to_deezer(self):
         r = self.run_search('redbone', [], [track(5, 'Redbone', 'Childish Gambino', isrc='USYAH1600107')])

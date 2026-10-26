@@ -3324,3 +3324,24 @@ lists Kendrick Lamar's original first.
   matches whole words.
 - "(Speed)"-style labels slip past the re-upload filter. A filter on parenthetical labels would
   catch them without hiding songs like "Need for Speed".
+
+### Type-ahead: mid-word queries and "(Speed)" labels (2026-10-25)
+**Mid-word:** Last.fm matches whole words only, so partial queries got junk ("septem" → "Septem"
+by Hexis), while Deezer matches prefixes well. New order:
+1. Popular (≥100k listeners), Deezer-confirmed Last.fm hits, at most 3.
+2. Deezer's results.
+3. The rest of Last.fm.
+
+Every result must also pass a relevance check: each typed word starts some word of the title or
+artist.
+
+**Labels:** one `deezer.is_reupload()` now serves search, Deezer matching and the resolver. It
+checks only a title's bracketed or dashed label, plus re-upload account names and album labels,
+for speed/slowed/reverb/nightcore/8d/karaoke/instrumental/cover/tribute/bass-boosted, unless the
+query asks for that kind. So "(Speed)" is caught, while "Need for Speed" and "Undercover Lover"
+are kept.
+
+**Live:** money tre → Rilès / Money Tree; money trees → Kendrick Lamar; redbo → Redbone (and
+Childish Gambino 2nd); septem → Earth, Wind & Fire; dancing qu → ABBA. About 0.5–1s.
+
+**Known:** "kendrick lamar money" lists a "Kendrick Lamar - Money Trees" upload by "Music" second.

@@ -30,7 +30,33 @@ WINDOW_S = 5.0
 MAX_PER_WINDOW = 40
 _RETRIES = 3
 # Re-uploads that outrank originals unless the pick asked for them.
-_VARIANTS = ('sped up', 'slowed', 'nightcore', '8d audio', 'karaoke', 'instrumental', 'cover', 'tribute')
+# Re-upload markers, matched in a title's *label* (its bracketed or dashed
+# suffix) so "Money Trees (Speed)" is caught but "Need for Speed" and
+# "Undercover Lover" aren't. Each word maps to one kind, so "sped up" in the
+# query allows a "(Speed Up)" result.
+_VARIANT = re.compile(
+    r'\b(sped[ -]?up|speed(?:[ -]?up)?|slowed|reverb|nightcore|8d|karaoke|instrumental|'
+    r'cover|tribute|bass[ -]?boosted)\b', re.I)
+_KIND = {'sped': 'speed', 'speed': 'speed', 'slowed': 'slowed', 'reverb': 'slowed', 'nightcore': 'speed',
+         '8d': '8d', 'karaoke': 'karaoke', 'instrumental': 'instrumental', 'cover': 'cover',
+         'tribute': 'cover', 'bass': 'bass'}
+_LABELS = re.compile(r'[\(\[]([^\)\]]*)[\)\]]|\s-\s(.+)$')
+# Accounts that only post re-uploads, named for it ("sped up viral").
+_REUPLOAD_ARTIST = re.compile(r'\b(sped[ -]?up|slowed|nightcore|8d audio|bass[ -]?boosted)\b', re.I)
+
+
+def _kinds(text: str) -> set[str]:
+    return {_KIND[m.group(1).casefold().split()[0].split('-')[0]] for m in _VARIANT.finditer(text)}
+
+
+def is_reupload(title: str, artist: str = '', wanted: str = '', *extra_labels: str) -> bool:
+    """A sped-up / slowed / cover / karaoke… version the wanted text didn't ask for.
+    `extra_labels` are checked whole (e.g. an album named "September (sped up + slowed)")."""
+    labels = ' '.join(a or b for a, b in _LABELS.findall(title))
+    found = _kinds(labels) | _kinds(' '.join(extra_labels))
+    if _REUPLOAD_ARTIST.search(artist or ''):
+        found |= _kinds(artist)
+    return bool(found - _kinds(wanted))
 _ARTIST_SPLIT = re.compile(r'\s*(?:,|&|\bfeat\.?|\bft\.?|\bfeaturing\b|\bwith\b|\bx\b|\band\b)\s*', re.I)
 
 
@@ -61,8 +87,7 @@ def title_matches(wanted: str, found: str) -> bool:
     w, f = _fold(_base_title(wanted)), _fold(_base_title(found))
     if not w or w != f:
         return False
-    lowered = found.casefold()
-    return not any(v in lowered and v not in wanted.casefold() for v in _VARIANTS)
+    return not is_reupload(found, wanted=wanted)
 
 
 def _song(t: dict) -> dict:

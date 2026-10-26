@@ -12,7 +12,7 @@ that scope (and everyone signing in again).
 import asyncio
 
 from services import track_cache
-from services.deezer import _VARIANTS
+from services.deezer import is_reupload
 from config import SPOTIFY_MARKET
 from services.spotify_client import app_client, search
 
@@ -39,8 +39,8 @@ def _format_track(track: dict) -> dict:
 def _is_reupload(t: dict, wanted_title: str) -> bool:
     """Sped-up/slowed re-releases can share the original's ISRC (Q0 spike: the
     only 'single' under September's ISRC was a "sped up + slowed" release)."""
-    names = f"{t.get('name', '')} {(t.get('album') or {}).get('name', '')}".casefold()
-    return any(v in names and v not in wanted_title.casefold() for v in _VARIANTS)
+    album = (t.get('album') or {}).get('name', '')
+    return is_reupload(t.get('name', ''), '', wanted_title, album)
 
 
 def _pick(items: list[dict], wanted_title: str = '') -> dict | None:
