@@ -3367,3 +3367,11 @@ drop that kind of upload:
 - taylor swift bad blood → Bad Blood, then Taylor's Version
 
 148 backend tests pass.
+
+### Search covers + one row per song (2026-10-25)
+- **Covers:** iOS Add to Queue rows show the cover. `/search/` fills in covers for the top 8
+  Last.fm hits (was 6), and a hit Deezer can't match uses Last.fm's own image, skipping its grey
+  placeholder star. Live: 10/10 results with covers.
+- **One row per song per artist:** Deezer lists every release separately, so "Come and Get Your
+  Love" appeared five times. Its results now dedupe by song and artist, which also collapses
+  "Bad Blood (Taylor's Version)" into "Bad Blood".

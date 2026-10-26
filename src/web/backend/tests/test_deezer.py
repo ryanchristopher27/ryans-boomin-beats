@@ -239,6 +239,14 @@ class SearchEndpoint(unittest.TestCase):
                   {'title': 'Cry for You', 'artist': 'September', 'listeners': 10}]  # a band named September
         self.assertEqual(len(self.run_search('september', lastfm).json()['tracks']), 2)
 
+    def test_one_row_per_song_per_artist(self):
+        versions = [track(1, 'Come and Get Your Love (Single Version)', 'Redbone', isrc='USAAA0000001'),
+                    track(2, 'Come And Get Your Love', 'Redbone', isrc='USAAA0000002'),
+                    track(3, 'Come and Get Your Love (Re-Record)', 'Redbone', isrc='USAAA0000003'),
+                    track(4, 'Redbone', 'Childish Gambino', isrc='USYAH1600107')]
+        r = self.run_search('redbone', [], versions)
+        self.assertEqual([t['title'] for t in r.json()['tracks']], ['Come and Get Your Love (Single Version)', 'Redbone'])
+
     def test_lastfm_down_falls_back_to_deezer(self):
         r = self.run_search('redbone', [], [track(5, 'Redbone', 'Childish Gambino', isrc='USYAH1600107')])
         self.assertEqual([t['id'] for t in r.json()['tracks']], ['USYAH1600107'])

@@ -123,17 +123,27 @@ async def search(searchValue: str = Query(..., min_length=1, max_length=200)):
     # 1. Popular songs Last.fm is sure of (the original "Money Trees" leads).
     #    Mid-word, Last.fm only has whole-word junk, which won't be this popular.
     strong = [h for h in top if h['listeners'] >= STRONG_LISTENERS and found.get((h['title'], h['artist']))]
+    shown = set()
     for h in strong[:MAX_STRONG]:
         keep(deezer.as_track(found[(h['title'], h['artist'])]))
+        shown.add(_key(h['title'], h['artist']))
     # 2. Deezer's own results: it matches prefixes, so it carries mid-word queries.
     for s in from_deezer:
         artist = s['artists'][0] if s['artists'] else ''
         if _is_reupload(s['title'], artist, q) or not _relevant(s['title'], artist, q) \
                 or _artist_prefixed(s['title'], artist, credited) or _names_other_artist(s['title'], artist, named):
             continue
+        # One row per song per artist: Deezer lists every release ("Come and Get
+        # Your Love", its single version, re-records, compilations) separately.
+        k = _key(s['title'], artist)
+        if k in shown:
+            continue
+        shown.add(k)
         keep(deezer.as_track(s))
     # 3. The rest of Last.fm's hits, for songs too niche for Deezer's search.
     for h in top:
+        if _key(h['title'], h['artist']) in shown:
+            continue
         song = found.get((h['title'], h['artist']))
         keep(deezer.as_track(song) if song else _bare(h['title'], h['artist'], h.get('image', '')))
     return {'type': 'searchSongs', 'tracks': tracks}
