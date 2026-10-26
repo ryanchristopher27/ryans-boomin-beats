@@ -3315,3 +3315,12 @@ logs nothing while serving the simulator's polls normally.
 & Fire; Tadow → Masego (once); Electric → Alina Baraz. Cold queries take 0.5–2s; cached ~300ms.
 
 **Also:** the Last.fm client moved to HTTPS, since its API key travels in the query string.
+
+**Production check:** on 26dad29, the simulator's search for "money trees" (through production)
+lists Kendrick Lamar's original first.
+
+**Small follow-ups:**
+- Mid-word queries ("money tre") give weak results until the word is complete, because Last.fm
+  matches whole words.
+- "(Speed)"-style labels slip past the re-upload filter. A filter on parenthetical labels would
+  catch them without hiding songs like "Need for Speed".
