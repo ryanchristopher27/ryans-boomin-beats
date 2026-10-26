@@ -60,8 +60,10 @@
 				bind:value={destination}
 				on:focus={() => (editing = true)}
 				on:keydown={(e) => e.key === 'Escape' && (editing = false)}
-				placeholder="e.g. 90s R&B, or Daft Punk"
+				placeholder="e.g. 90s R&B or Daft Punk…"
 				aria-label="Destination"
+				name="destination"
+				autocomplete="off"
 				maxlength="200"
 			/>
 			{#if editing}<button class="btn" type="submit">Set</button>{/if}

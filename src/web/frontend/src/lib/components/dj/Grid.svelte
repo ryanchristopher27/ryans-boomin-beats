@@ -25,13 +25,14 @@
 				animate: !reduced,
 				staticGrid: !editing,
 				handle: '.widget-handle',
-				// The brief's breakpoints: 12 cols at >= 1280px, 8 below, 6 below 1024.
+				// The brief's breakpoints: 12 cols at >= 1280px, 8 at 1024-1279, 6 below.
+				// A breakpoint's `w` is inclusive (applies at widths <= w).
 				columnOpts: {
 					breakpointForWindow: true,
 					layout: 'list',
 					breakpoints: [
-						{ w: 1024, c: 6 },
-						{ w: 1280, c: 8 }
+						{ w: 1023, c: 6 },
+						{ w: 1279, c: 8 }
 					]
 				}
 			},

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page, access_token } from '../../stores.js';
 	import { getDJ } from '$lib/dj/instance.js';
+	import { sampleCover } from '$lib/dj/ambience.js';
 	import { PRESETS, STORAGE_KEY, WIDGETS, addable, itemsFor, loadLayout, moveLabel } from '$lib/dj/layout.js';
 	import Grid from '$lib/components/dj/Grid.svelte';
 	import Widget from '$lib/components/dj/Widget.svelte';
@@ -16,7 +17,7 @@
 	import '$lib/components/dj/dj.css';
 
 	const dj = /** @type {any} */ (getDJ());
-	const { doc, suggestions } = dj;
+	const { doc, suggestions, player } = dj;
 
 	let layout = loadLayout(read());
 	let items = itemsFor(layout);
@@ -27,13 +28,11 @@
 	let before = items;
 	let addingSong = false;
 	let addMenu;
+	let addButton;
 
 	onMount(() => {
 		$page = 'DJ';
 	});
-
-	// The engine runs once signed in, and keeps running across pages.
-	$: if ($access_token) dj.start();
 
 	function read() {
 		try {
@@ -76,6 +75,14 @@
 		editing = false;
 	}
 
+	// The menu is in the top layer; open it under its button.
+	function placeMenu(e) {
+		if (e.newState !== 'open') return;
+		const r = addButton.getBoundingClientRect();
+		addMenu.style.top = `${r.bottom + 4}px`;
+		addMenu.style.left = `${Math.max(8, r.left)}px`;
+	}
+
 	function addWidget(w) {
 		addMenu.hidePopover();
 		const def = WIDGETS[w.type];
@@ -85,6 +92,13 @@
 	function onKey(e) {
 		if (editing && e.key === 'Escape' && !document.querySelector(':popover-open')) cancel();
 	}
+
+	// Album-art ambience: the Now playing widget takes a tint of the cover.
+	let ambient = '';
+	$: cover = $player.state?.track?.image ?? '';
+	$: sampleCover(cover).then((c) => {
+		if (cover === ($player.state?.track?.image ?? '')) ambient = c;
+	});
 
 	const titleFor = (item) => (item.type === 'move' ? moveLabel(item.kind) : WIDGETS[item.type].title);
 	$: requestCount = $doc.queue.requests.length;
@@ -104,8 +118,8 @@
 		<SyncBanner {dj} />
 		<div class="spacer" />
 		{#if editing}
-			<button class="btn" popovertarget="add-widget" disabled={!addable(items).length}><Icon name="plus" size={16} /> Add widget</button>
-			<div class="menu" id="add-widget" popover="auto" bind:this={addMenu}>
+			<button class="btn" bind:this={addButton} popovertarget="add-widget" disabled={!addable(items).length}><Icon name="plus" size={16} /> Add widget</button>
+			<div class="menu" id="add-widget" popover="auto" bind:this={addMenu} on:toggle={placeMenu}>
 				{#each addable(items) as w (w.id)}
 					<button on:click={() => addWidget(w)}>{w.label}</button>
 				{/each}
@@ -131,7 +145,7 @@
 	{:else}
 		{#key gridKey}
 			<Grid bind:this={grid} bind:items {editing} let:item>
-				<Widget title={titleFor(item)} {editing} onRemove={() => grid.remove(item.id)}>
+				<Widget title={titleFor(item)} {editing} onRemove={() => grid.remove(item.id)} ambient={item.type === 'nowPlaying' ? ambient : ''}>
 					<svelte:fragment slot="badge">
 						{#if item.type === 'requests' && requestCount}
 							<span class="badge" aria-label="{requestCount} pending">{requestCount}</span>
@@ -219,7 +233,7 @@
 
 	.menu {
 		position: fixed;
-		inset: 140px 16px auto auto;
+		inset: auto;
 		margin: 0;
 		padding: 4px;
 		min-width: 200px;

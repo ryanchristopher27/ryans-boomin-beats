@@ -34,7 +34,7 @@
 <div class="upnext">
 	{#if adding}
 		<div class="search">
-			<SongSearch placeholder="Add a song" onSelect={(t) => dj.add(t)} />
+			<SongSearch placeholder="Add a song…" onSelect={(t) => dj.add(t)} />
 		</div>
 	{/if}
 
@@ -57,7 +57,8 @@
 		</ul>
 	{/if}
 
-	<h3>Up next</h3>
+	<!-- Subheadings only when both parts show; the widget title already says "Up next". -->
+	{#if q.sent.length}<h3>Then</h3>{/if}
 	{#if q.upcoming.length}
 		<ul class="list">
 			{#each q.upcoming as item, i (item.id)}
@@ -93,7 +94,7 @@
 
 <style>
 	.upnext {
-		padding: 4px 16px 12px;
+		padding: 8px 16px 12px;
 	}
 
 	.search {

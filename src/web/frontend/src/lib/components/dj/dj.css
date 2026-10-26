@@ -1,6 +1,10 @@
 /* Shared controls for the DJ page (W2). Scoped to .dj-page so nothing leaks
    into the other pages; popover menus stay in its subtree. */
 .dj-page {
+	color-scheme: dark;
+}
+
+.dj-page {
 	/* Purple text that holds 4.5:1 on the surfaces; --accent-2 itself is for fills. */
 	--accent-2-text: #c49bff;
 	--danger: #ff7a7a;
@@ -8,8 +12,8 @@
 }
 
 .dj-page .icon-btn {
-	width: 32px;
-	height: 32px;
+	width: 36px;
+	height: 36px;
 	display: inline-grid;
 	place-items: center;
 	padding: 0;
@@ -35,7 +39,7 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	height: 32px;
+	height: 36px;
 	padding: 0 12px;
 	border: 1px solid var(--border-subtle);
 	border-radius: var(--radius-sm);
@@ -59,7 +63,7 @@
 }
 
 .dj-page .btn.small {
-	height: 28px;
+	height: 32px;
 	padding: 0 10px;
 	font-size: 12px;
 }

@@ -1,9 +1,12 @@
 <script>
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import Header from './Header.svelte';
 	import PlaylistsPanel from '$lib/components/PlaylistsPanel.svelte';
+	import MiniPlayer from '$lib/components/dj/MiniPlayer.svelte';
 	import { hydrateToken } from '$lib/spotifyAuth.js';
-	import { playlistsPanelOpen } from '../stores.js';
+	import { getDJ } from '$lib/dj/instance.js';
+	import { access_token, playlistsPanelOpen } from '../stores.js';
 	import './styles.css';
 
 	// Load the Spotify session app-wide so account actions work on every page,
@@ -13,6 +16,10 @@
 			hydrateToken();
 		}
 	});
+
+	// The DJ engine runs app-wide once signed in, so a driving tab keeps
+	// driving (and the mini player stays live) on every page.
+	$: if ($access_token) getDJ()?.start();
 </script>
 
 <div class="app" class:panel-open={$playlistsPanelOpen}>
@@ -23,6 +30,7 @@
 	</main>
 
 	<PlaylistsPanel />
+	{#if browser}<MiniPlayer />{/if}
 </div>
 
 <style>
