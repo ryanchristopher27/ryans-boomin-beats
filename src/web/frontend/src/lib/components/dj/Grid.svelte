@@ -25,14 +25,20 @@
 				animate: !reduced,
 				staticGrid: !editing,
 				handle: '.widget-handle',
-				// The brief's breakpoints: 12 cols at >= 1280px, 8 at 1024-1279, 6 below.
-				// A breakpoint's `w` is inclusive (applies at widths <= w).
+				// The brief's breakpoints (12 cols at a 1280px window, 8 from 1024, 6
+				// below), measured on the grid itself (a 1280px window leaves ~1245px
+				// after padding and the scrollbar) so the Playlists panel counts.
+				// Below 720px a 3-column widget would be under 360px, so widgets
+				// stack in one column instead. A breakpoint's `w` is inclusive.
+				// columnMax is required: with several breakpoints gridstack doesn't
+				// default it, and growing past the widest one then never returned to 12.
 				columnOpts: {
-					breakpointForWindow: true,
+					columnMax: COLUMNS,
 					layout: 'list',
 					breakpoints: [
-						{ w: 1023, c: 6 },
-						{ w: 1279, c: 8 }
+						{ w: 719, c: 1 },
+						{ w: 959, c: 6 },
+						{ w: 1199, c: 8 }
 					]
 				}
 			},
