@@ -1,777 +1,838 @@
 <script>
-    import { onMount } from 'svelte';
-    import { goto } from '$app/navigation';
-    import { PUBLIC_API_URL } from '$env/static/public';
-    import BoominBeatsLogo from '$lib/images/BoominBeatsLogo.jpg';
-    import SongCard from '$lib/components/SongCard.svelte';
-    import SongRadar from '$lib/components/SongRadar.svelte';
-    import DashboardModule from '$lib/components/DashboardModule.svelte';
-    import TrendChart from '$lib/components/TrendChart.svelte';
-    import BarChart from '$lib/components/BarChart.svelte';
-    import ColumnChart from '$lib/components/ColumnChart.svelte';
-    import Heatmap from '$lib/components/Heatmap.svelte';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { PUBLIC_API_URL } from '$env/static/public';
+	import { page, access_token, selectedSong, exploreTrail, discoveryPlaylist, builderRequest } from '../../stores.js';
+	import { bearer } from '$lib/spotifyHeaders.js';
+	import { beginLogin, logoutSpotify, hydrateToken, exchangeCodeForToken, saveTokens } from '$lib/spotifyAuth.js';
+	import { getSavedStates, queueTracks, setTrackSaved } from '$lib/playlistActions.js';
+	import { PERIOD_LABELS, insights, peakHour, summaryParts } from '$lib/profile.js';
+	import { nameHue } from '$lib/dj/ambience.js';
+	import { say } from '$lib/toast.js';
+	import DashboardModule from '$lib/components/DashboardModule.svelte';
+	import TrendChart from '$lib/components/TrendChart.svelte';
+	import ColumnChart from '$lib/components/ColumnChart.svelte';
+	import Heatmap from '$lib/components/Heatmap.svelte';
+	import SongRow from '$lib/components/ui/SongRow.svelte';
+	import Blobs from '$lib/components/ui/Blobs.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 
-    let expandedModule = null; // 'genres' | 'taste' | 'tracks' | 'artists' | null
-    const toggleModule = (id) => { expandedModule = expandedModule === id ? null : id; };
+	let token = $access_token;
+	let user_profile = null;
+	let top_artists = [];
+	let top_tracks = [];
+	let loading = false;
+	let error = '';
+	const NUM_TOPS = 50;
+	const PERIODS = ['short_term', 'medium_term', 'long_term'];
+	let time_period = 'short_term';
 
-    let tasteData = null;
-    let tasteLoaded = false;
-    async function fetchTasteOverTime() {
-        if (tasteLoaded || !token) return;
-        tasteLoaded = true;
-        try {
-            const res = await fetch(`${PUBLIC_API_URL}/spotify/taste-over-time/`, { headers: bearer(token) });
-            if (res.ok) tasteData = await res.json();
-        } catch { /* ignore */ }
-    }
+	/** @type {null | 'tracks' | 'artists' | 'genres' | 'eras' | 'taste' | 'clock'} */
+	let expanded = null;
+	const toggle = (id) => (expanded = expanded === id ? null : id);
+	// Reactive, so the template's {#if shows(...)} re-runs when `expanded` changes.
+	$: shows = (id) => !expanded || expanded === id;
 
-    // Listening clock (recently-played → hour/day histograms, local time)
-    let recentData = null;
-    let recentLoaded = false;
-    let recentNeedsReauth = false;
-    async function fetchRecentlyPlayed() {
-        if (recentLoaded || !token) return;
-        recentLoaded = true;
-        try {
-            const res = await fetch(`${PUBLIC_API_URL}/spotify/recently-played/`, { headers: bearer(token) });
-            if (res.status === 403) { recentNeedsReauth = true; return; }
-            if (res.ok) recentData = await res.json();
-        } catch { /* ignore */ }
-    }
-
-    const HOUR_TICKS = { 0: '12a', 6: '6a', 12: '12p', 18: '6p' };
-    const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon … Sun
-    const DAY_INITIAL = { 0: 'S', 1: 'M', 2: 'T', 3: 'W', 4: 'T', 5: 'F', 6: 'S' };
-    const DAY_NAME = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
-
-    $: hourCells = buildHourCells(recentData);
-    $: dayCells = buildDayCells(recentData);
-    function buildHourCells(d) {
-        const counts = new Array(24).fill(0);
-        (d?.played_at || []).forEach((ts) => { counts[new Date(ts).getHours()]++; });
-        return counts.map((v, h) => ({ value: v, label: `${h}:00`, tick: HOUR_TICKS[h] || '' }));
-    }
-    function buildDayCells(d) {
-        const counts = new Array(7).fill(0);
-        (d?.played_at || []).forEach((ts) => { counts[new Date(ts).getDay()]++; });
-        return DAY_ORDER.map((day) => ({ value: counts[day], label: DAY_NAME[day], tick: DAY_INITIAL[day] }));
-    }
-
-    $: eraYears = (tasteData?.release_year || []).filter((y) => y > 0);
-    $: eraMin = eraYears.length ? Math.min(...eraYears) - 2 : 2000;
-    $: eraMax = eraYears.length ? Math.max(...eraYears) + 2 : 2025;
-    $: audioSeries = tasteData?.audio_features
-        ? Object.entries(tasteData.audio_features).map(([name, values]) => ({ name, values }))
-        : [];
-
-    function fmtDur(ms) {
-        if (!ms) return '—';
-        const m = Math.floor(ms / 60000);
-        const s = Math.round((ms % 60000) / 1000);
-        return `${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-
-    import { page, user, access_token, selectedSong, exploreTrail, discoveryPlaylist } from '../../stores.js'
-    import { bearer } from '$lib/spotifyHeaders.js';
-    import { beginLogin, logoutSpotify, hydrateToken, exchangeCodeForToken, saveTokens } from '$lib/spotifyAuth.js';
-    import { getSavedStates, setTrackSaved } from '$lib/playlistActions.js';
-
-    let savedMap = {};
-    let savedKey = '';
-
-    let token = $access_token;
-
-    let user_profile = {};
-    let top_artists = [];
-    let top_tracks = [];
-
-    let number_of_tops = 50;
-
-    let possible_time_periods = ['short_term', 'medium_term', 'long_term'];
-    let time_period = 'short_term';
-    let time_period_object = {'short_term': '1 Month', 'medium_term': '6 Months', 'long_term': 'All Time'}
-
-    let logged_in = false;
-
-    function handleLogout() {
-        logoutSpotify();
-        token = '';
-        logged_in = false;
-    }
-
-    onMount(async () => {
-        $page = 'Profile';
-
-        // Returning from the Spotify OAuth redirect.
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        if (code) {
-            const verifier = sessionStorage.getItem('spotify_pkce_verifier');
-            if (verifier) {
-                const tokenData = await exchangeCodeForToken(code, verifier);
-                if (tokenData.access_token) {
-                    saveTokens(tokenData);
-                    token = tokenData.access_token;
-                    $access_token = token;
-                }
-                sessionStorage.removeItem('spotify_pkce_verifier');
-                window.history.replaceState({}, '', '/profile');
-                getProfile();
-            }
-            return;
-        }
-
-        // Otherwise hydrate from a stored session (shared app-wide helper).
-        const ok = await hydrateToken();
-        if (ok) {
-            token = $access_token;
-            getProfile();
-        }
-    });
-
-    const handleLogin = () => beginLogin();
-
-    async function getProfile() {
-        console.log('Get Profile Test 1')
-        try {
-            console.log('Get Profile Test In Try')
-			// let url = `${PUBLIC_API_URL}/account-analysis/?access_token=${access_token}`
-			let url = `${PUBLIC_API_URL}/get-profile/?num_tops=${number_of_tops}&time_period=${time_period}`
-
-            console.log('Fetching User Profile')
-			const response = await fetch(url, {
-                method: 'GET',
-                mode: 'cors',
-                headers: bearer(token),
-            })
-
-			if (!response.ok) {
-				throw new Error('Network response was not ok.');
+	onMount(async () => {
+		$page = 'Profile';
+		// Returning from the Spotify OAuth redirect.
+		const code = new URLSearchParams(window.location.search).get('code');
+		if (code) {
+			const verifier = sessionStorage.getItem('spotify_pkce_verifier');
+			if (verifier) {
+				const tokenData = await exchangeCodeForToken(code, verifier);
+				if (tokenData.access_token) {
+					saveTokens(tokenData);
+					token = tokenData.access_token;
+					$access_token = token;
+				}
+				sessionStorage.removeItem('spotify_pkce_verifier');
+				window.history.replaceState({}, '', '/profile');
+				getProfile();
 			}
-
-			const jsonResponse = await response.json();
-			user_profile = jsonResponse.profile;
-            top_artists = jsonResponse.top_artists;
-            top_tracks = jsonResponse.top_tracks;
-            console.log(user_profile);
-            console.log(top_artists);
-            console.log(top_tracks);
-            logged_in = true;
-            fetchTasteOverTime();
-            fetchRecentlyPlayed();
-            // $logged_in = true;
-
-		} catch (error) {
-			// Handle any errors that occurred during the fetch request.
-			console.error('Error fetching data:', error);
+			return;
 		}
-    }
+		// Otherwise hydrate from a stored session (shared app-wide helper).
+		if (await hydrateToken()) {
+			token = $access_token;
+			getProfile();
+		}
+	});
 
-    let setTimePeriod = (time) => {
-        time_period = time;
-        getProfile()
+	async function getProfile() {
+		loading = true;
+		error = '';
+		try {
+			const res = await fetch(`${PUBLIC_API_URL}/get-profile/?num_tops=${NUM_TOPS}&time_period=${time_period}`, { headers: bearer(token) });
+			if (!res.ok) throw new Error(`profile ${res.status}`);
+			const data = await res.json();
+			user_profile = data.profile;
+			top_artists = data.top_artists ?? [];
+			top_tracks = data.top_tracks ?? [];
+			fetchTasteOverTime();
+			fetchRecentlyPlayed();
+		} catch {
+			error = "Couldn't load your profile. Try again in a moment.";
+		} finally {
+			loading = false;
+		}
 	}
 
-    // --- Genres: rank-weighted aggregation of top artists' genres ---
-    $: genreRanked = rankGenres(top_artists);                                  // full sorted [{genre, weight}]
-    $: genreAxes = genreRanked.slice(0, 6).map((g) => ({ label: trunc(g.genre, 16), value: g.weight }));
-    $: genreBars = genreRanked.slice(0, 8).map((g) => ({ label: g.genre, value: g.weight }));
-    $: genreDiversity = diversityIndex(genreRanked.map((g) => g.weight));
+	function setPeriod(p) {
+		if (p === time_period) return;
+		time_period = p;
+		getProfile();
+	}
 
-    function rankGenres(artists) {
-        if (!artists || !artists.length) return [];
-        const weights = {};
-        const N = artists.length;
-        artists.forEach((a, i) => {
-            const w = N - i; // earlier (higher-ranked) artists weigh more
-            (a.genres || []).forEach((g) => { weights[g] = (weights[g] || 0) + w; });
-        });
-        return Object.entries(weights).sort((a, b) => b[1] - a[1]).map(([genre, weight]) => ({ genre, weight }));
-    }
-    function trunc(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
-    // Normalized Shannon entropy of genre weights → 0–100 ("focused" vs "varied").
-    function diversityIndex(weights) {
-        const total = weights.reduce((a, b) => a + b, 0);
-        if (!total || weights.length < 2) return 0;
-        const probs = weights.map((w) => w / total);
-        const entropy = -probs.reduce((a, p) => a + (p > 0 ? p * Math.log(p) : 0), 0);
-        return Math.round((100 * entropy) / Math.log(weights.length));
-    }
+	function logOut() {
+		logoutSpotify();
+		token = '';
+		user_profile = null;
+	}
 
-    // --- Decade distribution (from top tracks' release dates) ---
-    $: decadeData = decadeBuckets(top_tracks || []);
-    function decadeBuckets(tracks) {
-        const counts = {};
-        for (const t of tracks) {
-            const y = parseInt((t.release_date || '').slice(0, 4), 10);
-            if (!y) continue;
-            const dec = Math.floor(y / 10) * 10;
-            counts[dec] = (counts[dec] || 0) + 1;
-        }
-        return Object.keys(counts).sort((a, b) => a - b).map((d) => ({ label: `${d}s`, value: counts[d] }));
-    }
+	// --- Taste over time ---
+	let tasteData = null;
+	let tasteLoaded = false;
+	async function fetchTasteOverTime() {
+		if (tasteLoaded || !token) return;
+		tasteLoaded = true;
+		try {
+			const res = await fetch(`${PUBLIC_API_URL}/spotify/taste-over-time/`, { headers: bearer(token) });
+			if (res.ok) tasteData = await res.json();
+		} catch {
+			/* the module just doesn't show */
+		}
+	}
+	$: eraYears = (tasteData?.release_year || []).filter((y) => y > 0);
+	$: eraMin = eraYears.length ? Math.min(...eraYears) - 2 : 2000;
+	$: eraMax = eraYears.length ? Math.max(...eraYears) + 2 : 2025;
+	$: audioSeries = tasteData?.audio_features ? Object.entries(tasteData.audio_features).map(([name, values]) => ({ name, values })) : [];
 
-    // --- Top tracks rendered via SongCard (adapter from flat shape) ---
-    $: trackCards = (top_tracks || []).map(toSongCardShape);
-    function toSongCardShape(track) {
-        return {
-            spotify: {
-                id: track.id,
-                title: track.title,
-                artists: track.artists,
-                album: track.album,
-                image: track.image,
-                track_url: track.track_url,
-                duration_ms: track.duration_ms,
-            },
-        };
-    }
+	// --- Listening clock (recently played → hour/day counts, local time) ---
+	let recentData = null;
+	let recentLoaded = false;
+	let recentNeedsReauth = false;
+	async function fetchRecentlyPlayed() {
+		if (recentLoaded || !token) return;
+		recentLoaded = true;
+		try {
+			const res = await fetch(`${PUBLIC_API_URL}/spotify/recently-played/`, { headers: bearer(token) });
+			if (res.status === 403) recentNeedsReauth = true;
+			else if (res.ok) recentData = await res.json();
+		} catch {
+			/* the module just doesn't show */
+		}
+	}
+	const HOUR_TICKS = { 0: '12a', 6: '6a', 12: '12p', 18: '6p' };
+	const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon … Sun
+	const DAY_INITIAL = { 0: 'S', 1: 'M', 2: 'T', 3: 'W', 4: 'T', 5: 'F', 6: 'S' };
+	const DAY_NAME = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
+	$: hourCounts = countBy(recentData, (d) => d.getHours(), 24);
+	$: hourCells = hourCounts.map((value, h) => ({ value, label: `${h}:00`, tick: HOUR_TICKS[h] || '' }));
+	$: dayCells = ((c) => DAY_ORDER.map((day) => ({ value: c[day], label: DAY_NAME[day], tick: DAY_INITIAL[day] })))(countBy(recentData, (d) => d.getDay(), 7));
+	function countBy(d, key, n) {
+		const counts = new Array(n).fill(0);
+		(d?.played_at || []).forEach((ts) => counts[key(new Date(ts))]++);
+		return counts;
+	}
 
-    $: maybeCheckSaved(trackCards);
-    async function maybeCheckSaved(cards) {
-        const ids = cards.map((c) => c.spotify.id);
-        const key = ids.join(',');
-        if (!ids.length || key === savedKey) return;
-        savedKey = key;
-        savedMap = await getSavedStates(ids);
-    }
+	function fmtDur(ms) {
+		if (!ms) return '—';
+		const s = Math.round(ms / 1000);
+		return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+	}
 
-    async function handleSaveToggle(id, newSaved) {
-        savedMap = { ...savedMap, [id]: newSaved };
-        const r = await setTrackSaved(id, newSaved);
-        if (r.error) savedMap = { ...savedMap, [id]: !newSaved };
-    }
+	// --- Genres: rank-weighted aggregation of top artists' genres ---
+	$: genreRanked = rankGenres(top_artists);
+	$: genreTotal = genreRanked.reduce((s, g) => s + g.weight, 0);
+	$: genreBars = genreRanked.slice(0, 8).map((g) => ({ label: g.genre, pct: Math.round((100 * g.weight) / (genreTotal || 1)), w: (100 * g.weight) / (genreRanked[0]?.weight || 1) }));
+	$: genreDiversity = diversityIndex(genreRanked.map((g) => g.weight));
+	function rankGenres(artists) {
+		if (!artists?.length) return [];
+		const weights = {};
+		artists.forEach((a, i) => (a.genres || []).forEach((g) => (weights[g] = (weights[g] || 0) + artists.length - i))); // higher-ranked artists weigh more
+		return Object.entries(weights).sort((a, b) => b[1] - a[1]).map(([genre, weight]) => ({ genre, weight }));
+	}
+	// Normalized Shannon entropy of genre weights → 0–100 ("focused" vs "varied").
+	function diversityIndex(weights) {
+		const total = weights.reduce((a, b) => a + b, 0);
+		if (!total || weights.length < 2) return 0;
+		const entropy = -weights.reduce((a, w) => a + (w / total) * Math.log(w / total), 0);
+		return Math.round((100 * entropy) / Math.log(weights.length));
+	}
 
-    function exploreTrack(song) {
-        $selectedSong = { title: song.title, artists: song.artists, id: song.id, image: song.image };
-        $exploreTrail = [$selectedSong];
-        $discoveryPlaylist = [];
-        goto('/');
-    }
+	// --- Decades (from top tracks' release dates) ---
+	$: decadeData = decadeBuckets(top_tracks);
+	function decadeBuckets(tracks) {
+		const counts = {};
+		for (const t of tracks) {
+			const y = parseInt((t.release_date || '').slice(0, 4), 10);
+			if (y) counts[Math.floor(y / 10) * 10] = (counts[Math.floor(y / 10) * 10] || 0) + 1;
+		}
+		return Object.keys(counts).sort((a, b) => Number(a) - Number(b)).map((d) => ({ label: `${d}s`, value: counts[d] }));
+	}
 
+	// --- Summary and insights ---
+	$: facts = { period: time_period, genres: genreRanked.map((g) => g.genre), decades: decadeData, peak: peakHour(hourCounts), topArtist: top_artists[0]?.name };
+	$: summary = summaryParts(facts);
+	$: cards = insights(facts);
+	$: fresh = !!user_profile && !loading && !top_tracks.length && !top_artists.length;
+
+	function act(card) {
+		if (card.kind === 'build') {
+			$builderRequest = card.prompt;
+			goto('/playlist-builder/');
+		} else goto('/dj/');
+	}
+
+	// --- Top tracks ---
+	let saved = {};
+	let savedKey = '';
+	$: loadSaved(top_tracks.map((t) => t.id));
+	async function loadSaved(ids) {
+		const key = ids.join(',');
+		if (!ids.length || key === savedKey) return;
+		savedKey = key;
+		saved = await getSavedStates(ids);
+	}
+	async function toggleSaved(id) {
+		const next = !saved[id];
+		saved = { ...saved, [id]: next };
+		const r = await setTrackSaved(id, next);
+		if (r.error) {
+			saved = { ...saved, [id]: !next };
+			say(r.error === 'reconnect' ? 'Reconnect Spotify to save songs: log out, then log in.' : "Couldn't update Liked Songs.");
+		}
+	}
+
+	let queued = new Set();
+	async function queue(id) {
+		const r = await queueTracks([id]);
+		if (r.ok) queued = new Set(queued).add(id);
+		say(r.message);
+	}
+
+	function explore(t) {
+		$selectedSong = { title: t.title, artists: t.artists, id: t.id, image: t.image };
+		$exploreTrail = [$selectedSong];
+		$discoveryPlaylist = [];
+		goto('/');
+	}
+
+	$: avatar = user_profile?.images?.[0]?.url ?? '';
+	$: initials = (user_profile?.display_name ?? '').split(/\s+/).slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase();
 </script>
 
 <svelte:head>
-	<title>Profile</title>
-	<meta name="Profile" content="Profile" />
+	<title>Profile · Boomin Beats</title>
+	<meta name="description" content="Your listening, summarised" />
 </svelte:head>
 
-<div class='profile-body'>
-    <!-- <div class='login-form'>
-        <label for='username'>Username</label>
-        <input class='username-input' id='username' placeholder="Username..." bind:value={username}/>
+<div class="bleed">
+	{#if !$access_token}
+		<div class="signin">
+			<Blobs hue={235} hero />
+			<div class="signin-card glass">
+				<h1>Your listening, at a glance.</h1>
+				<p>Connect Spotify to see your top tracks, artists, genres and eras, and to build playlists from them.</p>
+				<button class="btn primary big" on:click={beginLogin}>Connect Spotify</button>
+			</div>
+		</div>
+	{:else}
+		<Blobs hue={235} hero />
+		<div class="content">
+			<header class="who">
+				{#if avatar}
+					<img class="avatar" src={avatar} alt="" />
+				{:else}
+					<span class="avatar blank" style:--h={nameHue(user_profile?.display_name ?? '')}>{initials}</span>
+				{/if}
+				<div class="name">
+					<h1>{user_profile?.display_name ?? (loading ? ' ' : 'Your profile')}</h1>
+					{#if user_profile}<p class="mono">{user_profile.followers?.total ?? 0} followers · Spotify</p>{/if}
+				</div>
+				<div class="segmented periods" role="radiogroup" aria-label="Time period">
+					{#each PERIODS as p}
+						<button role="radio" aria-checked={time_period === p} class:active={time_period === p} on:click={() => setPeriod(p)}>{PERIOD_LABELS[p]}</button>
+					{/each}
+				</div>
+				<button class="btn small" on:click={logOut}><Icon name="logout" size={14} /> Log out</button>
+			</header>
 
-        <label for='password'>Password</label>
-        <input class='password-input' id='password' placeholder="Password..." bind:value={password}/>
-    </div> -->
-    <!-- {#if $logged_in === false} -->
-    {#if logged_in === false}
-    <div class='login-button-div'>
-        <button on:click={handleLogin} class='login-button'>Login with Spotify</button>
-    </div>
-    {:else}
-    <div class='profile-div'>
-        <div class='profile-image-div'>
-            {#if user_profile.images.length === 0}
-            <img src={BoominBeatsLogo} alt="Italian Trulli" class="profile-image">
-            {:else}
-            <img src={user_profile.images[1].url} alt="Italian Trulli" class="profile-image">
-            {/if}
-        </div>
-        <div class='profile-name-div'>
-            {user_profile.display_name}
-        </div>
-        <div class='followers-div'>
-            Followers: {user_profile.followers.total}
-        </div>
-        <div class='logout-div'>
-            <button on:click={handleLogout} class='logout-button'>Log Out</button>
-        </div>
-    </div>
-    <div class='controls-bar'>
-        <div class='control-group'>
-            <span class='control-label'>Period</span>
-            {#each possible_time_periods as time}
-                <button class='chip' class:active={time === time_period} on:click={() => setTimePeriod(time)}>{time_period_object[time]}</button>
-            {/each}
-        </div>
-    </div>
+			{#if error}
+				<p class="error" role="alert">{error} <button class="link" on:click={getProfile}>Retry</button></p>
+			{/if}
 
-    {@const visualsExpanded = ['genres', 'eras', 'taste', 'clock'].includes(expandedModule)}
-    <div class='dashboard' class:has-expanded={expandedModule}>
-        {#if !expandedModule || expandedModule === 'tracks'}
-            <div class='col col-tracks' class:full={expandedModule === 'tracks'}>
-                <DashboardModule title="Top Tracks" fullHeight expanded={expandedModule === 'tracks'} onToggleExpand={() => toggleModule('tracks')}>
-                    {#each trackCards as card, i (card.spotify.id)}
-                        <SongCard
-                            song={card}
-                            index={i + 1}
-                            compact
-                            saved={savedMap[card.spotify.id] || false}
-                            onSaveToggle={handleSaveToggle}
-                            onExplore={exploreTrack}
-                        />
-                    {/each}
-                </DashboardModule>
-            </div>
-        {/if}
+			{#if user_profile}
+				<p class="summary">
+					{#each summary as part}{#if part.strong}<strong>{part.text}</strong>{:else}{part.text}{/if}{/each}
+				</p>
+			{/if}
 
-        {#if !expandedModule || expandedModule === 'artists'}
-            <div class='col col-artists' class:full={expandedModule === 'artists'}>
-                <DashboardModule title="Top Artists" fullHeight expanded={expandedModule === 'artists'} onToggleExpand={() => toggleModule('artists')}>
-                    <div class='col-desc'>
-                        <div class='cell-num'>#</div>
-                        <div class='cell-img-spacer'></div>
-                        <div class='cell-main'>Artist</div>
-                        <div class='cell-side'>Genres</div>
-                    </div>
-                    {#each top_artists as artist, i}
-                        <div class='list-row'>
-                            <div class='cell-num'>{i+1}</div>
-                            <img src={artist.images[0].url} alt={artist.name} class="row-img"/>
-                            <div class='cell-main row-name'>{artist.name}</div>
-                            <div class='cell-side row-sub'>{artist.genres}</div>
-                        </div>
-                    {/each}
-                </DashboardModule>
-            </div>
-        {/if}
+			{#if fresh}
+				<div class="fresh glass">
+					<h2>Nothing to show yet</h2>
+					<p>Spotify shares top tracks and artists after a few days of listening. Until then, start from a song or let the DJ run tonight.</p>
+					<div class="fresh-actions">
+						<a class="btn primary" href="/">Explore a song</a>
+						<a class="btn" href="/dj/">Start a DJ set</a>
+					</div>
+				</div>
+			{:else if cards.length}
+				<div class="insights">
+					{#each cards as card, i}
+						<button class="insight glass" style:animation-delay="{i * 60}ms" on:click={() => act(card)}>
+							<span class="insight-label">{card.label}</span>
+							<span class="insight-value">{card.value}</span>
+							<span class="insight-action">{card.action} <span aria-hidden="true">→</span></span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 
-        {#if !expandedModule || visualsExpanded}
-            <div class='col col-visuals' class:full={visualsExpanded}>
-                {#if (!expandedModule || expandedModule === 'genres') && genreAxes.length >= 3}
-                    <DashboardModule title="Top Genres" scroll={false} expanded={expandedModule === 'genres'} onToggleExpand={() => toggleModule('genres')}>
-                        <div class='genre-body'>
-                            <SongRadar axes={genreAxes} showValue={false} ariaLabel="Top genres" />
-                            <div class='genre-extra'>
-                                <div class='diversity'>
-                                    <span class='diversity-label'>Diversity</span>
-                                    <span class='diversity-val'>{genreDiversity}</span>
-                                    <span class='diversity-cap'>{genreDiversity >= 66 ? 'eclectic' : genreDiversity >= 33 ? 'balanced' : 'focused'}</span>
-                                </div>
-                                <BarChart items={genreBars} />
-                            </div>
-                        </div>
-                    </DashboardModule>
-                {/if}
+			{#if !fresh && (user_profile || loading)}
+				<div class="grid" class:has-expanded={!!expanded} class:dim={loading}>
+					{#if shows('tracks')}
+						<div class="m tall" style:--span={expanded ? 12 : 5}>
+							<DashboardModule title="Top tracks" expanded={expanded === 'tracks'} onToggleExpand={() => toggle('tracks')}>
+								{#each top_tracks as t, i (t.id)}
+									<SongRow
+										compact
+										index={i + 1}
+										title={t.title}
+										artists={t.artists}
+										image={t.image}
+										duration={t.duration_ms}
+										dragId={t.id}
+										onOpen={() => explore(t)}
+										openLabel="Explore {t.title}"
+										onAdd={() => queue(t.id)}
+										added={queued.has(t.id)}
+									>
+										<button slot="actions" class="row-btn heart" class:on={saved[t.id]} on:click|stopPropagation={() => toggleSaved(t.id)} aria-pressed={!!saved[t.id]} aria-label={saved[t.id] ? `Remove ${t.title} from Liked Songs` : `Save ${t.title} to Liked Songs`}>
+											<Icon name="heart" size={14} filled={saved[t.id]} />
+										</button>
+									</SongRow>
+								{/each}
+							</DashboardModule>
+						</div>
+					{/if}
 
-                {#if (!expandedModule || expandedModule === 'eras') && decadeData.length}
-                    <DashboardModule title="Eras" scroll={false} expanded={expandedModule === 'eras'} onToggleExpand={() => toggleModule('eras')}>
-                        <div class='chart-body'>
-                            <ColumnChart items={decadeData} />
-                        </div>
-                    </DashboardModule>
-                {/if}
+					{#if shows('artists')}
+						<div class="m tall" style:--span={expanded ? 12 : 4}>
+							<DashboardModule title="Top artists" expanded={expanded === 'artists'} onToggleExpand={() => toggle('artists')}>
+								<ol class="artists">
+									{#each top_artists as a, i (a.name)}
+										<li>
+											<span class="rank mono">{i + 1}</span>
+											{#if a.images?.[0]?.url}<img src={a.images[0].url} alt="" loading="lazy" />{:else}<span class="artist-blank" style:--h={nameHue(a.name)}>{a.name.slice(0, 1)}</span>{/if}
+											<span class="artist-text">
+												<span class="artist-name">{a.name}</span>
+												<span class="artist-genres">{(a.genres || []).join(', ')}</span>
+											</span>
+										</li>
+									{/each}
+								</ol>
+							</DashboardModule>
+						</div>
+					{/if}
 
-                {#if (!expandedModule || expandedModule === 'taste') && tasteData}
-                    <DashboardModule title="Taste over time" scroll={false} expanded={expandedModule === 'taste'} onToggleExpand={() => toggleModule('taste')}>
-                        <div class='taste-body'>
-                            {#if audioSeries.length}
-                                <TrendChart labels={tasteData.timeframes} series={audioSeries} min={0} max={100} />
-                            {:else}
-                                <TrendChart labels={tasteData.timeframes} series={[{ name: 'Release year', values: tasteData.release_year }]} min={eraMin} max={eraMax} />
-                            {/if}
-                            <div class='stat-trends'>
-                                {#if audioSeries.length}
-                                    <div class='stat-row'>
-                                        <span class='era-label'>Era</span>
-                                        {#each tasteData.timeframes as tf, i}<span class='era-point'>{tf} <strong>{tasteData.release_year[i] || '—'}</strong></span>{/each}
-                                    </div>
-                                {/if}
-                                <div class='stat-row'>
-                                    <span class='era-label'>Avg length</span>
-                                    {#each tasteData.timeframes as tf, i}<span class='era-point'>{tf} <strong>{fmtDur(tasteData.avg_duration_ms[i])}</strong></span>{/each}
-                                </div>
-                                <div class='stat-row'>
-                                    <span class='era-label'>Explicit</span>
-                                    {#each tasteData.timeframes as tf, i}<span class='era-point'>{tf} <strong>{tasteData.explicit_pct[i]}%</strong></span>{/each}
-                                </div>
-                            </div>
-                        </div>
-                    </DashboardModule>
-                {/if}
+					{#if shows('genres') && genreBars.length}
+						<div class="m tall" style:--span={expanded ? 12 : 3}>
+							<DashboardModule title="Top genres" expanded={expanded === 'genres'} onToggleExpand={() => toggle('genres')}>
+								<div class="pad">
+									<div class="diversity">
+										<span class="div-word">{genreDiversity >= 66 ? 'Eclectic' : genreDiversity >= 33 ? 'Balanced' : 'Focused'}</span>
+										<span class="div-sub">taste diversity · {genreDiversity}/100</span>
+									</div>
+									{#each genreBars as g, i}
+										<div class="gbar">
+											<div class="gbar-head"><span>{g.label}</span><span class="mono">{g.pct}%</span></div>
+											<div class="gtrack"><div class="gfill" style:width="{g.w}%" style:opacity={1 - i * 0.08} /></div>
+										</div>
+									{/each}
+								</div>
+							</DashboardModule>
+						</div>
+					{/if}
 
-                {#if (!expandedModule || expandedModule === 'clock') && (recentData?.count > 0 || recentNeedsReauth)}
-                    <DashboardModule title="Listening clock" scroll={false} expanded={expandedModule === 'clock'} onToggleExpand={() => toggleModule('clock')}>
-                        <div class='clock-body'>
-                            {#if recentNeedsReauth}
-                                <div class='clock-note'>Reconnect Spotify (Log Out → Log in) to enable your listening history.</div>
-                            {:else if recentData?.count > 0}
-                                <div class='clock-section'>
-                                    <div class='clock-section-label'>By hour of day</div>
-                                    <Heatmap cells={hourCells} />
-                                </div>
-                                <div class='clock-section'>
-                                    <div class='clock-section-label'>By day of week</div>
-                                    <Heatmap cells={dayCells} />
-                                </div>
-                                <div class='clock-note'>Based on your last {recentData.count} plays (Spotify's max).</div>
-                            {/if}
-                        </div>
-                    </DashboardModule>
-                {/if}
-            </div>
-        {/if}
-    </div>
-    {/if}
+					{#if shows('eras') && decadeData.length}
+						<div class="m short" style:--span={expanded ? 12 : 3}>
+							<DashboardModule title="Eras" expanded={expanded === 'eras'} onToggleExpand={() => toggle('eras')}>
+								<div class="pad chart"><ColumnChart items={decadeData} /></div>
+							</DashboardModule>
+						</div>
+					{/if}
 
+					{#if shows('taste') && tasteData}
+						<div class="m short" style:--span={expanded ? 12 : 5}>
+							<DashboardModule title="Taste over time" expanded={expanded === 'taste'} onToggleExpand={() => toggle('taste')}>
+								<div class="pad">
+									{#if audioSeries.length}
+										<TrendChart labels={tasteData.timeframes} series={audioSeries} min={0} max={100} />
+									{:else}
+										<TrendChart labels={tasteData.timeframes} series={[{ name: 'Release year', values: tasteData.release_year }]} min={eraMin} max={eraMax} />
+									{/if}
+									<dl class="stats">
+										{#each tasteData.timeframes as tf, i}
+											<div><dt>{tf}</dt><dd class="mono">{fmtDur(tasteData.avg_duration_ms[i])} · {tasteData.explicit_pct[i]}% explicit</dd></div>
+										{/each}
+									</dl>
+								</div>
+							</DashboardModule>
+						</div>
+					{/if}
+
+					{#if shows('clock') && (recentData?.count > 0 || recentNeedsReauth)}
+						<div class="m short" style:--span={expanded ? 12 : 4}>
+							<DashboardModule title="Listening clock" expanded={expanded === 'clock'} onToggleExpand={() => toggle('clock')}>
+								<div class="pad clock">
+									{#if recentNeedsReauth}
+										<p class="note">Reconnect Spotify (log out, then log in) to see your listening history.</p>
+									{:else}
+										<p class="clock-label mono">BY HOUR</p>
+										<Heatmap cells={hourCells} />
+										<p class="clock-label mono">BY DAY</p>
+										<Heatmap cells={dayCells} />
+										<p class="note">Based on your last {recentData.count} plays (Spotify's limit).</p>
+									{/if}
+								</div>
+							</DashboardModule>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <style>
-    .profile-body {
-    }
+	.bleed {
+		position: relative;
+		margin: calc(var(--primary-spacing) * -1) calc(var(--primary-spacing) * -1) 0;
+		min-height: calc(100vh - var(--header-height));
+		overflow-x: hidden;
+	}
 
-    /* --- Login --- */
-    .login-button-div {
-        display: flex;
-        width: 40%;
-        min-width: 320px;
-        background-color: var(--surface-1);
-        border: 1px solid var(--border-subtle);
-        height: 120px;
-        border-radius: var(--radius-lg);
-        margin: 40px auto;
-        align-items: center;
-        justify-content: center;
-    }
+	.content {
+		position: relative;
+		z-index: 1;
+		max-width: 1320px;
+		margin: 0 auto;
+		padding: 40px 28px 48px;
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+	}
 
-    .login-button {
-        height: 44px;
-        padding: 0 24px;
-        background: var(--brand-gradient);
-        color: var(--surface-0);
-        border: none;
-        border-radius: var(--radius);
-        font-weight: 700;
-        font-size: 0.9rem;
-        cursor: pointer;
-        transition: filter var(--transition);
-    }
+	/* --- Signed out --- */
+	.signin {
+		position: relative;
+		display: grid;
+		place-items: center;
+		min-height: calc(100vh - var(--header-height));
+		padding: 16px;
+	}
 
-    .login-button:hover {
-        filter: brightness(1.1);
-    }
+	.signin-card {
+		position: relative;
+		z-index: 1;
+		max-width: 520px;
+		padding: 32px;
+		border-radius: 20px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 14px;
+	}
 
-    /* --- Profile header card --- */
-    .profile-div {
-        display: flex;
-        align-items: center;
-        gap: 24px;
-        background-color: var(--surface-1);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-lg);
-        padding: 22px 28px;
-    }
+	.signin-card h1 {
+		margin: 0;
+		font-size: 36px;
+		font-weight: 700;
+		letter-spacing: -0.035em;
+		line-height: 1.05;
+	}
 
-    .profile-image-div {
-        flex-shrink: 0;
-    }
+	.signin-card p {
+		margin: 0;
+		font-size: 15px;
+		color: var(--text-muted);
+	}
 
-    .profile-image {
-        width: 88px;
-        height: 88px;
-        border-radius: 50%;
-        object-fit: cover;
-        display: block;
-    }
+	.big {
+		height: 46px;
+		padding: 0 20px;
+		border-radius: 11px;
+		font-size: 14px;
+	}
 
-    .profile-name-div {
-        flex: 1;
-        font-size: 2rem;
-        font-weight: 700;
-        letter-spacing: -0.01em;
-        color: var(--text-primary);
-    }
+	/* --- Header --- */
+	.who {
+		display: flex;
+		align-items: center;
+		gap: 20px;
+		flex-wrap: wrap;
+	}
 
-    .followers-div {
-        color: var(--text-muted);
-        font-size: 0.9rem;
-    }
+	.avatar {
+		flex: none;
+		width: 88px;
+		height: 88px;
+		border-radius: 50%;
+		object-fit: cover;
+		box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+	}
 
-    .logout-div {
-        margin-left: 8px;
-    }
+	.avatar.blank {
+		display: grid;
+		place-items: center;
+		background: linear-gradient(140deg, oklch(0.62 0.1 var(--h)), oklch(0.32 0.08 calc(var(--h) + 50)));
+		font-size: 22px;
+		font-weight: 600;
+	}
 
-    .logout-button {
-        height: 36px;
-        padding: 0 16px;
-        background-color: var(--surface-2);
-        color: var(--text-primary);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius);
-        cursor: pointer;
-        font-size: 0.8rem;
-        transition: border-color var(--transition);
-    }
+	.name {
+		flex: 1;
+		min-width: 240px;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
 
-    .logout-button:hover {
-        border-color: var(--accent);
-    }
+	h1 {
+		margin: 0;
+		font-size: clamp(32px, 5vw, 56px);
+		font-weight: 700;
+		line-height: 1;
+		letter-spacing: -0.04em;
+	}
 
-    /* --- Controls toolbar --- */
-    .controls-bar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 24px;
-        align-items: center;
-        margin-top: 16px;
-        padding: 10px 16px;
-        background-color: var(--surface-1);
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-lg);
-    }
+	.name p {
+		margin: 0;
+		font-size: 13px;
+		color: var(--text-subtle);
+	}
 
-    .control-group {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
+	.periods button {
+		height: 32px;
+		padding: 0 14px;
+	}
 
-    .control-label {
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--text-subtle);
-        margin-right: 4px;
-    }
+	.error {
+		margin: 0;
+		color: var(--danger-text);
+		font-size: 14px;
+	}
 
-    .chip {
-        height: 28px;
-        padding: 0 12px;
-        background-color: var(--surface-2);
-        color: var(--text-muted);
-        border: 1px solid var(--border-subtle);
-        border-radius: 14px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: border-color var(--transition), color var(--transition),
-            background-color var(--transition);
-    }
+	.link {
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--accent);
+		font: inherit;
+		cursor: pointer;
+	}
 
-    .chip:hover {
-        border-color: var(--accent);
-        color: var(--text-primary);
-    }
+	.summary {
+		margin: 0;
+		max-width: 880px;
+		font-size: 22px;
+		font-weight: 500;
+		line-height: 1.45;
+		letter-spacing: -0.015em;
+		color: rgba(243, 243, 245, 0.55);
+		text-wrap: pretty;
+	}
 
-    .chip.active {
-        background-color: var(--accent);
-        border-color: var(--accent);
-        color: var(--surface-0);
-    }
+	.summary strong {
+		font-weight: 500;
+		color: var(--text-primary);
+	}
 
-    /* --- Modular dashboard (3 columns: tracks | artists | stacked visuals) --- */
-    .dashboard {
-        display: flex;
-        gap: 16px;
-        align-items: flex-start;
-        margin-top: 16px;
-    }
+	/* --- Insights --- */
+	.insights {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+		gap: 12px;
+	}
 
-    .col {
-        min-width: 0;
-    }
+	.insight {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 16px;
+		border-radius: 16px;
+		color: var(--text-primary);
+		font: inherit;
+		text-align: left;
+		white-space: normal;
+		cursor: pointer;
+		transition: border-color 0.15s, transform 0.2s var(--ease);
+		animation: bbin 0.4s var(--ease) both;
+	}
 
-    .col-tracks {
-        flex: 1.5;
-    }
+	.insight:hover {
+		border-color: rgba(var(--accent-rgb), 0.4);
+		transform: translateY(-2px);
+	}
 
-    .col-artists {
-        flex: 1;
-    }
+	.insight-label {
+		font-size: 12px;
+		font-weight: 500;
+		color: rgba(243, 243, 245, 0.5);
+	}
 
-    .col-visuals {
-        flex: 1.15;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-    }
+	.insight-value {
+		font-size: 20px;
+		font-weight: 600;
+		line-height: 1.2;
+		letter-spacing: -0.02em;
+		text-wrap: balance;
+	}
 
-    /* When a module is expanded, its column fills the row. */
-    .dashboard.has-expanded .col.full {
-        flex: 1 1 100%;
-        width: 100%;
-    }
+	.insight-action {
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--accent);
+	}
 
-    .genre-body {
-        max-width: 380px;
-        margin: 0 auto;
-        padding-top: 8px;
-    }
+	.fresh {
+		max-width: 620px;
+		padding: 28px;
+		border-radius: 16px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 14px;
+	}
 
-    .genre-extra {
-        margin-top: 18px;
-        padding-top: 16px;
-        border-top: 1px solid var(--border-subtle);
-    }
+	.fresh h2 {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 600;
+	}
 
-    .diversity {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        margin-bottom: 14px;
-    }
+	.fresh p {
+		margin: 0;
+		font-size: 14px;
+		line-height: 1.55;
+		color: var(--text-muted);
+	}
 
-    .diversity-label {
-        font-size: 0.68rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--text-subtle);
-    }
+	.fresh-actions {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
 
-    .diversity-val {
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: var(--text-primary);
-    }
+	/* --- Module grid: 12 columns; expand makes one module the whole row --- */
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(12, minmax(0, 1fr));
+		gap: 16px;
+		transition: opacity 0.2s var(--ease);
+	}
 
-    .diversity-cap {
-        font-size: 0.78rem;
-        color: var(--text-muted);
-    }
+	.grid.dim {
+		opacity: 0.5;
+	}
 
-    .chart-body {
-        padding: 10px 12px 4px;
-    }
+	.m {
+		grid-column: span var(--span);
+		min-width: 0;
+	}
 
-    .clock-body {
-        padding: 10px 12px 4px;
-    }
+	.m.tall {
+		height: 520px;
+	}
 
-    .clock-section {
-        margin-bottom: 18px;
-    }
+	.m.short {
+		height: 300px;
+	}
 
-    .clock-section-label {
-        font-size: 0.68rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        font-weight: 700;
-        color: var(--text-subtle);
-        margin-bottom: 8px;
-    }
+	.has-expanded .m {
+		height: calc(100vh - var(--header-height) - var(--mini-h, 0px) - 120px);
+		min-height: 420px;
+	}
 
-    .clock-note {
-        font-size: 0.72rem;
-        color: var(--text-subtle);
-        margin-top: 8px;
-    }
+	.heart.on {
+		color: var(--accent);
+	}
 
-    .taste-body {
-        padding: 8px 10px 0;
-    }
+	.artists {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
 
-    .stat-trends {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-top: 14px;
-        padding-top: 12px;
-        border-top: 1px solid var(--border-subtle);
-    }
+	.artists li {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 8px 10px;
+		border-radius: 10px;
+	}
 
-    .stat-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: baseline;
-        gap: 6px 14px;
-        font-size: 0.78rem;
-        color: var(--text-muted);
-    }
+	.artists li:hover {
+		background: rgba(255, 255, 255, 0.045);
+	}
 
-    .era-label {
-        font-size: 0.68rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--text-subtle);
-    }
+	.rank {
+		flex: none;
+		width: 20px;
+		text-align: right;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--text-subtle);
+	}
 
-    .era-point strong {
-        color: var(--text-primary);
-        font-weight: 700;
-    }
+	.artists img,
+	.artist-blank {
+		flex: none;
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		object-fit: cover;
+	}
 
-    .col-desc, .list-row {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 0 14px;
-    }
+	.artist-blank {
+		display: grid;
+		place-items: center;
+		background: linear-gradient(140deg, oklch(0.66 0.12 var(--h)), oklch(0.32 0.08 calc(var(--h) + 45)));
+		font-size: 13px;
+		font-weight: 600;
+	}
 
-    .col-desc {
-        height: 32px;
-        font-size: 0.66rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-subtle);
-        border-bottom: 1px solid var(--border-subtle);
-        margin-bottom: 6px;
-    }
+	.artist-text {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
 
-    .list-row {
-        height: 56px;
-        border-radius: var(--radius-sm);
-        transition: background-color var(--transition);
-    }
+	.artist-name {
+		font-size: 14px;
+		font-weight: 500;
+	}
 
-    .list-row:hover {
-        background-color: var(--surface-2);
-    }
+	.artist-genres {
+		font-size: 12px;
+		color: var(--text-subtle);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 
-    .cell-num {
-        width: 20px;
-        flex-shrink: 0;
-        text-align: right;
-        color: var(--text-subtle);
-        font-size: 0.85rem;
-    }
+	.pad {
+		padding: 12px;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
 
-    .cell-img-spacer, .row-img {
-        width: 44px;
-        flex-shrink: 0;
-    }
+	.diversity {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
 
-    .row-img {
-        height: 44px;
-        border-radius: var(--radius-sm);
-        object-fit: cover;
-    }
+	.div-word {
+		font-size: 30px;
+		font-weight: 700;
+		letter-spacing: -0.03em;
+	}
 
-    .cell-main {
-        flex: 1;
-        min-width: 0;
-    }
+	.div-sub {
+		font-size: 12px;
+		color: var(--text-subtle);
+	}
 
-    .cell-side {
-        width: 28%;
-        flex-shrink: 0;
-        min-width: 0;
-    }
+	.gbar {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+	}
 
-    .cell-trail {
-        width: 72px;
-        flex-shrink: 0;
-        text-align: right;
-    }
+	.gbar-head {
+		display: flex;
+		justify-content: space-between;
+		gap: 8px;
+		font-size: 13px;
+	}
 
-    .row-name {
-        color: var(--text-primary);
-        font-weight: 600;
-        font-size: 0.88rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+	.gbar-head .mono {
+		font-size: 12px;
+		color: var(--text-subtle);
+	}
 
-    .row-sub {
-        color: var(--text-muted);
-        font-size: 0.8rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+	.gtrack {
+		height: 6px;
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.06);
+	}
 
+	.gfill {
+		height: 100%;
+		border-radius: 6px;
+		background: var(--accent);
+		transition: width 0.25s var(--ease);
+	}
+
+	.stats {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		margin: 0;
+	}
+
+	.stats div {
+		display: flex;
+		justify-content: space-between;
+		gap: 12px;
+		font-size: 12px;
+	}
+
+	.stats dt {
+		color: var(--text-muted);
+	}
+
+	.stats dd {
+		margin: 0;
+		color: rgba(243, 243, 245, 0.65);
+	}
+
+	.clock-label {
+		margin: 0;
+		font-size: 11px;
+		letter-spacing: 0.04em;
+		color: var(--text-subtle);
+	}
+
+	.note {
+		margin: 0;
+		font-size: 12px;
+		color: var(--text-subtle);
+	}
+
+	@media (max-width: 1179px) {
+		.m {
+			grid-column: span 6;
+		}
+		.has-expanded .m {
+			grid-column: span 12;
+		}
+	}
+
+	@media (max-width: 759px) {
+		.content {
+			padding: 20px 16px 40px;
+		}
+		.m {
+			grid-column: span 12;
+		}
+		.summary {
+			font-size: 18px;
+		}
+	}
 </style>

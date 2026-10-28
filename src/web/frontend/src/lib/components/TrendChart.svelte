@@ -50,7 +50,8 @@
 			{/each}
 
 			{#each labels as lbl, i}
-				<text class="x-label" x={x(i)} y={H - 12} text-anchor="middle">{lbl}</text>
+				<!-- Edge labels anchor inward so they never overflow the chart. -->
+				<text class="x-label" x={x(i)} y={H - 12} text-anchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}>{lbl}</text>
 			{/each}
 		</svg>
 
