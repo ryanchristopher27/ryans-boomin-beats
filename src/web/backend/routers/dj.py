@@ -102,6 +102,10 @@ class SuggestRequest(BaseModel):
     only_moves: list[Annotated[str, StringConstraints(max_length=20)]] = Field(default=[], max_length=8)
     feedback: dict[Annotated[str, StringConstraints(max_length=20)], list[Annotated[str, StringConstraints(max_length=60)]]] = Field(default={}, max_length=8)
     exclude: list[TrackRef] = _refs()
+    # F3d: how much to draw on the listener's own library (their top tracks).
+    # None = no preference (older clients); 0 = from their library, 1 = all new.
+    familiar: float | None = Field(default=None, ge=0, le=1)
+    library: list[TrackRef] = _refs()
 
 
 # Concrete markers, because a bare "step energy UP" was followed weakly at
@@ -164,6 +168,21 @@ def _adventure_line(a: float) -> str:
             'Skip anything a casual listener would already expect.')
 
 
+def familiar_line(body: SuggestRequest) -> str:
+    """Familiar ↔ New (F3d): lean on the listener's library, or away from it."""
+    if body.familiar is None or not body.library:
+        return ''
+    songs = '\n'.join(f'- {r.title} — {r.artist}' for r in body.library[:20])
+    head = f"The listener's own library (their top tracks):\n{songs}\n"
+    if body.familiar < 0.34:
+        return head + ('FAMILIAR: most picks should be songs from this library or other songs by these artists, '
+                       'as long as they fit the move. Say so in the reason.\n\n')
+    if body.familiar < 0.67:
+        return head + 'MIX: about half the picks from this library or its artists, half new to the listener.\n\n'
+    return head + ('NEW: pick songs the listener likely has NOT heard: avoid this library and its artists, '
+                   'but match its taste.\n\n')
+
+
 def asked_moves(body: SuggestRequest) -> dict[str, str]:
     """The moves this round asks for: all of them, or only the ones being refreshed."""
     allowed = moves_for(body.goal)
@@ -202,6 +221,7 @@ def build_prompt(body: SuggestRequest, tags: list[str]) -> str:
         + (f'Never suggest these artists: {", ".join(body.avoid_artists)}\n\n' if body.avoid_artists else '')
         + (f'Just shown and being replaced (do not suggest these):\n{lines(body.exclude)}\n\n' if body.exclude else '')
         + feedback_lines(body, asked)
+        + familiar_line(body)
         + ('Clean versions only: no explicit songs.\n\n' if body.clean else '')
         + f'{_adventure_line(body.adventurousness)}\n\n'
         + f'Give {n} songs for each of these moves:\n{moves}'

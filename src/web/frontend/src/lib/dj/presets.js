@@ -1,12 +1,12 @@
 // Night presets (F3a): one tap sets how bold the DJ is and where it's heading.
-// Values from the handoff (Dinner 20 / Pregame 55 / Peak 80 / Afterparty 35);
-// `familiar` waits for the Familiar ↔ New slider (F3d).
+// Values from the handoff: bold Dinner 20 / Pregame 55 / Peak 80 / Afterparty 35,
+// Familiar ↔ New 75 / 45 / 40 / 30 (on our scale 0 = familiar, so 1 − those).
 
 export const NIGHT = {
-	dinner: { label: 'Dinner', bold: 0.2, familiar: 0.75, goal: { kind: 'drift' } },
-	pregame: { label: 'Pregame', bold: 0.55, familiar: 0.45, goal: { kind: 'arc', shape: 'build', minutes: 60 } },
-	peak: { label: 'Peak', bold: 0.8, familiar: 0.4, goal: { kind: 'arc', shape: 'peak_cool', minutes: 60 } },
-	afterparty: { label: 'Afterparty', bold: 0.35, familiar: 0.3, goal: { kind: 'arc', shape: 'wind_down', minutes: 60 } }
+	dinner: { label: 'Dinner', bold: 0.2, familiar: 0.25, goal: { kind: 'drift' } },
+	pregame: { label: 'Pregame', bold: 0.55, familiar: 0.55, goal: { kind: 'arc', shape: 'build', minutes: 60 } },
+	peak: { label: 'Peak', bold: 0.8, familiar: 0.6, goal: { kind: 'arc', shape: 'peak_cool', minutes: 60 } },
+	afterparty: { label: 'Afterparty', bold: 0.35, familiar: 0.7, goal: { kind: 'arc', shape: 'wind_down', minutes: 60 } }
 };
 
 const sameGoal = (a, b) => !!a && a.kind === b.kind && (a.kind !== 'arc' || (a.shape === b.shape && a.minutes === b.minutes));
@@ -24,5 +24,6 @@ export function applyPreset(dj, id) {
 	const p = NIGHT[id];
 	if (!p) return;
 	dj.setAdventurousness(p.bold);
+	dj.setFamiliar(p.familiar);
 	dj.setGoal(p.goal);
 }

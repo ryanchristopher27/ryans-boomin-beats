@@ -205,6 +205,24 @@ class BuildPrompt(unittest.TestCase):
         self.assertIn('Give 4 songs', p)
 
 
+class FamiliarToNew(unittest.TestCase):
+    np = TrackRef(title='Redbone', artist='Childish Gambino')
+    lib = [TrackRef(title='With You', artist='Jorja Smith'), TrackRef(title='Jet Black', artist='Anderson .Paak')]
+
+    def test_each_end_of_the_slider(self):
+        familiar = build_prompt(SuggestRequest(now_playing=self.np, familiar=0.1, library=self.lib), [])
+        new = build_prompt(SuggestRequest(now_playing=self.np, familiar=0.9, library=self.lib), [])
+        mix = build_prompt(SuggestRequest(now_playing=self.np, familiar=0.5, library=self.lib), [])
+        self.assertIn('With You — Jorja Smith', familiar)
+        self.assertIn('FAMILIAR', familiar)
+        self.assertIn('NEW:', new)
+        self.assertIn('MIX:', mix)
+
+    def test_no_preference_or_no_library_says_nothing(self):
+        self.assertNotIn('library', build_prompt(SuggestRequest(now_playing=self.np, library=self.lib), []))
+        self.assertNotIn('library', build_prompt(SuggestRequest(now_playing=self.np, familiar=0.1), []))
+
+
 class RefreshOneMove(unittest.TestCase):
     """F3c: a per-move refresh asks only for that move, says what was off,
     and keeps the replaced picks out."""

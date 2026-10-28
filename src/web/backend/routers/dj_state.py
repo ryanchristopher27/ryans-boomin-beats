@@ -86,6 +86,8 @@ class Goal(_Strict):
 class Options(_Strict):
     mode: Literal['whisper', 'copilot', 'autofill', 'driver'] = 'copilot'
     adventurousness: float = Field(default=0.5, ge=0, le=1)
+    # F3d: 0 = from the listener's library, 1 = all new to them.
+    familiar: float = Field(default=0.5, ge=0, le=1)
     clean: bool = False
     goal: Goal | None = None
     avoidTracks: list[AvoidedTrack] = Field(default=[], max_length=500)

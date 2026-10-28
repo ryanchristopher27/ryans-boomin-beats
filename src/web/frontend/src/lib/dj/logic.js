@@ -107,7 +107,7 @@ export function goalKey(goal, now = Date.now()) {
 export function emptyDoc() {
 	return {
 		queue: { sent: [], upcoming: [], requests: [], guestSkips: [], keptGuests: [] },
-		options: { mode: 'copilot', adventurousness: 0.5, clean: false, goal: null, avoidTracks: [], avoidArtists: [] },
+		options: { mode: 'copilot', adventurousness: 0.5, familiar: 0.5, clean: false, goal: null, avoidTracks: [], avoidArtists: [] },
 		feedback: { liked: [], disliked: [], skipped: [] },
 		recent: []
 	};

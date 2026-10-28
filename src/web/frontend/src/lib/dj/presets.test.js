@@ -4,8 +4,8 @@ import { NIGHT, activePreset, applyPreset } from './presets.js';
 describe('night presets', () => {
 	test('applying a preset sets boldness and the goal', () => {
 		const calls = [];
-		applyPreset({ setAdventurousness: (a) => calls.push(['bold', a]), setGoal: (g) => calls.push(['goal', g]) }, 'pregame');
-		expect(calls).toEqual([['bold', 0.55], ['goal', NIGHT.pregame.goal]]);
+		applyPreset({ setAdventurousness: (a) => calls.push(['bold', a]), setFamiliar: (f) => calls.push(['familiar', f]), setGoal: (g) => calls.push(['goal', g]) }, 'pregame');
+		expect(calls).toEqual([['bold', 0.55], ['familiar', 0.55], ['goal', NIGHT.pregame.goal]]);
 	});
 	test('the active preset is recognised, and lost once tweaked', () => {
 		const opts = { adventurousness: 0.8, goal: { kind: 'arc', shape: 'peak_cool', minutes: 60, startedAt: 'x' } };

@@ -21,6 +21,9 @@
 	// The slider moves freely; the DJ re-asks only when it's released.
 	let draft = null;
 	$: bold = draft ?? o.adventurousness;
+	let famDraft = null;
+	$: familiar = famDraft ?? o.familiar ?? 0.5;
+	$: famLabel = familiar < 0.34 ? 'From your library' : familiar < 0.67 ? 'Mix' : 'Mostly new';
 </script>
 
 <div class="controls">
@@ -44,6 +47,24 @@
 			on:change={(e) => {
 				dj.setAdventurousness(+e.currentTarget.value);
 				draft = null;
+			}}
+		/>
+	</label>
+
+	<label class="slider">
+		<span class="ends"><span>Familiar</span><span class="mid mono">{famLabel}</span><span>New</span></span>
+		<input
+			type="range"
+			min="0"
+			max="1"
+			step="0.05"
+			value={familiar}
+			aria-label="Familiar to new"
+			aria-valuetext={famLabel}
+			on:input={(e) => (famDraft = +e.currentTarget.value)}
+			on:change={(e) => {
+				dj.setFamiliar(+e.currentTarget.value);
+				famDraft = null;
 			}}
 		/>
 	</label>
@@ -128,6 +149,10 @@
 		justify-content: space-between;
 		font-size: calc(12px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.55);
+	}
+
+	.mid {
+		color: var(--text-subtle);
 	}
 
 	.slider input {

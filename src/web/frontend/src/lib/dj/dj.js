@@ -630,6 +630,8 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 
 	/** The DJ page calls this on mount; the returned function on destroy. */
 	function watchSuggestions() {
+		// The library seeds Familiar ↔ New; rounds use it once it has arrived.
+		loadLibrary();
 		watchers++;
 		prefetch();
 		return () => watchers--;
@@ -644,6 +646,23 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	}
 
 	const ref = (t) => ({ id: t.trackID ?? t.id ?? '', isrc: t.isrc ?? null, title: t.title, artist: t.artists?.[0] ?? t.artist ?? '' });
+
+	// The listener's top tracks seed Familiar ↔ New (F3d); fetched once per session.
+	let library = null;
+	let libraryLoad = null;
+	function loadLibrary() {
+		libraryLoad ??= fetchLibrary();
+		return libraryLoad;
+	}
+	async function fetchLibrary() {
+		try {
+			const r = await request('GET', 'spotify/top-tracks/?limit=20');
+			library = r.status === 200 ? (r.data?.tracks ?? []).map(ref) : [];
+		} catch {
+			library = [];
+		}
+		return library;
+	}
 
 	/** The /dj/suggest/ request for a track: the night so far, the host's taste and controls. */
 	function suggestBody(track, extra = {}) {
@@ -669,6 +688,8 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 				elapsed_minutes: Math.max(0, L.elapsedMinutes(o.goal, now()))
 			},
 			feedback: get(moveFeedback),
+			familiar: o.familiar ?? 0.5,
+			library: library ?? [],
 			...extra
 		};
 	}
@@ -705,7 +726,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		if (!hasLLM()) return suggestions.set({ status: 'needsKey', moves: [], error: null });
 		const o = d().options;
 		// Settings that change the answer are part of the key.
-		const key = `${track.id}|${Math.floor(o.adventurousness * 3)}|${o.clean}|${L.goalKey(o.goal, now())}|${JSON.stringify(get(moveFeedback))}`;
+		const key = `${track.id}|${Math.floor(o.adventurousness * 3)}|${Math.floor((o.familiar ?? 0.5) * 3)}|${o.clean}|${L.goalKey(o.goal, now())}|${JSON.stringify(get(moveFeedback))}`;
 		if (!force && cache.has(key)) {
 			suggestions.set({ status: 'loaded', moves: cache.get(key), error: null });
 			return autopilot();
@@ -841,6 +862,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		// options
 		setMode: (m) => setOption('mode', m),
 		setAdventurousness: (a) => setOption('adventurousness', a),
+		setFamiliar: (f) => setOption('familiar', f),
 		setClean: (c) => setOption('clean', c),
 		// Every field filled, as the server stores it.
 		setGoal: (g) => setOption('goal', g && { destination: '', shape: 'build', minutes: 30, ...g, startedAt: g.startedAt ?? new Date(now()).toISOString() }),
