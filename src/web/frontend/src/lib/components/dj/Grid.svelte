@@ -102,6 +102,8 @@
 </div>
 
 <style>
+	/* Never put CSS `zoom` on the grid or any ancestor: gridstack then
+	   misplaces widgets after a resize and drag stops working (R0 spike). */
 	.grid-stack {
 		margin: 0 -5px;
 	}

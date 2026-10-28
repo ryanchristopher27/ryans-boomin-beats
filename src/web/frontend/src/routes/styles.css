@@ -1,47 +1,72 @@
-@import '@fontsource/fira-mono';
-@import '@fontsource/inter/400.css';
-@import '@fontsource/inter/500.css';
-@import '@fontsource/inter/600.css';
-@import '@fontsource/inter/700.css';
+@import '@fontsource/geist/400.css';
+@import '@fontsource/geist/500.css';
+@import '@fontsource/geist/600.css';
+@import '@fontsource/geist/700.css';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
 
+/* Tokens from the redesign handoff (docs/design/redesign-2026-10-27/README.md),
+   mapped onto the names the app already uses. */
 :root {
-	--font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
-		Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-	--font-mono: 'Fira Mono', monospace;
+	color-scheme: dark;
+	--font-body: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--font-mono: 'Geist Mono', ui-monospace, monospace;
 
-	/* --- Surfaces (layered dark, logo-plate-matched) --- */
-	--surface-0: #121212;   /* page background */
-	--surface-1: #242424;   /* cards — matches logo plate, header blends in */
-	--surface-2: #2e2e2e;   /* hover / raised */
+	/* --- Surfaces --- */
+	--surface-0: #0a0a0c; /* page */
+	--surface-raised: #0d0d10; /* header base, dock, mini player */
+	--surface-1: #131316; /* flat cards, inputs */
+	--surface-2: #1b1b1f; /* hover */
+	--surface-active: #24242a; /* selected segment, active nav, user bubbles */
+	--hover: rgba(255, 255, 255, 0.05);
+	--glass: rgba(20, 20, 24, 0.62); /* DJ and Profile cards, toolbar pills */
+	--glass-blur: blur(24px);
+	--popover: rgba(23, 23, 27, 0.94);
 
 	/* --- Text --- */
-	--text-primary: #ffffff;
-	--text-muted: rgba(255, 255, 255, 0.65);
-	--text-subtle: rgba(255, 255, 255, 0.4);
+	--text-primary: #f3f3f5;
+	--text-muted: rgba(243, 243, 245, 0.6);
+	--text-subtle: rgba(243, 243, 245, 0.45);
 
-	/* --- Accent (logo-derived blue → purple) --- */
-	--accent: #5ec9ff;        /* logo blue — primary accent, links, active */
+	/* --- Accent --- */
+	--accent: #5ec9ff;
 	--accent-rgb: 94, 201, 255;
-	--accent-mid: #7b7ff0;    /* logo gradient midpoint (periwinkle) */
-	--accent-2: #a235ff;      /* logo purple — secondary accent */
-	--accent-hover: #8ad8ff;  /* brightened blue for hover affordance */
+	--accent-hover: #8ad8ff;
+	--accent-on: #06121a; /* text on accent buttons */
+	--accent-tint: rgba(94, 201, 255, 0.13);
+	--accent-tint-border: rgba(94, 201, 255, 0.5);
+	--accent-tint-text: #9ddfff;
+	--accent-2: #a235ff; /* purple: Goal and the Toward move only */
+	--accent-2-text: #c49bff;
+	--accent-2-light: #d7bcff;
 	--brand-gradient: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+	--success: #4ade80;
+	--danger: #ff7a7a;
+	--danger-text: #ff9a9a;
+	--warning: #ffb454;
 
 	/* --- Lines / shape / motion --- */
-	--border-subtle: rgba(255, 255, 255, 0.08);
-	--radius: 12px;
-	--radius-sm: 8px;
-	--radius-lg: 20px;
-	--transition: 0.15s ease;
+	--border-subtle: rgba(255, 255, 255, 0.07); /* cards */
+	--border-control: rgba(255, 255, 255, 0.1);
+	--border-strong: rgba(255, 255, 255, 0.13); /* secondary buttons */
+	--radius: 14px; /* cards */
+	--radius-sm: 9px; /* buttons, inputs */
+	--radius-row: 10px;
+	--radius-lg: 20px; /* popovers, hero inputs */
+	--ease: cubic-bezier(0.16, 1, 0.3, 1);
+	--transition: 0.15s var(--ease);
+	--shadow-pop: 0 30px 80px rgba(0, 0, 0, 0.55);
 	--panel-width: 340px;
+	--header-height: 60px;
 
 	--color-text: var(--text-primary);
-
-	--primary-spacing: 15px;
-	--column-width: 42rem;
-	--column-margin-top: 4rem;
+	--primary-spacing: 28px;
 	font-family: var(--font-body);
 	color: var(--color-text);
+}
+
+* {
+	box-sizing: border-box;
 }
 
 body {
@@ -49,6 +74,7 @@ body {
 	margin: 0;
 	background-color: var(--surface-0);
 	color: var(--text-primary);
+	-webkit-font-smoothing: antialiased;
 }
 
 h1,
@@ -71,49 +97,39 @@ a:hover {
 	color: var(--accent-hover);
 }
 
-h1 {
-	font-size: 2rem;
-	text-align: center;
-}
-
-h2 {
-	font-size: 1rem;
-}
-
-pre {
-	font-size: 16px;
-	font-family: var(--font-mono);
-	background-color: rgba(255, 255, 255, 0.45);
-	border-radius: 3px;
-	box-shadow: 2px 2px 6px rgb(255 255 255 / 25%);
-	padding: 0.5em;
-	overflow-x: auto;
-	color: var(--color-text);
-}
-
-.text-column {
-	display: flex;
-	max-width: 48rem;
-	flex: 0.6;
-	flex-direction: column;
-	justify-content: center;
-	margin: 0 auto;
-}
-
 input,
-button {
+button,
+textarea,
+select {
 	font-size: inherit;
 	font-family: inherit;
+}
+
+button {
+	white-space: nowrap;
 }
 
 button:focus:not(:focus-visible) {
 	outline: none;
 }
 
-@media (min-width: 720px) {
-	h1 {
-		font-size: 2.4rem;
-	}
+:is(button, input, select, textarea, summary, a, [tabindex]):focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.08);
+	border-radius: 10px;
+	border: 3px solid transparent;
+	background-clip: padding-box;
+}
+::-webkit-scrollbar-track {
+	background: transparent;
 }
 
 .visually-hidden {
@@ -128,22 +144,294 @@ button:focus:not(:focus-visible) {
 	white-space: nowrap;
 }
 
-/* --- Subtle motion --- */
-@keyframes fadeIn {
+.mono {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+/* --- Shared controls (were DJ-only in dj.css) --- */
+.icon-btn {
+	width: 34px;
+	height: 34px;
+	display: inline-grid;
+	place-items: center;
+	padding: 0;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--text-muted);
+	cursor: pointer;
+	transition: background-color var(--transition), color var(--transition);
+}
+
+.icon-btn:hover:not(:disabled) {
+	background: var(--hover);
+	color: var(--text-primary);
+}
+
+.icon-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	height: 36px;
+	padding: 0 14px;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background-color var(--transition), border-color var(--transition), opacity var(--transition);
+}
+
+.btn:hover:not(:disabled) {
+	background: var(--hover);
+}
+
+.btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.btn.small {
+	height: 32px;
+	padding: 0 12px;
+	font-size: 13px;
+}
+
+.btn.glass {
+	background: var(--glass);
+	border-color: var(--border-control);
+	-webkit-backdrop-filter: var(--glass-blur);
+	backdrop-filter: var(--glass-blur);
+}
+
+.btn.subtle {
+	border: none;
+	background: var(--surface-active);
+}
+
+.btn.primary {
+	background: var(--accent);
+	border-color: transparent;
+	color: var(--accent-on);
+	font-weight: 600;
+}
+
+.btn.primary:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
+
+.btn.gradient {
+	background: var(--brand-gradient);
+	border-color: transparent;
+	color: #fff;
+	font-weight: 600;
+}
+
+.btn.gradient:hover:not(:disabled) {
+	opacity: 0.9;
+}
+
+.btn.white {
+	background: #f3f3f5;
+	border-color: transparent;
+	color: #0a0a0c;
+	font-weight: 600;
+}
+
+.btn.white:hover:not(:disabled) {
+	background: #fff;
+}
+
+.btn.danger {
+	color: var(--danger-text);
+}
+
+.segmented {
+	display: flex;
+	padding: 3px;
+	gap: 2px;
+	background: var(--glass);
+	border: 1px solid var(--border-control);
+	border-radius: 10px;
+}
+
+.segmented button {
+	flex: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	height: 30px;
+	padding: 0 10px;
+	border: none;
+	border-radius: 7px;
+	background: none;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 500;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background-color var(--transition), color var(--transition);
+}
+
+.segmented button:hover {
+	color: var(--text-primary);
+}
+
+.segmented button.active {
+	background: var(--surface-active);
+	color: var(--text-primary);
+}
+
+.segmented.small button {
+	height: 26px;
+	font-size: 12px;
+}
+
+/* A chip: Last.fm tags, mood and example prompts, goal picks. */
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--border-control);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
+	transition: background-color var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.chip:hover {
+	background: var(--hover);
+}
+
+.chip.selected {
+	background: var(--accent-tint);
+	border-color: var(--accent-tint-border);
+	color: var(--accent-tint-text);
+}
+
+.glass {
+	background: var(--glass);
+	border: 1px solid var(--border-subtle);
+	-webkit-backdrop-filter: var(--glass-blur);
+	backdrop-filter: var(--glass-blur);
+}
+
+.eyebrow {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-subtle);
+}
+
+.skeleton {
+	border-radius: 6px;
+	background: linear-gradient(90deg, #1c1c21 25%, #2a2a31 50%, #1c1c21 75%);
+	background-size: 200% 100%;
+	animation: bbshimmer 1.6s linear infinite;
+}
+
+/* --- Motion (handoff names) --- */
+@keyframes bbpulse {
+	0%,
+	100% {
+		opacity: 0.45;
+	}
+	50% {
+		opacity: 0.9;
+	}
+}
+@keyframes bbin {
 	from {
 		opacity: 0;
 		transform: translateY(6px);
 	}
 	to {
 		opacity: 1;
-		transform: translateY(0);
+		transform: none;
+	}
+}
+@keyframes bbshimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+@keyframes bbeq {
+	0% {
+		transform: scaleY(0.18);
+	}
+	100% {
+		transform: scaleY(1);
+	}
+}
+@keyframes bbbreath {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.03);
+	}
+}
+@keyframes bbglow {
+	0%,
+	100% {
+		transform: translateY(8%) scale(0.92);
+	}
+	50% {
+		transform: translateY(8%) scale(1.06);
+	}
+}
+@keyframes bbdrift {
+	0% {
+		transform: translate(0, 0) scale(1);
+	}
+	100% {
+		transform: translate(7vw, 5vh) scale(1.18);
+	}
+}
+@keyframes bbpop {
+	from {
+		opacity: 0;
+		transform: scale(0.9);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+@keyframes bbspin {
+	to {
+		transform: rotate(360deg);
 	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-	* {
+	*,
+	*::before,
+	*::after {
 		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
 		transition-duration: 0.001ms !important;
 	}
 }
-

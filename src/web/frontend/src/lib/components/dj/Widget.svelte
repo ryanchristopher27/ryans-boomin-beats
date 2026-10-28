@@ -2,7 +2,7 @@
 	// Chrome shared by every DJ widget: a 40px header (title, actions) over a
 	// scrolling body. In edit mode the header becomes the drag handle and gains
 	// a remove button.
-	import Icon from './Icon.svelte';
+	import Icon from '../Icon.svelte';
 
 	export let title;
 	export let editing = false;

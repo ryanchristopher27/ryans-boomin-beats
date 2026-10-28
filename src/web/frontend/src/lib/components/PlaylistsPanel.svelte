@@ -247,7 +247,7 @@
 		z-index: 45;
 		display: flex;
 		flex-direction: column;
-		animation: fadeIn 0.2s ease;
+		animation: bbin 0.2s ease;
 	}
 
 	.panel.picking {

@@ -16,8 +16,7 @@
 	import Recent from '$lib/components/dj/Recent.svelte';
 	import { provideDJContext } from '$lib/components/dj/context.js';
 	import SyncBanner from '$lib/components/dj/SyncBanner.svelte';
-	import Icon from '$lib/components/dj/Icon.svelte';
-	import '$lib/components/dj/dj.css';
+	import Icon from '$lib/components/Icon.svelte';
 
 	const dj = /** @type {any} */ (getDJ());
 	const { doc, suggestions, player } = dj;

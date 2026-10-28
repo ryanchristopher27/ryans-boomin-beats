@@ -12,7 +12,6 @@
 		"format": "prettier --plugin-search-dir . --write ."
 	},
 	"devDependencies": {
-		"@fontsource/fira-mono": "^4.5.10",
 		"@sveltejs/adapter-auto": "^2.0.0",
 		"@sveltejs/kit": "^1.20.4",
 		"@types/cookie": "^0.5.1",
@@ -27,7 +26,8 @@
 	"type": "module",
 	"svelte": "index.js",
 	"dependencies": {
-		"@fontsource/inter": "^5.2.8",
+		"@fontsource/geist": "^5.3.0",
+		"@fontsource/geist-mono": "^5.3.0",
 		"gridstack": "13.3.0"
 	}
 }

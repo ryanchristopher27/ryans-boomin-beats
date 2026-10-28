@@ -6,7 +6,7 @@
 	import { llmSettingsOpen } from '../../../stores.js';
 	import { MOVE_SUMMARY, moveLabel } from '$lib/dj/layout.js';
 	import { queuedKeys } from '$lib/dj/logic.js';
-	import Icon from './Icon.svelte';
+	import Icon from '../Icon.svelte';
 	import PickRow from './PickRow.svelte';
 
 	/** @type {any} */

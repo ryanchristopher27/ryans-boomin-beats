@@ -1,5 +1,5 @@
 <script>
-	import Icon from './Icon.svelte';
+	import Icon from '../Icon.svelte';
 	import Goal from './Goal.svelte';
 
 	/** @type {any} */

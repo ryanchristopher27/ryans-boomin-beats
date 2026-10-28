@@ -1,7 +1,7 @@
 <script>
 	import { flip } from 'svelte/animate';
 	import SongSearch from '$lib/components/SongSearch.svelte';
-	import Icon from './Icon.svelte';
+	import Icon from '../Icon.svelte';
 	import { asSong, djContext, offerUndo } from './context.js';
 
 	/** @type {any} */

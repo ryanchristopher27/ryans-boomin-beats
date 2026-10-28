@@ -3569,3 +3569,14 @@ There's no new framework. It stays SvelteKit 1 + Svelte 4 with plain scoped CSS.
 | UI scale | CSS `zoom: 0.9` on `.app` (pending R0 spike) | Styles are px-based; a rem refactor is out of proportion | 2026-10-27 |
 | DJ layout | Keep gridstack, presets and Edit layout; Host becomes 3\|6\|3 with fill-height | Already shipped and tested; the handoff's repo map says to add Compass as a preset, which implies the grid stays | 2026-10-27 |
 | Handoff in repo | Copied to `docs/design/redesign-2026-10-27/` | The spec should outlive the Downloads folder. The prototype contains the owner's name (mock data), and the repo is public | 2026-10-27 |
+
+### R0 spike result (2026-10-27): no CSS `zoom`
+
+CSS `zoom` breaks gridstack. Under `zoom: 0.9` on `.app`, widgets land in the wrong place after a
+resize. Undoing the zoom on the grid and re-applying it inside each widget fixed placement but
+not dragging. In a headless Playwright drag, a widget moved with zoom off and stayed put with any
+zoom on.
+
+**Decision:** no `zoom`. Part 1 uses the handoff's sizes at 100%. The 90% default text size
+(the handoff's "Text size" setting) is now part of F1. It needs a mechanism that leaves the DJ
+grid unzoomed, such as a root font-size scale with rem-based type.

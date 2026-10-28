@@ -171,7 +171,7 @@
 		z-index: 60;
 		max-height: 380px;
 		overflow-y: auto;
-		animation: fadeIn 0.15s ease;
+		animation: bbin 0.15s ease;
 	}
 
 	.suggestion {

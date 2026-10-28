@@ -2,7 +2,7 @@
 	// Recently played (W4): this session's history, synced from the driving
 	// device. Click a row to see its profile; + queues it again.
 	import { flip } from 'svelte/animate';
-	import Icon from './Icon.svelte';
+	import Icon from '../Icon.svelte';
 	import { asSong, djContext } from './context.js';
 
 	/** @type {any} */

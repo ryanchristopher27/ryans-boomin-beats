@@ -1,7 +1,7 @@
 <script>
 	// Who's driving (SY3 on the web): quiet when this tab drives, a clear call
 	// to action when another device does, and a warning when it has gone quiet.
-	import Icon from './Icon.svelte';
+	import Icon from '../Icon.svelte';
 
 	/** @type {any} */
 	export let dj;

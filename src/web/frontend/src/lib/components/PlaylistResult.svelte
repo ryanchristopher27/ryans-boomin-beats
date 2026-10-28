@@ -184,7 +184,7 @@
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-lg);
 		padding: 18px;
-		animation: fadeIn 0.3s ease;
+		animation: bbin 0.3s ease;
 	}
 
 	.cover-backdrop {

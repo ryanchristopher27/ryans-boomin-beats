@@ -6,7 +6,7 @@
 	import { page as route } from '$app/stores';
 	import { access_token, playlistsPanelOpen } from '../../../stores.js';
 	import { getDJ } from '$lib/dj/instance.js';
-	import Icon from './Icon.svelte';
+	import Icon from '../Icon.svelte';
 
 	const dj = /** @type {any} */ (getDJ());
 	const { player, doc } = dj;
