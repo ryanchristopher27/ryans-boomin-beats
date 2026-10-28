@@ -71,7 +71,7 @@
         return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    import { page, user, access_token, selectedSong } from '../../stores.js'
+    import { page, user, access_token, selectedSong, exploreTrail, discoveryPlaylist } from '../../stores.js'
     import { bearer } from '$lib/spotifyHeaders.js';
     import { beginLogin, logoutSpotify, hydrateToken, exchangeCodeForToken, saveTokens } from '$lib/spotifyAuth.js';
     import { getSavedStates, setTrackSaved } from '$lib/playlistActions.js';
@@ -244,6 +244,8 @@
 
     function exploreTrack(song) {
         $selectedSong = { title: song.title, artists: song.artists, id: song.id, image: song.image };
+        $exploreTrail = [$selectedSong];
+        $discoveryPlaylist = [];
         goto('/');
     }
 

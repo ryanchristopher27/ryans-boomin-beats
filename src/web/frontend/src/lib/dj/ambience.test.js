@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { ambientColor, toOklab } from './ambience.js';
+import { ambientColor, nameHue, toOklab } from './ambience.js';
 
 const solid = (r, g, b, n = 4) => Uint8ClampedArray.from({ length: n * 4 }, (_, i) => [r, g, b, 255][i % 4]);
 const parse = (s) => s.match(/oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/).slice(1).map(Number);
@@ -24,5 +24,9 @@ describe('ambience', () => {
 	});
 	test('transparent images give no tint', () => {
 		expect(ambientColor(new Uint8ClampedArray(16))).toBe('');
+	});
+	test('a name always gets the same hue in range', () => {
+		expect(nameHue('Redbone')).toBe(nameHue('Redbone'));
+		for (const t of ['', 'Redbone', 'Come and Get Your Love', '4EVA']) expect(nameHue(t)).toBeGreaterThanOrEqual(0), expect(nameHue(t)).toBeLessThan(360);
 	});
 });

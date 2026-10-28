@@ -239,6 +239,7 @@ button:focus:not(:focus-visible) {
 }
 
 .btn.gradient:hover:not(:disabled) {
+	background: var(--brand-gradient);
 	opacity: 0.9;
 }
 

@@ -1,14 +1,15 @@
 <script>
+	// The Explore song page's left column (R3): Tags, What the AI hears, Sound
+	// profile and About. Picks go to exploreSession; the recipe column reads them.
 	import { PUBLIC_API_URL } from '$env/static/public';
-	import TagPill from './TagPill.svelte';
-	import SongRadar from './SongRadar.svelte';
-	import { exploreSession } from '../../stores.js';
+	import { exploreSession, llmConfig, llmSettingsOpen } from '../../stores.js';
 	import { llmHeaders } from '../llmHeaders.js';
+	import Icon from './Icon.svelte';
+	import { parseAnalysis } from '$lib/explore.js';
 
 	const SCORE_ORDER = ['Energy', 'Danceability', 'Positivity', 'Acousticness', 'Intensity', 'Tempo'];
 
 	export let song = null;
-	export let onDiscover = (selection) => {};
 
 	let loading = false;
 
@@ -17,34 +18,32 @@
 
 	$: profile = $exploreSession.profile;
 	$: analysisFields = profile ? parseAnalysis(profile.analysis) : [];
-	$: scoreAxes = profile?.scores
-		? SCORE_ORDER.map((k) => ({ label: k, value: profile.scores[k] ?? 0 }))
-		: [];
+	$: scores = profile?.scores ? SCORE_ORDER.filter((k) => k in profile.scores).map((k) => ({ label: k, value: Math.round(profile.scores[k] ?? 0) })) : [];
 	$: selectedTags = new Set($exploreSession.selectedTags);
 	$: selectedAspects = new Set($exploreSession.selectedAspects);
-	$: totalSelected = selectedTags.size + selectedAspects.size;
 
-	async function ensureProfile(key, s) {
-		// Already loaded this exact song — use the cache, do NOT re-query.
-		if ($exploreSession.key === key && $exploreSession.profile) return;
+	async function ensureProfile(key, s, force = false) {
+		// Already loaded this exact song: use the cache, do NOT re-query.
+		if (!force && $exploreSession.key === key && $exploreSession.profile) return;
 		loading = true;
-		$exploreSession = { key, profile: null, selectedTags: [], selectedAspects: [] };
+		const keep = force ? $exploreSession : { selectedTags: [], selectedAspects: [] };
+		$exploreSession = { key, profile: force ? $exploreSession.profile : null, selectedTags: keep.selectedTags, selectedAspects: keep.selectedAspects };
 		try {
 			const artist = s.artists?.[0] ?? s.artist ?? '';
 			const params = new URLSearchParams({ title: s.title, artist });
 			const res = await fetch(`${PUBLIC_API_URL}/song/profile/?${params}`, { headers: llmHeaders() });
 			const data = await res.json();
-			$exploreSession = { key, profile: data, selectedTags: [], selectedAspects: [] };
+			$exploreSession = { ...$exploreSession, key, profile: data };
 		} catch {
-			$exploreSession = { key, profile: null, selectedTags: [], selectedAspects: [] };
+			if (!force) $exploreSession = { key, profile: null, selectedTags: [], selectedAspects: [] };
 		} finally {
 			loading = false;
 		}
 	}
 
-	function toggleTag(tagName, isSelected) {
+	function toggleTag(name) {
 		const set = new Set($exploreSession.selectedTags);
-		isSelected ? set.add(tagName) : set.delete(tagName);
+		set.has(name) ? set.delete(name) : set.add(name);
 		$exploreSession = { ...$exploreSession, selectedTags: Array.from(set) };
 	}
 
@@ -53,342 +52,266 @@
 		set.has(label) ? set.delete(label) : set.add(label);
 		$exploreSession = { ...$exploreSession, selectedAspects: Array.from(set) };
 	}
-
-	function handleDiscover() {
-		onDiscover({
-			tags: [...$exploreSession.selectedTags],
-			aspects: analysisFields.filter(f => $exploreSession.selectedAspects.includes(f.label)),
-		});
-	}
-
-	function parseAnalysis(raw) {
-		if (!raw) return [];
-		return raw
-			.split('\n')
-			.map(line => line.trim())
-			.filter(line => line.includes(':'))
-			.map(line => {
-				const i = line.indexOf(':');
-				return { label: line.slice(0, i).trim(), value: line.slice(i + 1).trim() };
-			})
-			.filter(f => f.label && f.value);
-	}
 </script>
 
-{#if loading}
-	<div class="profile-container">
-		<div class="loading">Loading profile...</div>
+{#if loading && !profile}
+	<div class="col" aria-busy="true">
+		{#each [3, 5, 4] as lines}
+			<div class="card">
+				<div class="skeleton bar" style:width="30%" />
+				{#each Array(lines) as _, i}<div class="skeleton bar" style:width="{90 - i * 12}%" />{/each}
+			</div>
+		{/each}
 	</div>
 {:else if profile}
-	<div class="profile-container">
-		{#if song?.image}
-			<div class="profile-backdrop" style="background-image: url({song.image})"></div>
-			<div class="profile-scrim"></div>
+	<div class="col">
+		{#if profile.tags?.length}
+			<section class="card">
+				<div class="card-head">
+					<h2>Tags</h2>
+					<span class="aside">From Last.fm. Tap to add to your recipe.</span>
+				</div>
+				<div class="chips">
+					{#each profile.tags as tag}
+						<button class="chip" class:selected={selectedTags.has(tag.name)} aria-pressed={selectedTags.has(tag.name)} on:click={() => toggleTag(tag.name)}>
+							{#if selectedTags.has(tag.name)}<Icon name="check" size={12} />{/if}{tag.name}
+						</button>
+					{/each}
+				</div>
+			</section>
 		{/if}
 
-		<div class="profile-content">
-		<div class="profile-header">
-			{#if song?.image}
-				<img class="profile-cover" src={song.image} alt="" />
-			{/if}
-			<div class="profile-heading-text">
-				<div class="song-title">{profile.title}</div>
-				<div class="song-artist">{profile.artist}</div>
-				{#if profile.listeners > 0}
-					<div class="listeners">{profile.listeners.toLocaleString()} listeners{#if profile.play_count > 0} · {profile.play_count.toLocaleString()} plays{/if} on Last.fm</div>
-				{/if}
+		<section class="card">
+			<div class="card-head">
+				<h2>What the AI hears</h2>
+				{#if analysisFields.length}<span class="aside mono">Tap to add</span>{/if}
 			</div>
-		</div>
-
-		<div class="profile-body">
-			<div class="profile-body-left">
-				{#if profile.tags.length > 0}
-					<div class="section tags-section">
-						<div class="section-label">Tags · tap to select</div>
-						<div class="tag-pills">
-							{#each profile.tags as tag}
-								<TagPill
-									tag={tag.name}
-									selected={selectedTags.has(tag.name)}
-									onToggle={toggleTag}
-								/>
-							{/each}
-						</div>
-					</div>
-				{/if}
-
-				{#if analysisFields.length > 0}
-					<div class="section analysis-section">
-						<div class="section-label">Analysis · tap an aspect to select</div>
-						{#each analysisFields as field}
-							<button
-								type="button"
-								class="analysis-field"
-								class:selected={selectedAspects.has(field.label)}
-								on:click={() => toggleAspect(field.label)}
-							>
-								<span class="field-label">{field.label}</span>
-								<span class="field-value">{field.value}</span>
-							</button>
-						{/each}
-					</div>
-				{:else}
-					<div class="no-llm">Connect an AI account via ⚙ to see a song analysis and discover similar songs.</div>
-				{/if}
-			</div>
-
-			{#if profile.scores}
-				<div class="profile-body-radar">
-					<div class="section-label">Sound profile</div>
-					<SongRadar axes={scoreAxes} max={100} ariaLabel="Song characteristics" />
+			{#if analysisFields.length}
+				<div class="aspects">
+					{#each analysisFields as field}
+						<button class="aspect" class:on={selectedAspects.has(field.label)} aria-pressed={selectedAspects.has(field.label)} on:click={() => toggleAspect(field.label)}>
+							<span class="aspect-head">
+								<span class="aspect-label">{field.label}</span>
+								<span class="box">{#if selectedAspects.has(field.label)}<Icon name="check" size={11} />{/if}</span>
+							</span>
+							<span class="aspect-note">{field.value}</span>
+						</button>
+					{/each}
+				</div>
+			{:else if !$llmConfig.connected}
+				<div class="missing">
+					<p>Add an AI key to see a song analysis. Tags still work without one.</p>
+					<button class="btn primary small" on:click={() => ($llmSettingsOpen = true)}>Add AI key</button>
+				</div>
+			{:else}
+				<!-- Profiled before an AI was connected (the profile is cached per song). -->
+				<div class="missing">
+					<p>{loading ? 'Listening…' : 'No analysis for this song yet.'}</p>
+					<button class="btn primary small" disabled={loading} on:click={() => ensureProfile(songKey, song, true)}>Get the analysis</button>
 				</div>
 			{/if}
-		</div>
+		</section>
 
-		{#if profile.wiki_summary}
-			<div class="section about-section">
-				<div class="section-label">About</div>
-				<p class="wiki">{profile.wiki_summary}</p>
+		{#if scores.length || profile.wiki_summary}
+			<div class="pair">
+				{#if scores.length}
+					<section class="card">
+						<h2>Sound profile</h2>
+						{#each scores as s}
+							<div class="score">
+								<div class="score-head"><span>{s.label}</span><span class="mono">{s.value}</span></div>
+								<div class="track" role="meter" aria-label={s.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={s.value}><div class="fill" style:width="{s.value}%" /></div>
+							</div>
+						{/each}
+					</section>
+				{/if}
+				{#if profile.wiki_summary}
+					<section class="card">
+						<h2>About</h2>
+						<p class="about">{profile.wiki_summary}</p>
+					</section>
+				{/if}
 			</div>
 		{/if}
-
-		<button
-			class="discover-btn"
-			on:click={handleDiscover}
-			disabled={totalSelected === 0}
-		>
-			Discover Similar Songs
-			{#if totalSelected > 0}
-				· {totalSelected} selected
-			{/if}
-		</button>
-		{#if totalSelected === 0 && (profile.tags.length > 0 || analysisFields.length > 0)}
-			<div class="discover-hint">Select one or more tags or aspects above to discover similar songs.</div>
-		{/if}
-		</div>
 	</div>
 {/if}
 
 <style>
-	.profile-container {
-		position: relative;
-		overflow: hidden;
-		background-color: var(--surface-1);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-lg);
-		padding: 28px;
-		margin-top: 20px;
-		animation: bbin 0.3s ease;
-	}
-
-	.profile-backdrop {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: 360px;
-		background-size: cover;
-		background-position: center;
-		filter: blur(50px) saturate(1.3);
-		opacity: 0.45;
-		transform: scale(1.2);
-		-webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
-		mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
-		pointer-events: none;
-	}
-
-	.profile-scrim {
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: 360px;
-		background: linear-gradient(180deg, rgba(18, 18, 18, 0.55) 0%, var(--surface-1) 100%);
-		pointer-events: none;
-	}
-
-	.profile-content {
-		position: relative;
-		z-index: 1;
-	}
-
-	.loading {
-		text-align: center;
-		color: var(--text-subtle);
-		padding: 40px;
-		font-size: 0.85rem;
-	}
-
-	.profile-header {
-		display: flex;
-		align-items: center;
-		gap: 18px;
-		margin-bottom: 28px;
-	}
-
-	.profile-cover {
-		width: 96px;
-		height: 96px;
-		border-radius: var(--radius);
-		object-fit: cover;
-		flex-shrink: 0;
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
-	}
-
-	.profile-heading-text {
-		min-width: 0;
-	}
-
-	.profile-body {
-		display: flex;
-		gap: 32px;
-		align-items: stretch;
-		margin-bottom: 28px;
-	}
-
-	.profile-body-left {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.profile-body-left .section:last-child {
-		margin-bottom: 0;
-	}
-
-	.profile-body-radar {
-		flex: 0 0 48%;
+	.col {
 		display: flex;
 		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		gap: 8px;
+		gap: 20px;
+		min-width: 0;
 	}
 
-	.profile-body-radar .section-label {
-		text-align: center;
-		margin-bottom: 0;
+	.card {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 20px;
+		border-radius: 16px;
+		background: var(--surface-1);
+		border: 1px solid var(--border-subtle);
+		min-width: 0;
 	}
 
-	.song-title {
-		font-size: 1.6rem;
-		font-weight: 700;
-		color: var(--text-primary);
-		letter-spacing: -0.01em;
+	.card-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: 12px;
 	}
 
-	.song-artist {
-		font-size: 1rem;
-		color: var(--text-muted);
-		margin-top: 4px;
+	h2 {
+		margin: 0;
+		font-size: 16px;
+		font-weight: 600;
 	}
 
-	.listeners {
-		font-size: 0.75rem;
+	.aside {
+		font-size: 12px;
 		color: var(--text-subtle);
-		margin-top: 8px;
+		text-align: right;
 	}
 
-	.section {
-		margin-bottom: 28px;
-	}
-
-	.section-label {
-		font-size: 0.68rem;
-		text-transform: uppercase;
-		letter-spacing: 0.12em;
-		font-weight: 700;
-		color: var(--text-subtle);
-		margin-bottom: 12px;
-	}
-
-	.tag-pills {
+	.chips {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
 	}
 
-	.analysis-field {
+	.chip {
+		font-weight: 500;
+	}
+
+	.aspects {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+	}
+
+	.aspect {
 		display: flex;
-		gap: 12px;
-		width: 100%;
-		margin-bottom: 8px;
-		padding: 10px 12px;
-		font-size: 0.85rem;
-		line-height: 1.55;
+		flex-direction: column;
+		gap: 4px;
+		padding: 12px 14px;
+		border-radius: 11px;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: transparent;
+		color: var(--text-primary);
+		font: inherit;
 		text-align: left;
-		background-color: var(--surface-0);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
+		white-space: normal;
 		cursor: pointer;
 		transition: border-color var(--transition), background-color var(--transition);
-		font-family: inherit;
 	}
 
-	.analysis-field:hover {
+	.aspect:hover {
+		border-color: rgba(255, 255, 255, 0.18);
+	}
+
+	.aspect.on {
+		background: rgba(var(--accent-rgb), 0.08);
+		border-color: var(--accent-tint-border);
+	}
+
+	.aspect-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+	}
+
+	.aspect-label {
+		font-size: 14px;
+		font-weight: 500;
+	}
+
+	.box {
+		flex: none;
+		width: 16px;
+		height: 16px;
+		display: grid;
+		place-items: center;
+		border-radius: 5px;
+		border: 1.5px solid rgba(255, 255, 255, 0.25);
+		color: var(--accent-on);
+	}
+
+	.on .box {
 		border-color: var(--accent);
+		background: var(--accent);
 	}
 
-	.analysis-field.selected {
-		border-color: var(--accent);
-		background-color: rgba(var(--accent-rgb), 0.1);
+	.aspect-note {
+		font-size: 12px;
+		line-height: 1.4;
+		color: rgba(243, 243, 245, 0.5);
 	}
 
-	.field-label {
-		color: var(--accent);
-		font-weight: 600;
-		min-width: 150px;
-		flex-shrink: 0;
+	.missing {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 14px;
+		border-radius: 11px;
+		border: 1px dashed rgba(255, 255, 255, 0.12);
 	}
 
-	.field-value {
-		color: var(--text-muted);
-	}
-
-	.about-section {
-		margin-bottom: 28px;
-	}
-
-	.wiki {
-		font-size: 0.85rem;
-		line-height: 1.6;
-		color: var(--text-muted);
+	.missing p {
 		margin: 0;
-		white-space: pre-line;
+		font-size: 14px;
+		color: var(--text-muted);
 	}
 
-	.discover-hint {
-		text-align: center;
-		color: var(--text-subtle);
-		font-size: 0.75rem;
-		margin-top: 10px;
+	.pair {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+		gap: 20px;
 	}
 
-	.no-llm {
-		font-size: 0.8rem;
-		color: var(--text-subtle);
-		font-style: italic;
-		margin-bottom: 20px;
+	.score {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
 	}
 
-	.discover-btn {
-		width: 100%;
-		height: 46px;
-		background: var(--brand-gradient);
-		color: var(--surface-0);
-		border: none;
-		border-radius: var(--radius);
-		font-weight: 700;
-		font-size: 0.85rem;
-		cursor: pointer;
-		transition: opacity var(--transition), filter var(--transition);
+	.score-head {
+		display: flex;
+		justify-content: space-between;
+		font-size: 12px;
+		color: var(--text-muted);
 	}
 
-	.discover-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
+	.track {
+		height: 4px;
+		border-radius: 4px;
+		background: rgba(255, 255, 255, 0.07);
+		overflow: hidden;
 	}
 
-	.discover-btn:hover:not(:disabled) {
-		filter: brightness(1.1);
+	.fill {
+		height: 100%;
+		border-radius: 4px;
+		background: var(--accent);
+	}
+
+	.about {
+		margin: 0;
+		font-size: 14px;
+		line-height: 1.6;
+		color: rgba(243, 243, 245, 0.68);
+		text-wrap: pretty;
+	}
+
+	.bar {
+		height: 12px;
+	}
+
+	@media (max-width: 759px) {
+		.aspects {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

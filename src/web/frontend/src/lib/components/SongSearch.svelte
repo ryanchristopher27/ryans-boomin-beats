@@ -3,12 +3,19 @@
 	import SongRow from './ui/SongRow.svelte';
 
 	export let onSelect = (song) => {};
-	export let placeholder = 'Search for a song...';
+	export let placeholder = 'Search for a song';
+	/** 'hero': the 64px glass pill on Explore. */
+	export let variant = 'default';
+
+	let input;
+	export const focus = () => input?.focus();
 
 	let searchValue = '';
 	let tracks = [];
 	let open = false;
 	let activeIndex = -1;
+	/** The query the open list answers, for the no-match message. */
+	let searched = '';
 	let debounceTimer;
 	const listId = `songs-${Math.random().toString(36).slice(2)}`;
 
@@ -30,9 +37,10 @@
 			const res = await fetch(`${PUBLIC_API_URL}/search/?searchValue=${encodeURIComponent(q)}`);
 			if (!res.ok) return;
 			const data = await res.json();
-			tracks = (data.tracks ?? []).slice(0, 8);
+			tracks = (data.tracks ?? []).slice(0, 6);
 			activeIndex = -1;
-			open = tracks.length > 0;
+			searched = q;
+			open = true;
 		} catch {
 			tracks = [];
 			open = false;
@@ -63,7 +71,7 @@
 	}
 
 	function onFocus() {
-		if (tracks.length > 0) open = true;
+		if (searched && searchValue.trim() === searched) open = true;
 	}
 
 	function onBlur() {
@@ -72,8 +80,8 @@
 	}
 </script>
 
-<div class="search-container">
-	<svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+<div class="search-container {variant}">
+	<svg class="search-icon" viewBox="0 0 24 24" width={variant === 'hero' ? 20 : 18} height={variant === 'hero' ? 20 : 18} aria-hidden="true">
 		<path
 			fill="none"
 			stroke="currentColor"
@@ -84,7 +92,9 @@
 	</svg>
 	<input
 		class="searchbar"
+		bind:this={input}
 		{placeholder}
+		aria-label={placeholder}
 		bind:value={searchValue}
 		on:input={onInput}
 		on:keydown={onKeydown}
@@ -111,6 +121,7 @@
 					<SongRow title={track.title} artists={track.artists} image={track.image} />
 				</li>
 			{/each}
+			{#if !tracks.length}<li class="none" role="presentation">No songs match "{searched}". Try an artist name.</li>{/if}
 		</ul>
 	{/if}
 </div>
@@ -123,24 +134,24 @@
 
 	.search-icon {
 		position: absolute;
-		left: 16px;
+		left: 14px;
 		top: 50%;
 		transform: translateY(-50%);
+		z-index: 1;
 		color: var(--text-subtle);
 		pointer-events: none;
 	}
 
 	.searchbar {
 		width: 100%;
-		box-sizing: border-box;
-		height: 48px;
-		background-color: var(--surface-1);
+		height: 44px;
+		padding: 0 14px 0 40px;
+		border: 1px solid rgba(255, 255, 255, 0.09);
+		border-radius: 10px;
+		background: var(--surface-1);
 		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius);
-		padding: 0 18px 0 44px;
-		font-size: 0.95rem;
-		transition: border-color var(--transition), box-shadow var(--transition);
+		font-size: 14px;
+		transition: border-color var(--transition);
 	}
 
 	.searchbar::placeholder {
@@ -149,8 +160,35 @@
 
 	.searchbar:focus {
 		outline: none;
-		border-color: var(--accent);
-		box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
+		border-color: var(--accent-tint-border);
+	}
+
+
+	.hero .search-icon {
+		left: 22px;
+		color: rgba(243, 243, 245, 0.6);
+	}
+
+	.hero .searchbar {
+		height: 64px;
+		padding: 0 22px 0 54px;
+		border-radius: 999px;
+		background: rgba(10, 10, 12, 0.55);
+		-webkit-backdrop-filter: blur(12px);
+		backdrop-filter: blur(12px);
+		font-size: 18px;
+	}
+
+	.hero .suggestions {
+		top: 68px;
+		text-align: left;
+	}
+
+	.none {
+		padding: 16px;
+		font-size: 14px;
+		color: var(--text-muted);
+		cursor: default;
 	}
 
 	.suggestions {

@@ -123,3 +123,33 @@ export async function getSavedStates(keys) {
 		return {};
 	}
 }
+
+/**
+ * Queue songs on the user's active Spotify device, resolving Deezer keys first.
+ * @returns {Promise<{ok: boolean, message: string}>} a sentence for the UI either way
+ */
+export async function queueTracks(keys) {
+	const { ids, missing, error } = await toSpotifyIds(keys);
+	if (error === 'auth') return { ok: false, message: 'Log in to Spotify on the Profile page to queue songs.' };
+	if (error || !ids.length) return { ok: false, message: error ? "Couldn't look these songs up on Spotify right now." : 'None of these songs are on Spotify.' };
+	const skipped = missing ? ` ${missing} song${missing > 1 ? "s aren't" : " isn't"} on Spotify and was skipped.` : '';
+	try {
+		const res = await fetch(`${PUBLIC_API_URL}/spotify/queue/`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', ...bearer(get(access_token)) },
+			body: JSON.stringify({ track_ids: ids })
+		});
+		if (res.status === 401) return { ok: false, message: 'Log in to Spotify on the Profile page to queue songs.' };
+		const data = await res.json();
+		// The backend reports how many landed before a failure, so a partial
+		// queue doesn't read as a total failure.
+		if (data.error === 'no_active_device')
+			return { ok: false, message: data.queued ? `Queued ${data.queued} before Spotify lost the active device. Start playback, then try again.` : 'Open Spotify on a device first, then try again.' };
+		if (data.error === 'premium_required') return { ok: false, message: 'Queueing requires Spotify Premium.' };
+		if (data.error)
+			return { ok: false, message: data.queued ? `Queued ${data.queued} before Spotify refused the rest. Try again in a moment.` : "Spotify didn't allow queueing right now. Try again in a moment." };
+		return { ok: true, message: (ids.length > 1 ? `Queued ${ids.length} songs.` : 'Added to the queue.') + skipped };
+	} catch {
+		return { ok: false, message: 'Could not reach the server.' };
+	}
+}

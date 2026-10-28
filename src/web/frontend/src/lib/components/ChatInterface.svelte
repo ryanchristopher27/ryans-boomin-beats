@@ -1,6 +1,7 @@
 <script>
+	import { onMount } from 'svelte';
 	import { PUBLIC_API_URL } from '$env/static/public';
-	import { chatMessages, generatedPlaylist, llmConfig } from '../../stores.js';
+	import { builderRequest, chatMessages, generatedPlaylist, llmConfig } from '../../stores.js';
 	import { llmHeaders } from '../llmHeaders.js';
 
 	export let onResult = (data) => {};
@@ -48,6 +49,16 @@
 			loading = false;
 		}
 	}
+
+	// A prompt handed over from Explore or Profile starts a fresh playlist.
+	onMount(() => {
+		if (!$builderRequest) return;
+		$chatMessages = [];
+		$generatedPlaylist = [];
+		prompt = $builderRequest;
+		$builderRequest = null;
+		send();
+	});
 
 	function handleKeydown(e) {
 		if (e.key === 'Enter' && !e.shiftKey) {

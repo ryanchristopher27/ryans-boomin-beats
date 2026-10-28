@@ -4,6 +4,7 @@
 	// duration · Swap · +/✓. Lists add their own buttons through the `actions`
 	// slot. The preview badge on the cover arrives with F2.
 	import Icon from '../Icon.svelte';
+	import { nameHue } from '$lib/dj/ambience.js';
 
 	export let title = '';
 	/** @type {string | string[]} */
@@ -40,7 +41,7 @@
 	$: artistText = Array.isArray(artists) ? artists.join(', ') : artists;
 	// A deliberate placeholder when a song has no art: a gradient from the
 	// title's hue (the handoff's cover formula) with its initials.
-	$: hue = [...(title + artistText)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+	$: hue = nameHue(title + artistText);
 	$: initials = title
 		.replace(/\(.*?\)|\[.*?\]/g, '')
 		.split(/\s+/)

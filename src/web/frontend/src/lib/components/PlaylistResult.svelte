@@ -1,9 +1,7 @@
 <script>
-	import { PUBLIC_API_URL } from '$env/static/public';
 	import SongCard from './SongCard.svelte';
-	import { access_token, pendingAdd, playlistsPanelOpen } from '../../stores.js';
-	import { spotifyHeaders } from '../spotifyHeaders.js';
-	import { getSavedStates, rememberSongs, setTrackSaved, toSpotifyIds } from '$lib/playlistActions.js';
+	import { pendingAdd, playlistsPanelOpen } from '../../stores.js';
+	import { getSavedStates, queueTracks, rememberSongs, setTrackSaved } from '$lib/playlistActions.js';
 
 	export let playlist = [];
 	export let requested = 0;
@@ -16,6 +14,7 @@
 	let checkedIds = new Set();
 	let actionError = '';
 	let queueSuccess = false;
+	let queueMessage = '';
 	let savedMap = {};
 	let savedKey = '';
 
@@ -68,44 +67,11 @@
 	async function queueAll() {
 		actionError = '';
 		queueSuccess = false;
-		try {
-			const { ids, missing, error } = await toSpotifyIds(allIds);
-			if (error === 'auth') {
-				actionError = 'Log in to Spotify on the Profile page to queue songs.';
-				return;
-			}
-			if (error || !ids.length) {
-				actionError = error ? "Couldn't look these songs up on Spotify right now." : "None of these songs are on Spotify.";
-				return;
-			}
-			if (missing) actionError = `${missing} song${missing > 1 ? "s aren't" : " isn't"} on Spotify and was skipped.`;
-			const res = await fetch(`${PUBLIC_API_URL}/spotify/queue/`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...spotifyHeaders() },
-				body: JSON.stringify({ track_ids: ids }),
-			});
-			const data = await res.json();
-			if (res.status === 401) {
-				actionError = 'Log in to Spotify on the Profile page to queue songs.';
-			} else if (data.error === 'no_active_device') {
-				// The backend reports how many landed before the device dropped,
-				// so a partial queue doesn't read as a total failure.
-				actionError = data.queued
-					? `Queued ${data.queued} before Spotify lost the active device. Start playback, then try again.`
-					: 'Open Spotify on a device first, then try again.';
-			} else if (data.error === 'premium_required') {
-				actionError = 'Queueing requires Spotify Premium.';
-			} else if (data.error) {
-				// e.g. 'restricted': Spotify refused for a non-Premium reason.
-				actionError = data.queued
-					? `Queued ${data.queued} before Spotify refused the rest. Try again in a moment.`
-					: "Spotify didn't allow queueing right now. Try again in a moment.";
-			} else {
-				queueSuccess = true;
-			}
-		} catch (e) {
-			actionError = 'Could not reach the server.';
-		}
+		const r = await queueTracks(allIds);
+		if (r.ok) {
+			queueSuccess = true;
+			queueMessage = r.message;
+		} else actionError = r.message;
 	}
 </script>
 
@@ -168,7 +134,7 @@
 		{/if}
 
 		{#if queueSuccess}
-			<div class="action-success">Queued! Open Spotify to hear your playlist.</div>
+			<div class="action-success">{queueMessage}</div>
 		{/if}
 
 		</div>

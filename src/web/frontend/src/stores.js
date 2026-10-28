@@ -61,6 +61,14 @@ export const selectedSong = persisted('selectedSong', null);
 export const discoveryPlaylist = persisted('discoveryPlaylist', []);
 export const discoveryRequested = persisted('discoveryRequested', 0);
 
+// The songs explored this session, oldest first (the Explore page's Path).
+export const exploreTrail = persisted('exploreTrail', []);
+
+// A prompt handed to the Playlist Builder from another page (Explore's mood
+// chips and recipe, Profile insights); the Builder starts it on arrival.
+/** @type {import('svelte/store').Writable<string | null>} */
+export const builderRequest = writable(null);
+
 // Playlists side panel
 export const playlistsPanelOpen = persisted('playlistsPanelOpen', false);
 export const userPlaylists = writable([]);

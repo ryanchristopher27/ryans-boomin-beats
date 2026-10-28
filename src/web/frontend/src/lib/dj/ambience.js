@@ -78,3 +78,20 @@ export function sampleCover(url) {
 	cache.set(url, p);
 	return p;
 }
+
+/** A stable hue (0-359) for a song without usable art, from its name. */
+export function nameHue(text) {
+	return [...(text ?? '')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+}
+
+/**
+ * The hue of a cover, for the redesign's tinted heroes (Explore, Profile).
+ * Falls back to `nameHue(fallback)` when the image can't be sampled.
+ * @returns {Promise<number>}
+ */
+export async function coverHue(url, fallback = '') {
+	const tint = await sampleCover(url);
+	const m = /oklch\([\d.]+ ([\d.]+) ([\d.]+)\)/.exec(tint);
+	// A near-grey cover has no meaningful hue: use the name's instead.
+	return m && Number(m[1]) > 0.005 ? Math.round(Number(m[2])) : nameHue(fallback);
+}
