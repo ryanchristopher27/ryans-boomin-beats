@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div draggable="true" title="{{ tip }}" onDragStart="{{ dragStart }}" onDragEnd="{{ dragEnd }}" onClick="{{ open }}" style="display:flex;align-items:center;gap:{{ gap }}px;padding:{{ pad }};border-radius:10px;cursor:pointer;transition:background .15s cubic-bezier(.16,1,.3,1);font-family:'Geist',system-ui,sans-serif;min-width:0;background:{{ rowBg }}" style-hover="background:rgba(255,255,255,.05)">
+  <sc-if value="{{ hasIndex }}" hint-placeholder-val="{{ false }}"><div style="flex:none;width:20px;text-align:right;font:500 12px 'Geist Mono',monospace;color:rgba(243,243,245,.4)">{{ index }}</div></sc-if>
+  <div onClick="{{ prev }}" title="{{ prevTip }}" style="position:relative;flex:none;width:{{ size }}px;height:{{ size }}px;border-radius:7px;background:{{ song.cover }};display:grid;place-items:center;font:600 11px 'Geist Mono',monospace;letter-spacing:.02em;color:rgba(255,255,255,.82);box-shadow:{{ coverRing }};transition:filter .15s" style-hover="filter:brightness(.78)">
+    <sc-if value="{{ notPreviewing }}" hint-placeholder-val="{{ true }}"><span>{{ song.mono }}</span></sc-if>
+    <sc-if value="{{ previewing }}" hint-placeholder-val="{{ false }}">{{ pvEq }}</sc-if>
+    <sc-if value="{{ canPreview }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:2px;bottom:2px;width:13px;height:13px;border-radius:50%;background:rgba(0,0,0,.55);display:grid;place-items:center"><svg width="7" height="7" viewBox="0 0 24 24" fill="#fff"><path d="{{ prevIcon }}"></path></svg></span></sc-if>
+  </div>
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px">
+    <div style="display:flex;align-items:center;gap:6px;min-width:0">
+      <div style="font:500 {{ titleSize }}px/1.3 'Geist',sans-serif;color:{{ titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ song.title }}</div>
+      <sc-if value="{{ dj }}" hint-placeholder-val="{{ false }}"><div title="Picked by the DJ" style="flex:none;font-size:11px;color:#5ec9ff">✦</div></sc-if>
+    </div>
+    <div style="font:400 {{ subSize }}px/1.3 'Geist',sans-serif;color:rgba(243,243,245,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ song.artist }}</div>
+    <sc-if value="{{ showReason }}" hint-placeholder-val="{{ false }}"><div style="font:400 12px/1.4 'Geist',sans-serif;color:rgba(243,243,245,.5);display:-webkit-box;-webkit-line-clamp:{{ clamp }};-webkit-box-orient:vertical;overflow:hidden;margin-top:2px;text-wrap:pretty">{{ song.reason }}</div></sc-if>
+    <sc-if value="{{ flagged }}" hint-placeholder-val="{{ false }}"><div style="font:500 12px/1.3 'Geist',sans-serif;color:#ff7a7a;margin-top:2px">Not found on Spotify</div></sc-if>
+  </div>
+  <sc-if value="{{ hasDur }}" hint-placeholder-val="{{ false }}"><div style="flex:none;font:400 12px 'Geist Mono',monospace;color:rgba(243,243,245,.4)">{{ song.dur }}</div></sc-if>
+  <sc-if value="{{ flagged }}" hint-placeholder-val="{{ false }}"><button onClick="{{ swap }}" style="flex:none;height:30px;padding:0 12px;border-radius:8px;border:1px solid rgba(255,122,122,.35);background:transparent;color:#ff9a9a;font:500 12px 'Geist',sans-serif;cursor:pointer">Swap</button></sc-if>
+  <sc-if value="{{ showAdd }}" hint-placeholder-val="{{ true }}">
+    <button onClick="{{ add }}" title="Add to queue" style="flex:none;width:{{ btn }}px;height:{{ btn }}px;border-radius:8px;border:1px solid rgba(255,255,255,.08);background:{{ addBg }};color:{{ addColor }};display:grid;place-items:center;cursor:pointer;transition:all .15s" style-hover="border-color:rgba(94,201,255,.5)">
+      <sc-if value="{{ added }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg></sc-if>
+      <sc-if value="{{ notAdded }}" hint-placeholder-val="{{ true }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></sc-if>
+    </button>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:480,&quot;height&quot;:80},&quot;song&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;},&quot;index&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:40,&quot;tsType&quot;:&quot;number&quot;},&quot;compact&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showReason&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showDur&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;added&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;previewId&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;onPreview&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;function&quot;},&quot;onOpen&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;function&quot;},&quot;onAdd&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;function&quot;},&quot;onSwap&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;function&quot;},&quot;onDrag&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;function&quot;},&quot;onDragEnd&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;function&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props, s = p.song || {}, c = !!p.compact;
+    const canPreview = !!p.onPreview && !s.flagged;
+    const pv = canPreview && p.previewId === s.id;
+    const E = React.createElement;
+    const pvEq = pv ? E('div', { style: { display: 'flex', alignItems: 'flex-end', gap: 2, height: 14 } },
+      [0, 1, 2].map(i => E('span', { key: i, style: { width: 3, height: '100%', borderRadius: 2, background: '#fff', transformOrigin: 'bottom', animation: `bbeq ${0.5 + i * 0.17}s ease-in-out ${-i * 0.2}s infinite alternate` } }))) : null;
+    return {
+      song: s, size: p.size ?? (c ? 34 : 40), index: p.index, hasIndex: p.index != null,
+      gap: c ? 10 : 12, pad: c ? '5px 8px' : '8px 10px', titleSize: c ? 13 : 14, subSize: c ? 12 : 13, clamp: c ? 1 : 2, btn: c ? 28 : 32,
+      tip: s.reason || '', rowBg: pv ? 'rgba(94,201,255,.07)' : 'transparent', titleColor: pv ? '#9ddfff' : '#f3f3f5',
+      canPreview, previewing: pv, notPreviewing: !pv, pvEq, prevTip: pv ? 'Stop preview' : 'Preview 15 seconds',
+      prevIcon: pv ? 'M6 6h12v12H6z' : 'M7 4l13 8-13 8z',
+      coverRing: pv ? 'inset 0 0 0 1px rgba(255,255,255,.08), 0 0 0 2px #5ec9ff' : 'inset 0 0 0 1px rgba(255,255,255,.08)',
+      prev: e => { if (!canPreview) return; e.stopPropagation(); p.onPreview(s); },
+      showReason: !!(p.showReason && s.reason), flagged: !!s.flagged,
+      hasDur: !!(p.showDur && s.dur), dj: !!s.dj,
+      added: !!p.added, notAdded: !p.added, showAdd: !!p.onAdd && !s.flagged,
+      addBg: p.added ? 'rgba(94,201,255,.14)' : 'transparent', addColor: p.added ? '#5ec9ff' : 'rgba(243,243,245,.75)',
+      open: () => p.onOpen && p.onOpen(s),
+      add: e => { e.stopPropagation(); p.onAdd && p.onAdd(s); },
+      swap: e => { e.stopPropagation(); p.onSwap && p.onSwap(s); },
+      dragStart: e => { e.dataTransfer.setData('text/plain', s.title || ''); p.onDrag && p.onDrag(s); },
+      dragEnd: () => p.onDragEnd && p.onDragEnd(),
+    };
+  }
+}
+</script>
+</body>
+</html>

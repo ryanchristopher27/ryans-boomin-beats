@@ -3377,3 +3377,195 @@ drop that kind of upload:
   "Bad Blood (Taylor's Version)" into "Bad Blood".
 
 **Production check:** on 989ffcd, the simulator's "redbone" search (through production) shows a cover on every row and one "Come and Get Your Love".
+
+---
+
+# Plan — Web Redesign (Claude Design handoff)
+Date: 2026-10-27
+Status: Active
+Brainstorm: inline. The design is the Claude Design handoff in
+`docs/design/redesign-2026-10-27/` (README = spec, `Boomin Beats.dc.html` = clickable prototype,
+`screenshots/`). The context we gave the design agent is `docs/design-context.md`.
+
+## Overview
+
+A full visual redesign of the SvelteKit web app (`src/web/frontend`):
+- immersive colour taken from album art, plus motion while music plays
+- glass cards
+- denser, shared song rows
+- tighter links between Explore, the Builder, the DJ and Profile
+
+The handoff also specifies roughly a dozen new features. We build it in two parts:
+- **Part 1, a reskin (R0–R6):** every page restyled to the handoff, keeping today's features.
+- **Part 2, features (F1–F5):** the new behaviour, one milestone at a time, after the reskin ships.
+
+## Goals & Success Criteria
+
+- **Matches the screenshots.** Each page matches the handoff at 1280px and at about 924px
+  (tablet). Colour, type, spacing, radius and motion all follow the README's tables.
+- **Nothing lost.** Every feature that works today still works. That covers search and resolve,
+  song profile and Discover, Builder generation, save and queue, drag-to-playlist, the Profile
+  modules, and the DJ's sync, presets, Edit layout and mini player. The 52 vitest tests pass.
+- **One song row.** A single `SongRow.svelte` replaces the current row variants: `SongCard`, the
+  `PlaylistResult` rows, `PickRow`, the `UpNext` rows and the search rows.
+- **Motion has an off switch.** Under `prefers-reduced-motion`, nothing drifts, breathes or glows.
+  The blobs and visualizer move only while music is playing.
+- **Accessible.** Text holds 4.5:1 contrast over glass and blobs (checked over the brightest
+  cover hue), and keyboard focus is visible everywhere.
+- **The detector is clean.** `/design audit` passes, or each remaining hit is justified. (The
+  handoff deliberately uses glass and the gradient, see the Decisions Log.)
+
+## Scope
+
+### In scope (Part 1)
+
+- **Foundations:**
+  - Tokens mapped onto the existing names (`--surface-*`, `--accent*`, `--text-*`, plus new ones
+    for glass, popovers, success and danger).
+  - Geist and Geist Mono via `@fontsource`, replacing Inter and Fira Mono.
+  - The motion keyframes (`bbin`, `bbshimmer`, `bbspin`, `bbeq`, `bbbreath`, `bbglow`, `bbpop`,
+    `bbdrift`).
+  - One stroke icon set, by extending `dj/Icon.svelte` app-wide.
+  - The 90% default UI scale.
+- **Shell:**
+  - A 60px glass header with a segmented icon nav (and a dot on DJ while music plays).
+  - The Playlists dock restyled.
+  - The mini player restyled: gradient progress line, glow and breathing cover, playing bars.
+  - The gear popover restyled. It gets the **AI tab only**; the General tab is F1.
+  - Toasts.
+- **Song row:** the shared row with rank, cover, ✦, reason, duration, Swap and + → ✓, and drag
+  onto playlists. The preview badge is left out until F2.
+- **Explore:**
+  - Idle: hero tinted by the hovered top track, a 64px glass search, mood chips that go to the
+    Builder, and a grid of cover tiles.
+  - Song page:
+    - a sticky bar with the **Path** trail
+    - an immersive hero
+    - Tags, "What the AI hears", Sound profile and About on the left
+    - a sticky **Your recipe** column on the right
+  - The recipe hands off to the Builder.
+- **Builder:**
+  - Empty: the composer with example chips.
+  - Active: two columns (chat | playlist), the 3-step loading card, refine chips (pre-filled
+    follow-ups), and a mosaic hero.
+  - Also the unmatched-song notice with Swap, and dimming during refines.
+- **Profile:**
+  - The header with drifting blobs, and a one-sentence summary computed from data we already
+    have.
+  - An insights row whose actions go to the Builder or DJ.
+  - A 12-column module grid with expand.
+- **DJ:**
+  - Immersive background from the cover's hue.
+  - Glass widgets restyled to the handoff's Now playing (100px cover, 40-bar visualizer,
+    gradient progress), controls, Next moves (move groups in an auto-fill grid), Requests and
+    Up next.
+  - A Host preset matching the handoff's 3 | 6 | 3 columns.
+  - No page scroll at ≥ 1180px: the grid fills the height and each panel scrolls on its own.
+- **Responsive to tablet:**
+  - The breakpoints move to the handoff's (desktop ≥ 1180, tablet 760–1179).
+  - The header's 800px minimum is removed.
+  - The Explore and Builder pages stack below desktop.
+
+### Out of scope (Part 2 milestones, or not planned)
+
+- **F1:** Settings General (text size, compact rows, the Playback animations toggle, Clean only,
+  Lower Spotify while previewing) and the first-run flow.
+- **F2:** previews.
+- **F3:** new DJ features. Night presets, per-move refresh feedback, Familiar ↔ New, DJ mode
+  without an AI key, Save tonight's set, Compass + keyboard moves, the Playlist widget, and Up
+  next drag reorder + Play now + Undo.
+- **F4:** the ⌘K command palette.
+- **F5:** the phone layout and bottom tab bar.
+- **Not planned:** the prototype's Sidebar nav variant and its Flat page style. The owner chose
+  Immersive; the Top bar nav is the default.
+
+## Tech Stack & Architecture
+
+There's no new framework. It stays SvelteKit 1 + Svelte 4 with plain scoped CSS.
+
+- **Tokens.** `routes/styles.css` stays the single token source. Existing names keep their
+  meaning and take the handoff's values:
+  - `--surface-0` `#0a0a0c`, `--surface-1` `#131316`, `--surface-2` `#24242a`
+  - `--text-primary` `#f3f3f5`
+  - `--accent` unchanged
+  - new: `--glass`, `--glass-blur`, `--popover`, `--success`, `--danger`
+
+  `dj.css`'s page-scoped tokens and controls move up to the global layer, since every page now
+  uses the same buttons, segments and toggles.
+- **Shared primitives** in `lib/components/ui/`:
+  - `SongRow`, `Segmented`, `Toggle`, `GlassCard`
+  - `Skeleton` (shimmer)
+  - `Visualizer`, `Blobs`, `CoverGlow`
+  - `Toast` and a `toast` store
+
+  Pages compose these instead of each styling its own controls.
+- **Ambience everywhere.** `lib/dj/ambience.js` already samples a cover's hue for the DJ. It
+  becomes the source for the Explore, Profile and DJ backgrounds through a small `hue` store, so
+  all three pull from the same sampler.
+- **UI scale.** The 90% default goes through CSS `zoom` on `.app`, because the styles are
+  px-based and a rem refactor isn't worth it. Risk: gridstack's drag maths under `zoom` (see
+  Risks). An R0 spike confirms it, and the fallback is scaling the type tokens instead.
+- **DJ grid.** Keep gridstack, presets and Edit layout. The handoff's Host is a preset:
+  - Host = 3 | 6 | 3 columns. The handoff has 3 | 6 | 3.4, and 12 columns can't do .4.
+  - Desktop fill is a `cellHeight` computed from the viewport height, so the grid fills the
+    screen without page scroll.
+  - Board and Focus stay; they aren't in the handoff, but they're shipped and nothing replaces
+    them.
+  - Compass arrives as a preset in F3, as the handoff's repo map suggests.
+- **No backend changes in Part 1.** Every new endpoint is in Part 2:
+  - F2: Deezer preview URLs and a `/player/volume/` route.
+  - F3: move feedback in `/dj/suggest/`, a library seed, a Last.fm fallback, and save-set.
+
+## Milestones
+
+| # | Milestone | Description | Dependencies |
+|---|---|---|---|
+| R0 | Foundations | Tokens, Geist, global controls (from `dj.css`), keyframes, app-wide icons, `ui/` primitives, `zoom` + gridstack spike | — |
+| R1 | Shell | Header + segmented nav, Playlists dock, mini player, AI settings popover, toasts; header min-width removed | R0 |
+| R2 | Shared song row | `SongRow.svelte`; replace `SongCard`, `PlaylistResult` rows, `PickRow`, `UpNext` rows, search rows; drag-to-playlist on every row | R0 |
+| R3 | Explore | Idle hero + mood chips + cover tiles; song page with Path, hero, recipe column, Builder hand-off | R1, R2 |
+| R4 | Builder | Composer, chat \| playlist columns, loading steps, refine chips, mosaic hero, unmatched + Swap | R1, R2 |
+| R5 | Profile | Header + blobs, summary sentence, insights row, 12-col module grid | R1, R2 |
+| R6 | DJ | Immersive background, glass widgets per handoff, Host preset 3\|6\|3 + fill-height, tablet breakpoints; then `/design audit` + `polish` over Part 1 | R1, R2 |
+| F1 | Settings + first run | General tab (text size, compact, motion, clean, duck), persisted; first-run onboarding + empty states | R6 |
+| F2 | Previews | Deezer 30s preview via `<audio>`, 15s preview pill, Spotify volume ducking (`/player/volume/`) | R6 |
+| F3 | DJ features | Night presets, per-move refresh feedback, Familiar↔New (b951bf), no-key DJ (9341cc), Save tonight's set (9da022), Compass + keys, Playlist widget, Up next reorder/Play now/Undo | R6 |
+| F4 | Command palette | ⌘K: songs + Go to; on DJ adds to Up next | R1 |
+| F5 | Phone layout | < 760: bottom tab bar, sheet settings, full-width dock, single-column DJ | R6 |
+
+## Risks & Mitigations
+
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| CSS `zoom` breaks gridstack drag/resize coordinates | Medium | Medium | Spike in R0; if it breaks, scale the type tokens instead (sizes × 0.9) and leave `zoom` for F1's setting only on non-DJ pages |
+| `backdrop-filter` over animated blobs is slow on a laptop at a party | Medium | Medium | Blobs are 3 blurred elements, GPU-transformed only; pause when hidden (`visibilitychange`) and when paused; measure frame time in R6 |
+| Text on glass over bright covers drops below 4.5:1 | Medium | Medium | Clamp blob lightness/chroma (as `ambience.js` already does) and test against a white/yellow cover |
+| The reskin silently drops a working feature | Medium | High | Each milestone checks the "Nothing lost" list in the browser before review |
+| Geist Mono in data-dense places (times, counts) reads worse than tabular Inter | Low | Low | Use `font-variant-numeric: tabular-nums`; judge in R1 |
+
+## Dependencies
+
+- `@fontsource/geist` and `@fontsource/geist-mono` (5.3.0). Self-hosted, so no Google Fonts
+  request.
+- No new runtime libraries. gridstack stays at 13.3.0.
+
+## Open Questions
+
+1. **DJ grid:** keep the customizable grid? The prototype has no Edit layout, Board or Focus,
+   only fixed Host and Compass. The plan keeps the grid (see Tech Stack). Confirm before R6.
+2. **The Profile summary sentence** ("mostly rap and R&B, 76% from the 2020s, … around 8pm"):
+   build it from the existing profile data, with no AI. That's assumed here.
+3. **"Start an evening DJ set" on Profile** needs night presets (F3). Until then it just opens
+   the DJ.
+
+## Decisions Log
+
+| Decision | Choice | Reasoning | Date |
+|---|---|---|---|
+| Phasing | Reskin first (R0–R6), features after (F1–F5) | About half the handoff is new behaviour with backend work. Restyling with today's features ships a visible win without coupling it to those risks | 2026-10-27 |
+| Glass + drifting blobs | Keep, as designed | The owner chose the Immersive direction. This **reverses** the DJ brief's "no glassmorphism / aurora" rule (2026-10-25). Guardrails: blobs move only while playing, off under reduced motion, contrast checked | 2026-10-27 |
+| Font | Geist + Geist Mono replace Inter + Fira Mono | Matches the handoff's tight display headlines; self-hosted via `@fontsource` | 2026-10-27 |
+| Nav and style variants | Top bar + Immersive only | These are the prototype's defaults. Sidebar and Flat aren't built | 2026-10-27 |
+| UI scale | CSS `zoom: 0.9` on `.app` (pending R0 spike) | Styles are px-based; a rem refactor is out of proportion | 2026-10-27 |
+| DJ layout | Keep gridstack, presets and Edit layout; Host becomes 3\|6\|3 with fill-height | Already shipped and tested; the handoff's repo map says to add Compass as a preset, which implies the grid stays | 2026-10-27 |
+| Handoff in repo | Copied to `docs/design/redesign-2026-10-27/` | The spec should outlive the Downloads folder. The prototype contains the owner's name (mock data), and the repo is public | 2026-10-27 |
