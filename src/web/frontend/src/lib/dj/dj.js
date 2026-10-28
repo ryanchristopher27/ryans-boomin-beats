@@ -336,6 +336,28 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		});
 	}
 
+	/** Everything in Up next, so an edit can be undone (F3b). */
+	function snapshotUpcoming() {
+		return structuredClone(d().queue.upcoming);
+	}
+
+	/**
+	 * Undo an Up next edit: put the list back as it was, minus anything that
+	 * has since gone to Spotify (that can't be taken back).
+	 */
+	async function restoreSnapshot(snapshot) {
+		edit((x) => {
+			const sent = new Set(x.queue.sent.map((i) => i.id));
+			x.queue.upcoming = snapshot.filter((i) => !sent.has(i.id));
+		});
+		await topUp(depth);
+	}
+
+	/** Empty Up next (songs already in Spotify stay). */
+	function clearUpcoming() {
+		edit((x) => (x.queue.upcoming = []));
+	}
+
 	/** Undo for "remove" in Up next: put the entry back where it was. */
 	async function restoreUpcoming(item, index) {
 		edit((x) => {
@@ -761,6 +783,9 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		add,
 		addPick,
 		moveUpcoming,
+		snapshotUpcoming,
+		restoreSnapshot,
+		clearUpcoming,
 		removeUpcoming,
 		restoreUpcoming,
 		removeSent,

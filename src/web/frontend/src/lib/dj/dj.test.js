@@ -143,6 +143,29 @@ describe('web DJ engine', () => {
 		expect(g(b.doc).queue.guestSkips).toEqual([]);
 	});
 
+	test('Up next edits undo from a snapshot, minus songs already sent', async () => {
+		const server = fakeServer();
+		const b = tab(server, 'b');
+		server.row = { version: 1, state: null, primary: { device: 'a', label: 'a', online: true } };
+		await b.refresh(); // a participant: nothing leaves for Spotify
+		for (const id of ['t1', 't2', 't3']) await b.add(track(id));
+		const ids = () => g(b.doc).queue.upcoming.map((i) => i.trackID);
+
+		let snap = b.snapshotUpcoming();
+		b.moveUpcoming(2, 0); // Play next
+		expect(ids()).toEqual(['t3', 't1', 't2']);
+		await b.restoreSnapshot(snap);
+		expect(ids()).toEqual(['t1', 't2', 't3']);
+
+		snap = b.snapshotUpcoming();
+		b.clearUpcoming();
+		expect(ids()).toEqual([]);
+		// Meanwhile t2 went to Spotify: undo can't bring it back into Up next.
+		b.doc.update((x) => ((x.queue.sent = [{ ...snap[1] }]), x));
+		await b.restoreSnapshot(snap);
+		expect(ids()).toEqual(['t1', 't3']);
+	});
+
 	test('suggestions are only fetched while watched, or when autopilot needs them', async () => {
 		const server = fakeServer();
 		const storage = memoryStorage();

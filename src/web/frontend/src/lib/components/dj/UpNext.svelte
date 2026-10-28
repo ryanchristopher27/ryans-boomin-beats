@@ -21,10 +21,16 @@
 		if (!r.ok) searchMiss = r.reason === 'not_on_spotify' ? `${t.title} isn't on Spotify.` : r.reason === 'explicit' ? `Only an explicit version of ${t.title} is on Spotify.` : "Couldn't add that right now.";
 	}
 
-	function remove(item, i) {
-		dj.removeUpcoming(item.id);
-		offerUndo(`Removed ${item.title}.`, () => dj.restoreUpcoming(item, i));
+	// Every Up next edit can be undone from a snapshot (F3b).
+	function undoable(message, change) {
+		const snap = dj.snapshotUpcoming();
+		change();
+		offerUndo(message, () => dj.restoreSnapshot(snap));
 	}
+
+	const remove = (item) => undoable(`Removed ${item.title}.`, () => dj.removeUpcoming(item.id));
+	const playNext = (item, i) => undoable(`${item.title} plays next.`, () => dj.moveUpcoming(i, 0));
+	const clearAll = () => undoable(`Cleared ${q.upcoming.length} songs from Up next.`, () => dj.clearUpcoming());
 	$: q = $doc.queue;
 	const reduced = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 	const anim = { duration: reduced ? 0 : 200 };
@@ -33,7 +39,10 @@
 	let dropAt = null;
 
 	function onDrop(i) {
-		if (dragFrom !== null && dragFrom !== i) dj.moveUpcoming(dragFrom, i);
+		if (dragFrom !== null && dragFrom !== i) {
+			const from = dragFrom;
+			undoable(`Moved ${q.upcoming[from]?.title ?? 'the song'}.`, () => dj.moveUpcoming(from, i));
+		}
 		dragFrom = dropAt = null;
 	}
 
@@ -82,7 +91,12 @@
 	{/if}
 
 	<!-- Subheadings only when both parts show; the widget title already says "Up next". -->
-	{#if q.sent.length}<h3>Then</h3>{/if}
+	{#if q.sent.length || q.upcoming.length > 1}
+		<div class="list-head">
+			{#if q.sent.length}<h3>Then</h3>{:else}<span />{/if}
+			{#if q.upcoming.length > 1}<button class="clear" on:click={clearAll}>Clear</button>{/if}
+		</div>
+	{/if}
 	{#if q.upcoming.length}
 		<ul class="list">
 			{#each q.upcoming as item, i (item.id)}
@@ -110,7 +124,8 @@
 							<Icon name="grip" size={14} />
 						</button>
 						<svelte:fragment slot="actions">
-							<button class="row-btn" on:click={() => remove(item, i)} aria-label="Remove {item.title}" title="Remove"><Icon name="x" size={15} /></button>
+							{#if i > 0}<button class="row-btn" on:click={() => playNext(item, i)} aria-label="Play {item.title} next" title="Play next"><Icon name="lift" size={15} /></button>{/if}
+							<button class="row-btn" on:click={() => remove(item)} aria-label="Remove {item.title}" title="Remove"><Icon name="x" size={15} /></button>
 						</svelte:fragment>
 					</SongRow>
 				</li>
@@ -141,6 +156,28 @@
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
 		color: var(--text-subtle);
+	}
+
+	.list-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+	}
+
+	.clear {
+		margin: 12px 8px 4px;
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: calc(12px * var(--text-scale, 1));
+		font-weight: 500;
+		cursor: pointer;
+	}
+
+	.clear:hover {
+		color: var(--danger-text);
 	}
 
 	.list {
