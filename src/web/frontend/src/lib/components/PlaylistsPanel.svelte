@@ -2,7 +2,7 @@
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { playlistsPanelOpen, userPlaylists, access_token, pendingAdd } from '../../stores.js';
 	import { spotifyHeaders } from '../spotifyHeaders.js';
-	import { addTracksToPlaylist } from '$lib/playlistActions.js';
+	import { addTracksToPlaylist, createPlaylist } from '$lib/playlistActions.js';
 	import PlaylistNameModal from './PlaylistNameModal.svelte';
 	import Icon from './Icon.svelte';
 	import { say } from '$lib/toast.js';
@@ -108,25 +108,16 @@
 		}
 	}
 
-	async function createPlaylist(name) {
+	async function onCreate(name) {
 		showNameModal = false;
 		const trackIds = $pendingAdd ? $pendingAdd.trackIds : [];
-		try {
-			const res = await fetch(`${PUBLIC_API_URL}/spotify/create-playlist/`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...spotifyHeaders() },
-				body: JSON.stringify({ name, track_ids: trackIds }),
-			});
-			const data = await res.json();
-			if (data.playlist_id) {
-				say(trackIds.length ? `Added to ${name}` : `Created ${name}`);
-				refresh();
-				finishPending();
-			} else {
-				say('Create failed');
-			}
-		} catch {
-			say('Create failed');
+		const r = await createPlaylist(name, trackIds);
+		if (r.ok) {
+			say(trackIds.length ? `Added to ${name}` : `Created ${name}`);
+			refresh();
+			finishPending();
+		} else {
+			say(r.error === 'auth' ? 'Log in on Profile first' : 'Create failed');
 		}
 	}
 
@@ -212,7 +203,7 @@
 {/if}
 
 {#if showNameModal}
-	<PlaylistNameModal onSave={createPlaylist} onCancel={() => (showNameModal = false)} />
+	<PlaylistNameModal onSave={onCreate} onCancel={() => (showNameModal = false)} />
 {/if}
 
 <style>

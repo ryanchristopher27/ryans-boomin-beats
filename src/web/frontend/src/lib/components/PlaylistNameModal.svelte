@@ -1,8 +1,15 @@
 <script>
 	export let onSave = (name) => {};
 	export let onCancel = () => {};
+	/** A suggested name, selected so typing replaces it. */
+	export let initial = '';
 
-	let name = '';
+	let name = initial;
+
+	function select(node) {
+		node.focus();
+		node.select();
+	}
 
 	function handleKeydown(e) {
 		if (e.key === 'Enter' && name.trim()) onSave(name.trim());
@@ -10,22 +17,14 @@
 	}
 </script>
 
+<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 <div class="overlay" on:click|self={onCancel}>
-	<div class="modal">
-		<div class="modal-title">Name your playlist</div>
-		<input
-			class="name-input"
-			type="text"
-			placeholder="Playlist name..."
-			bind:value={name}
-			on:keydown={handleKeydown}
-			autofocus
-		/>
+	<div class="modal" role="dialog" aria-modal="true" aria-labelledby="name-title">
+		<h2 id="name-title">Name your playlist</h2>
+		<input type="text" placeholder="Playlist name" aria-label="Playlist name" bind:value={name} on:keydown={handleKeydown} use:select />
 		<div class="actions">
-			<button class="cancel-btn" on:click={onCancel}>Cancel</button>
-			<button class="save-btn" on:click={() => onSave(name.trim())} disabled={!name.trim()}>
-				Save to Spotify
-			</button>
+			<button class="btn" on:click={onCancel}>Cancel</button>
+			<button class="btn primary" on:click={() => onSave(name.trim())} disabled={!name.trim()}>Save to Spotify</button>
 		</div>
 	</div>
 </div>
@@ -34,92 +33,52 @@
 	.overlay {
 		position: fixed;
 		inset: 0;
-		background-color: rgba(0, 0, 0, 0.6);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 100;
+		z-index: 80;
+		display: grid;
+		place-items: center;
+		padding: 16px;
+		background: rgba(5, 5, 7, 0.6);
 	}
 
 	.modal {
-		background-color: var(--surface-1);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-lg);
-		padding: 24px;
-		width: 340px;
+		width: min(420px, 100%);
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		padding: 20px;
+		border-radius: 18px;
+		background: var(--popover);
+		-webkit-backdrop-filter: blur(30px);
+		backdrop-filter: blur(30px);
+		border: 1px solid var(--border-control);
+		box-shadow: var(--shadow-pop);
+		animation: bbin 0.18s var(--ease);
 	}
 
-	.modal-title {
-		font-size: 1rem;
-		font-weight: 700;
+	h2 {
+		margin: 0;
+		font-size: 16px;
+		font-weight: 600;
+	}
+
+	input {
+		height: 42px;
+		padding: 0 12px;
+		border-radius: 10px;
+		border: 1px solid var(--border-control);
+		background: rgba(0, 0, 0, 0.35);
 		color: var(--text-primary);
-		margin-bottom: 16px;
-		text-align: center;
+		font-size: 15px;
 	}
 
-	.name-input {
-		width: 100%;
-		box-sizing: border-box;
-		background-color: var(--surface-0);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
-		padding: 10px 12px;
-		font-size: 0.9rem;
-		margin-bottom: 16px;
-		transition: border-color var(--transition);
-	}
-
-	.name-input::placeholder {
-		color: var(--text-subtle);
-	}
-
-	.name-input:focus {
+	input:focus {
 		outline: none;
-		border-color: var(--accent);
+		border-color: var(--accent-tint-border);
 	}
 
 	.actions {
 		display: flex;
-		gap: 10px;
 		justify-content: flex-end;
-	}
-
-	.cancel-btn {
-		height: 36px;
-		padding: 0 16px;
-		background-color: var(--surface-2);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
-		color: var(--text-primary);
-		font-size: 0.8rem;
-		cursor: pointer;
-		transition: border-color var(--transition);
-	}
-
-	.cancel-btn:hover {
-		border-color: var(--accent);
-	}
-
-	.save-btn {
-		height: 36px;
-		padding: 0 16px;
-		background: var(--brand-gradient);
-		border: none;
-		border-radius: var(--radius-sm);
-		color: var(--surface-0);
-		font-weight: 700;
-		font-size: 0.8rem;
-		cursor: pointer;
-		transition: filter var(--transition);
-	}
-
-	.save-btn:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.save-btn:hover:not(:disabled) {
-		filter: brightness(1.1);
+		gap: 8px;
 	}
 </style>

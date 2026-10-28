@@ -153,3 +153,27 @@ export async function queueTracks(keys) {
 		return { ok: false, message: 'Could not reach the server.' };
 	}
 }
+
+/**
+ * Create a private playlist with these songs, resolving Deezer keys first
+ * (passing them straight to Spotify failed for any Deezer-shown song).
+ * @returns {Promise<{ok: true, id: string, url: string, missing: number} | {ok: false, error: string}>}
+ */
+export async function createPlaylist(name, keys = []) {
+	const token = get(access_token);
+	if (!token) return { ok: false, error: 'auth' };
+	const { ids, missing, error } = keys.length ? await toSpotifyIds(keys) : { ids: [], missing: 0, error: undefined };
+	if (error) return { ok: false, error };
+	try {
+		const res = await fetch(`${PUBLIC_API_URL}/spotify/create-playlist/`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', ...bearer(token) },
+			body: JSON.stringify({ name, track_ids: ids })
+		});
+		if (res.status === 401) return { ok: false, error: 'auth' };
+		const data = await res.json();
+		return data.playlist_id ? { ok: true, id: data.playlist_id, url: data.playlist_url, missing } : { ok: false, error: 'server' };
+	} catch {
+		return { ok: false, error: 'server' };
+	}
+}

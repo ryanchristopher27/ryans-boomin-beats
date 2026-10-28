@@ -11,6 +11,8 @@
 	export let artists = [];
 	export let image = '';
 	export let reason = '';
+	/** Off: the reason is only the row's tooltip (the Builder's dense list). */
+	export let showReason = true;
 	/** Milliseconds; shown when set. */
 	export let duration = 0;
 	/** @type {number | null} */
@@ -80,7 +82,7 @@
 				<span class="note danger">Not found on Spotify</span>
 			{:else if note}
 				<span class="note {noteTone}" role="status">{note}</span>
-			{:else if reason}
+			{:else if reason && showReason}
 				<span class="reason">{reason}</span>
 			{/if}
 		</span>
