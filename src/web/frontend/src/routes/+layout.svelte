@@ -4,6 +4,7 @@
 	import Header from './Header.svelte';
 	import PlaylistsPanel from '$lib/components/PlaylistsPanel.svelte';
 	import MiniPlayer from '$lib/components/dj/MiniPlayer.svelte';
+	import Toast from '$lib/components/Toast.svelte';
 	import { hydrateToken } from '$lib/spotifyAuth.js';
 	import { getDJ } from '$lib/dj/instance.js';
 	import { access_token, playlistsPanelOpen } from '../stores.js';
@@ -36,6 +37,7 @@
 
 	<PlaylistsPanel />
 	{#if browser}<MiniPlayer />{/if}
+	<Toast />
 </div>
 
 <style>
@@ -51,31 +53,18 @@
 		display: flex;
 		flex-direction: column;
 		padding: var(--primary-spacing);
-		box-sizing: border-box;
 		background-color: var(--surface-0);
-		transition: margin-right 0.2s ease;
+		transition: margin-right 0.2s var(--ease);
 	}
 
-	/* Make room for the docked Playlists panel (width + its right margin). */
+	/* Make room for the docked Playlists panel. */
 	.app.panel-open main {
-		margin-right: calc(var(--panel-width) + var(--primary-spacing));
+		margin-right: var(--panel-width);
 	}
 
-	/* footer {
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		align-items: center;
-		padding: 12px;
-	}
-
-	footer a {
-		font-weight: bold;
-	}
-
-	@media (min-width: 480px) {
-		footer {
-			padding: 12px 0;
+	@media (max-width: 759px) {
+		main {
+			padding: 16px;
 		}
-	} */
+	}
 </style>

@@ -415,7 +415,6 @@
 
 <style>
     .profile-body {
-        margin-top: 88px;
     }
 
     /* --- Login --- */

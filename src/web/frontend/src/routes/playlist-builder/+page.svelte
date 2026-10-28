@@ -35,6 +35,5 @@
 		min-height: 100vh;
 		width: 100%;
 		min-width: 0;
-		margin-top: 88px;
 	}
 </style>

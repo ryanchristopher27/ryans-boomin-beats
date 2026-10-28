@@ -126,7 +126,6 @@
 		min-height: 100vh;
 		width: 100%;
 		min-width: 0;
-		margin-top: 88px;
 		display: flex;
 		flex-direction: column;
 	}

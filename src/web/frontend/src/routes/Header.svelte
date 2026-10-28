@@ -2,222 +2,205 @@
 	import { page, llmConfig, playlistsPanelOpen, llmSettingsOpen } from '../stores.js';
 	import BoominBeatsLogo from '$lib/images/BoominBeatsLogo.jpg';
 	import LLMSettingsPanel from '$lib/components/LLMSettingsPanel.svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import { getDJ } from '$lib/dj/instance.js';
 
 	const navLinks = [
-		{ label: 'Explore', href: '/', page: 'Explore' },
-		{ label: 'Playlist Builder', href: '/playlist-builder/', page: 'Playlist Builder' },
-		{ label: 'DJ', href: '/dj/', page: 'DJ' },
-		{ label: 'Profile', href: '/profile/', page: 'Profile' },
+		{ label: 'Explore', href: '/', page: 'Explore', icon: 'compass' },
+		{ label: 'Builder', href: '/playlist-builder/', page: 'Playlist Builder', icon: 'wand' },
+		{ label: 'DJ', href: '/dj/', page: 'DJ', icon: 'disc' },
+		{ label: 'Profile', href: '/profile/', page: 'Profile', icon: 'user' }
 	];
 
+	// The DJ tab shows a dot while music plays anywhere in the app.
+	const player = getDJ()?.player;
+	$: playing = !!($player?.state?.active && $player.state.is_playing);
 </script>
 
 <header>
-	<div class="header-bar">
-		<div class="logo-div">
-			<img src={BoominBeatsLogo} alt="Boomin Beats" id="boomin-beats-logo" />
-		</div>
+	<a class="brand" href="/">
+		<img src={BoominBeatsLogo} alt="" width="30" height="30" />
+		<span>Boomin Beats</span>
+	</a>
 
-		<nav>
-			{#each navLinks as link}
-				<a class="nav-link" class:active={$page === link.page} href={link.href}>
-					{link.label}
-				</a>
-			{/each}
-		</nav>
+	<nav aria-label="Main">
+		{#each navLinks as link}
+			<a class="nav-link" class:active={$page === link.page} aria-current={$page === link.page ? 'page' : undefined} href={link.href}>
+				<Icon name={link.icon} size={15} />
+				{link.label}
+				{#if link.page === 'DJ' && playing}<span class="live" aria-label="(playing)" />{/if}
+			</a>
+		{/each}
+	</nav>
 
-		<div class="header-actions">
-			<button
-				class="playlists-toggle"
-				class:active={$playlistsPanelOpen}
-				on:click={() => ($playlistsPanelOpen = !$playlistsPanelOpen)}
-				title="Playlists"
-			>
-				Playlists
-			</button>
-			<button
-				class="settings-toggle"
-				class:connected={$llmConfig.connected}
-				on:click={() => ($llmSettingsOpen = !$llmSettingsOpen)}
-				title="AI Settings"
-			>
-				<span class="settings-icon">⚙</span>
-				{#if $llmConfig.connected}
-					<span class="connected-dot"></span>
-				{/if}
-			</button>
-		</div>
+	<div class="actions">
+		<button
+			class="btn small"
+			class:on={$playlistsPanelOpen}
+			aria-pressed={$playlistsPanelOpen}
+			on:click={() => ($playlistsPanelOpen = !$playlistsPanelOpen)}
+		>
+			<Icon name="playlist" size={15} /> Playlists
+		</button>
+		<button
+			class="gear"
+			class:on={$llmSettingsOpen}
+			on:click={() => ($llmSettingsOpen = !$llmSettingsOpen)}
+			aria-label={$llmConfig.connected ? 'Settings (AI connected)' : 'Settings (no AI connected)'}
+			aria-expanded={$llmSettingsOpen}
+		>
+			<Icon name="gear" size={17} />
+			<span class="dot" class:connected={$llmConfig.connected} />
+		</button>
 	</div>
-
-	{#if $llmSettingsOpen}
-		<div class="settings-popover">
-			<LLMSettingsPanel onClose={() => ($llmSettingsOpen = false)} />
-		</div>
-	{/if}
 </header>
+
+{#if $llmSettingsOpen}
+	<LLMSettingsPanel onClose={() => ($llmSettingsOpen = false)} />
+{/if}
 
 <style>
 	header {
-		position: fixed;
+		position: sticky;
 		top: 0;
-		left: 0;
-		width: 100%;
 		z-index: 50;
-		display: flex;
-		justify-content: center;
-		padding: 12px var(--primary-spacing);
-		box-sizing: border-box;
-		background: linear-gradient(180deg, var(--surface-0) 60%, transparent 100%);
-	}
-
-	.header-bar {
+		height: var(--header-height);
 		display: flex;
 		align-items: center;
-		height: 56px;
-		width: 100%;
-		min-width: 800px;
-		padding: 0 16px;
-		box-sizing: border-box;
-		background-color: var(--surface-1);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-lg);
+		gap: 12px;
+		padding: 0 20px;
+		border-bottom: 1px solid var(--border-subtle);
+		background: rgba(10, 10, 12, 0.82);
+		-webkit-backdrop-filter: blur(20px);
+		backdrop-filter: blur(20px);
 	}
 
-	.logo-div {
+	.brand {
+		width: 220px;
 		display: flex;
 		align-items: center;
-		min-width: 50px;
+		gap: 10px;
+		color: var(--text-primary);
+		font-size: 15px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
 	}
 
-	#boomin-beats-logo {
-		height: 38px;
-		border-radius: var(--radius-sm);
-		display: block;
+	.brand:hover {
+		color: var(--text-primary);
 	}
 
+	.brand img {
+		border-radius: 8px;
+		object-fit: cover;
+	}
+
+	/* A segmented track, centred between brand and actions. */
 	nav {
 		display: flex;
-		justify-content: center;
-		align-items: center;
-		gap: 8px;
-		flex: 1;
+		gap: 2px;
+		margin: 0 auto;
+		padding: 3px;
+		border-radius: 11px;
+		background: var(--surface-1);
+		border: 1px solid rgba(255, 255, 255, 0.06);
 	}
 
 	.nav-link {
-		display: flex;
+		height: 32px;
+		display: inline-flex;
 		align-items: center;
-		height: 34px;
-		padding: 0 18px;
-		border-radius: 17px;
+		gap: 7px;
+		padding: 0 14px;
+		border-radius: 8px;
 		color: var(--text-muted);
-		font-weight: 600;
-		font-size: 0.72rem;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		text-decoration: none;
-		transition: color var(--transition), background-color var(--transition);
+		font-size: 13px;
+		font-weight: 500;
+		transition: background-color var(--transition), color var(--transition);
 	}
 
 	.nav-link:hover {
 		color: var(--text-primary);
-		background-color: var(--surface-2);
 	}
 
 	.nav-link.active {
-		background: var(--brand-gradient);
-		color: var(--surface-0);
-		font-weight: 700;
-	}
-
-	.nav-link.active:hover {
-		color: var(--surface-0);
-	}
-
-	.header-actions {
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-		gap: 10px;
-		min-width: 50px;
-	}
-
-	.playlists-toggle {
-		height: 34px;
-		padding: 0 14px;
-		background: none;
-		border: 1px solid var(--border-subtle);
-		border-radius: 17px;
-		color: var(--text-muted);
-		font-weight: 600;
-		font-size: 0.72rem;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-		cursor: pointer;
-		white-space: nowrap;
-		transition: color var(--transition), background-color var(--transition), border-color var(--transition);
-	}
-
-	.playlists-toggle:hover {
+		background: var(--surface-active);
 		color: var(--text-primary);
-		border-color: var(--accent);
 	}
 
-	.playlists-toggle.active {
-		background: var(--brand-gradient);
-		color: var(--surface-0);
-		border-color: transparent;
-	}
-
-	.settings-toggle {
-		position: relative;
-		background: none;
-		border: 1px solid var(--border-subtle);
-		border-radius: 50%;
-		width: 36px;
-		height: 36px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		cursor: pointer;
-		padding: 0;
-		transition: border-color var(--transition), background-color var(--transition);
-	}
-
-	.settings-toggle:hover {
-		border-color: var(--accent);
-		background-color: var(--surface-2);
-	}
-
-	.settings-toggle.connected {
-		border-color: var(--accent);
-	}
-
-	.settings-icon {
-		font-size: 1rem;
-		color: var(--text-muted);
-		line-height: 1;
-		transition: color var(--transition);
-	}
-
-	.settings-toggle:hover .settings-icon {
+	.nav-link.active :global(.icon) {
 		color: var(--accent);
 	}
 
-	.connected-dot {
-		position: absolute;
-		top: -2px;
-		right: -2px;
-		width: 9px;
-		height: 9px;
-		background-color: #6bffb8;
+	.live {
+		width: 5px;
+		height: 5px;
 		border-radius: 50%;
-		border: 2px solid var(--surface-1);
+		background: var(--accent);
 	}
 
-	.settings-popover {
+	.actions {
+		width: 220px;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 8px;
+	}
+
+	.actions .btn {
+		height: 34px;
+		border-color: var(--border-control);
+		background: var(--surface-1);
+	}
+
+	.actions .btn.on {
+		background: var(--surface-active);
+		border-color: var(--border-strong);
+	}
+
+	.gear {
+		position: relative;
+		width: 34px;
+		height: 34px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border-radius: 50%;
+		border: 1px solid var(--border-control);
+		background: var(--surface-1);
+		color: var(--text-primary);
+		cursor: pointer;
+		transition: background-color var(--transition);
+	}
+
+	.gear:hover,
+	.gear.on {
+		background: var(--surface-2);
+	}
+
+	.dot {
 		position: absolute;
-		top: calc(100% - 4px);
-		right: 30px;
-		z-index: 50;
+		top: 1px;
+		right: 1px;
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: rgba(243, 243, 245, 0.3);
+		box-shadow: 0 0 0 2px var(--surface-0);
+	}
+
+	.dot.connected {
+		background: var(--success);
+	}
+
+	/* Below desktop the brand and actions shrink to their content. */
+	@media (max-width: 1179px) {
+		.brand,
+		.actions {
+			width: auto;
+		}
+		.brand span {
+			display: none;
+		}
 	}
 </style>

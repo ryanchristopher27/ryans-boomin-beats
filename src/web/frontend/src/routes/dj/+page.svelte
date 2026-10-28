@@ -214,7 +214,6 @@
 
 <style>
 	.dj-page {
-		margin-top: 88px;
 		min-width: 0;
 	}
 

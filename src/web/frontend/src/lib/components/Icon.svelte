@@ -3,12 +3,14 @@
 	export let name;
 	export let size = 18;
 	export let label = '';
+	/** Solid shapes (the transport buttons) instead of outlines. */
+	export let filled = false;
 
 	const paths = {
 		play: 'M7 4v16l13-8z',
 		pause: 'M6 5h4v14H6zM14 5h4v14h-4z',
-		prev: 'M20 5v14l-12-7zM4 5v14',
-		next: 'M4 5v14l12-7zM20 5v14',
+		prev: 'M20 5v14l-12-7zM4 5h2v14H4z',
+		next: 'M4 5v14l12-7zM18 5h2v14h-2z',
 		up: 'M7 10v10H4V10zM7 11l4-8a2 2 0 0 1 3 2l-1 4h5a2 2 0 0 1 2 2l-1.5 7a2 2 0 0 1-2 2H7',
 		down: 'M7 14V4H4v10zM7 13l4 8a2 2 0 0 0 3-2l-1-4h5a2 2 0 0 0 2-2l-1.5-7a2 2 0 0 0-2-2H7',
 		plus: 'M12 5v14M5 12h14',
@@ -53,9 +55,9 @@
 	width={size}
 	height={size}
 	viewBox="0 0 24 24"
-	fill="none"
+	fill={filled ? 'currentColor' : 'none'}
 	stroke="currentColor"
-	stroke-width="1.75"
+	stroke-width={filled ? 0 : 1.75}
 	stroke-linecap="round"
 	stroke-linejoin="round"
 	role={label ? 'img' : undefined}

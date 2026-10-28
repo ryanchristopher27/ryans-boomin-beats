@@ -4,36 +4,37 @@
 	import { spotifyHeaders } from '../spotifyHeaders.js';
 	import { addTracksToPlaylist } from '$lib/playlistActions.js';
 	import PlaylistNameModal from './PlaylistNameModal.svelte';
+	import Icon from './Icon.svelte';
+	import { say } from '$lib/toast.js';
 
 	let loading = false;
 	let error = '';
 	let loaded = false;
 	let dragOverId = null;
-	let status = '';
-	let statusTimer;
 	let showNameModal = false;
 
 	// Sort: 'recent' = Spotify library order (Spotify exposes no created/modified
-	// date for playlists, so this is the closest to recency).
+	// date for playlists, so this is the closest to recency). One button cycles.
+	const SORTS = ['recent', 'name', 'count'];
+	const sortLabels = { recent: 'Recent', name: 'A to Z', count: 'Most songs' };
 	let sortKey = 'recent';
-	let sortDir = 'asc';
 	let search = '';
-	const sortLabels = { recent: 'Recently added', name: 'Name', count: 'Song count' };
+	// Any song row on the page is being dragged: outline every tile.
+	let dragging = false;
 
 	$: if ($playlistsPanelOpen && $access_token && !loaded && !loading) {
 		fetchPlaylists();
 	}
 
-	$: sortedPlaylists = sortPlaylists($userPlaylists, sortKey, sortDir);
+	$: sortedPlaylists = sortPlaylists($userPlaylists, sortKey);
 	$: visiblePlaylists = search.trim()
 		? sortedPlaylists.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
 		: sortedPlaylists;
 
-	function sortPlaylists(list, key, dir) {
+	function sortPlaylists(list, key) {
 		const arr = [...list];
 		if (key === 'name') arr.sort((a, b) => a.name.localeCompare(b.name));
-		else if (key === 'count') arr.sort((a, b) => a.track_count - b.track_count);
-		if (dir === 'desc') arr.reverse();
+		else if (key === 'count') arr.sort((a, b) => b.track_count - a.track_count);
 		return arr;
 	}
 
@@ -61,12 +62,6 @@
 		fetchPlaylists();
 	}
 
-	function flashStatus(msg) {
-		status = msg;
-		clearTimeout(statusTimer);
-		statusTimer = setTimeout(() => (status = ''), 2500);
-	}
-
 	function bumpCount(id, n = 1) {
 		$userPlaylists = $userPlaylists.map((p) =>
 			p.id === id ? { ...p, track_count: p.track_count + n } : p
@@ -91,10 +86,10 @@
 		const r = await addTracksToPlaylist(pl.id, trackIds);
 		if (r.ok) {
 			bumpCount(pl.id, trackIds.length);
-			flashStatus(trackIds.length > 1 ? `Added ${trackIds.length} to ${pl.name}` : `Added to ${pl.name}`);
+			say(trackIds.length > 1 ? `Added ${trackIds.length} to ${pl.name}` : `Added to ${pl.name}`);
 			finishPending();
 		} else {
-			flashStatus(r.error === 'auth' ? 'Log in on Profile first' : 'Add failed');
+			say(r.error === 'auth' ? 'Log in on Profile first' : 'Add failed');
 		}
 	}
 
@@ -124,14 +119,14 @@
 			});
 			const data = await res.json();
 			if (data.playlist_id) {
-				flashStatus(trackIds.length ? `Added to ${name}` : `Created ${name}`);
+				say(trackIds.length ? `Added to ${name}` : `Created ${name}`);
 				refresh();
 				finishPending();
 			} else {
-				flashStatus('Create failed');
+				say('Create failed');
 			}
 		} catch {
-			flashStatus('Create failed');
+			say('Create failed');
 		}
 	}
 
@@ -140,70 +135,58 @@
 	}
 </script>
 
-<svelte:window on:keydown={onKeydown} />
+<svelte:window
+	on:keydown={onKeydown}
+	on:dragstart={() => (dragging = true)}
+	on:dragend={() => ((dragging = false), (dragOverId = null))}
+	on:drop={() => (dragging = false)}
+/>
 
 {#if $playlistsPanelOpen}
-	<aside class="panel" class:picking={$pendingAdd}>
-		<div class="panel-head">
-			<span class="panel-title">Playlists</span>
+	<aside class="dock" class:picking={$pendingAdd} aria-label="Playlists">
+		<div class="head">
+			<h2>Playlists</h2>
 			<div class="head-actions">
-				<button class="icon-btn" title="Refresh" on:click={refresh} disabled={!$access_token || loading}>⟳</button>
-				<button class="icon-btn" title="Close" on:click={() => ($playlistsPanelOpen = false)}>✕</button>
+				<button class="icon-btn" aria-label="Refresh playlists" title="Refresh" on:click={refresh} disabled={!$access_token || loading}><Icon name="refresh" size={15} /></button>
+				<button class="icon-btn" aria-label="Close playlists" on:click={() => ($playlistsPanelOpen = false)}><Icon name="x" size={15} /></button>
 			</div>
 		</div>
 
 		{#if $pendingAdd}
-			<div class="pending-banner">
-				<span class="pending-text">Adding <strong>{$pendingAdd.label}</strong> — pick a playlist</span>
-				<button class="icon-btn" title="Cancel" on:click={cancelPending}>✕</button>
+			<div class="pending">
+				<span>Adding <strong>{$pendingAdd.label}</strong>. Pick a playlist.</span>
+				<button class="icon-btn" aria-label="Cancel adding" on:click={cancelPending}><Icon name="x" size={14} /></button>
 			</div>
 		{/if}
 
-		{#if status}
-			<div class="status">{status}</div>
-		{/if}
-
 		{#if !$access_token}
-			<div class="state">Log in on the Profile page to see your playlists.</div>
+			<p class="state">Log in on the Profile page to see your playlists.</p>
 		{:else if loading}
-			<div class="state">Loading…</div>
+			<div class="grid" aria-busy="true">
+				{#each Array(6) as _}
+					<div class="tile"><div class="cover skeleton" /><div class="skeleton line" /></div>
+				{/each}
+			</div>
 		{:else if error === 'server'}
-			<div class="state">Couldn't load playlists. <button class="link" on:click={refresh}>Retry</button></div>
+			<p class="state">Couldn't load playlists. <button class="link" on:click={refresh}>Retry</button></p>
 		{:else}
-			{#if $userPlaylists.length > 0}
-				<input
-					class="search-input"
-					type="text"
-					placeholder="Search playlists…"
-					bind:value={search}
-				/>
-				<div class="sort-bar">
-					<select class="sort-select" bind:value={sortKey} aria-label="Sort by">
-						<option value="recent">{sortLabels.recent}</option>
-						<option value="name">{sortLabels.name}</option>
-						<option value="count">{sortLabels.count}</option>
-					</select>
-					<button
-						class="sort-dir"
-						title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
-						on:click={() => (sortDir = sortDir === 'asc' ? 'desc' : 'asc')}
-					>
-						{sortDir === 'asc' ? '↑' : '↓'}
-					</button>
-				</div>
-			{/if}
+			<div class="tools">
+				<input type="search" placeholder="Search playlists" aria-label="Search playlists" bind:value={search} />
+				<button class="sort" on:click={() => (sortKey = SORTS[(SORTS.indexOf(sortKey) + 1) % SORTS.length])} aria-label="Sort: {sortLabels[sortKey]}">{sortLabels[sortKey]}</button>
+			</div>
+			<p class="hint">{dragging ? 'Drop on a playlist to add the song.' : 'Drag any song onto a playlist to add it.'}</p>
 
 			<div class="grid">
-				<button class="tile new-tile" on:click={() => (showNameModal = true)}>
-					<div class="tile-img new-img">＋</div>
-					<div class="tile-name">New playlist</div>
-					<div class="tile-count">&nbsp;</div>
+				<button class="tile" on:click={() => (showNameModal = true)}>
+					<div class="cover new"><Icon name="plus" size={22} /></div>
+					<div class="name">New playlist</div>
 				</button>
 
 				{#each visiblePlaylists as pl (pl.id)}
 					<div
 						class="tile"
-						class:drag-over={dragOverId === pl.id}
+						class:dragging
+						class:over={dragOverId === pl.id}
 						role="button"
 						tabindex="0"
 						on:click={() => onTileClick(pl)}
@@ -213,12 +196,14 @@
 						on:drop|preventDefault={(e) => handleDrop(e, pl)}
 					>
 						{#if pl.image}
-							<img class="tile-img" src={pl.image} alt="" />
+							<img class="cover" src={pl.image} alt="" loading="lazy" />
 						{:else}
-							<div class="tile-img placeholder"></div>
+							<div class="cover blank"><Icon name="music" size={22} /></div>
 						{/if}
-						<div class="tile-name" title={pl.name}>{pl.name}</div>
-						<div class="tile-count">{pl.track_count} songs</div>
+						<div class="meta">
+							<div class="name" title={pl.name}>{pl.name}</div>
+							<div class="count">{pl.track_count} songs</div>
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -231,248 +216,216 @@
 {/if}
 
 <style>
-	.panel {
+	.dock {
 		position: fixed;
-		/* Match the page content's top offset: main padding + body-div margin-top. */
-		top: calc(88px + var(--primary-spacing));
-		right: var(--primary-spacing);
-		bottom: 0;
+		top: var(--header-height);
+		right: 0;
+		bottom: var(--mini-h, 0px);
+		z-index: 30;
 		width: var(--panel-width);
-		box-sizing: border-box;
-		background-color: var(--surface-1);
-		border: 1px solid var(--border-subtle);
-		border-bottom: none;
-		border-top-left-radius: var(--radius-lg);
-		border-top-right-radius: var(--radius-lg);
-		z-index: 45;
 		display: flex;
 		flex-direction: column;
-		animation: bbin 0.2s ease;
+		border-left: 1px solid var(--border-subtle);
+		background: var(--surface-raised);
+		animation: bbin 0.2s var(--ease);
 	}
 
-	.panel.picking {
+	.dock.picking {
 		box-shadow: inset 0 0 0 2px var(--accent);
 	}
 
-	.panel-head {
+	.head {
+		flex: none;
+		height: 52px;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 16px 16px 12px;
-		flex-shrink: 0;
+		padding: 0 10px 0 18px;
+		border-bottom: 1px solid var(--border-subtle);
 	}
 
-	.panel-title {
-		font-size: 0.85rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: var(--text-subtle);
+	h2 {
+		margin: 0;
+		font-size: 15px;
+		font-weight: 600;
 	}
 
 	.head-actions {
 		display: flex;
-		gap: 4px;
+		gap: 2px;
 	}
 
-	.icon-btn {
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		cursor: pointer;
-		font-size: 0.95rem;
-		width: 26px;
-		height: 26px;
-		border-radius: var(--radius-sm);
-		transition: color var(--transition), background-color var(--transition);
-		flex-shrink: 0;
+	.head .icon-btn {
+		width: 30px;
+		height: 30px;
 	}
 
-	.icon-btn:hover:not(:disabled) {
-		color: var(--text-primary);
-		background-color: var(--surface-2);
-	}
-
-	.icon-btn:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.pending-banner {
+	.pending {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		margin: 0 16px 10px;
-		padding: 8px 10px;
-		background-color: rgba(var(--accent-rgb), 0.12);
-		border: 1px solid var(--accent);
-		border-radius: var(--radius-sm);
-		font-size: 0.75rem;
-		color: var(--text-muted);
+		margin: 12px 14px 0;
+		padding: 8px 6px 8px 12px;
+		border-radius: 10px;
+		background: var(--accent-tint);
+		border: 1px solid var(--accent-tint-border);
+		color: var(--accent-tint-text);
+		font-size: 13px;
 	}
 
-	.pending-text {
+	.pending span {
 		flex: 1;
 		min-width: 0;
 	}
 
-	.pending-text strong {
-		color: var(--text-primary);
-	}
-
-	.status {
-		margin: 0 16px 10px;
-		font-size: 0.75rem;
-		color: #6bffb8;
+	.pending .icon-btn {
+		width: 28px;
+		height: 28px;
+		color: inherit;
 	}
 
 	.state {
-		padding: 24px 16px;
-		font-size: 0.8rem;
-		color: var(--text-subtle);
-		text-align: center;
+		margin: 0;
+		padding: 18px;
+		font-size: 13px;
+		color: var(--text-muted);
 	}
 
 	.link {
-		background: none;
-		border: none;
-		color: var(--accent);
-		cursor: pointer;
-		font-size: inherit;
 		padding: 0;
+		border: none;
+		background: none;
+		color: var(--accent);
+		font: inherit;
+		cursor: pointer;
 	}
 
-	.search-input {
-		margin: 0 16px 10px;
-		background-color: var(--surface-0);
+	.tools {
+		display: flex;
+		gap: 8px;
+		padding: 12px 14px;
+	}
+
+	.tools input,
+	.sort {
+		height: 34px;
+		border-radius: 9px;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: var(--surface-1);
+		font-size: 13px;
+	}
+
+	.tools input {
+		flex: 1;
+		min-width: 0;
+		padding: 0 12px;
 		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
-		padding: 7px 10px;
-		font-size: 0.8rem;
-		font-family: inherit;
-		flex-shrink: 0;
 	}
 
-	.search-input::placeholder {
+	.tools input:focus {
+		outline: none;
+		border-color: var(--accent-tint-border);
+	}
+
+	.sort {
+		padding: 0 10px;
+		color: rgba(243, 243, 245, 0.7);
+		font-weight: 500;
+		font-size: 12px;
+		cursor: pointer;
+	}
+
+	.hint {
+		margin: 0;
+		padding: 0 18px 8px;
+		font-size: 12px;
 		color: var(--text-subtle);
 	}
 
-	.search-input:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-
-	.sort-bar {
-		display: flex;
-		gap: 8px;
-		padding: 0 16px 12px;
-		flex-shrink: 0;
-	}
-
-	.sort-select {
-		flex: 1;
-		min-width: 0;
-		background-color: var(--surface-0);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
-		padding: 6px 8px;
-		font-size: 0.78rem;
-		font-family: inherit;
-		cursor: pointer;
-	}
-
-	.sort-select:focus {
-		outline: none;
-		border-color: var(--accent);
-	}
-
-	.sort-dir {
-		width: 32px;
-		flex-shrink: 0;
-		background-color: var(--surface-0);
-		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
-		font-size: 0.85rem;
-		cursor: pointer;
-		transition: border-color var(--transition);
-	}
-
-	.sort-dir:hover {
-		border-color: var(--accent);
-	}
-
 	.grid {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		overflow-x: hidden;
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 12px;
-		padding: 0 16px 20px;
-		overflow-y: auto;
+		gap: 14px 12px;
+		align-content: start;
+		padding: 4px 14px 14px;
 	}
 
 	.tile {
 		display: flex;
 		flex-direction: column;
-		gap: 4px;
+		gap: 8px;
 		min-width: 0;
-		cursor: pointer;
-		border-radius: var(--radius-sm);
-		padding: 6px;
-		border: 1px solid transparent;
+		padding: 0;
+		border: none;
 		background: none;
-		text-align: left;
-		font-family: inherit;
-		transition: background-color var(--transition), border-color var(--transition);
-	}
-
-	.tile:hover {
-		background-color: var(--surface-2);
-	}
-
-	.tile.drag-over {
-		border-color: var(--accent);
-		background-color: rgba(var(--accent-rgb), 0.12);
-	}
-
-	.panel.picking .tile:not(.new-tile):hover {
-		border-color: var(--accent);
-	}
-
-	.tile-img {
-		width: 100%;
-		aspect-ratio: 1 / 1;
-		object-fit: cover;
-		border-radius: var(--radius-sm);
-		background-color: var(--surface-2);
-	}
-
-	.tile-img.placeholder {
-		display: block;
-	}
-
-	.new-img {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 1.6rem;
-		color: var(--text-subtle);
-		border: 1px dashed var(--border-subtle);
-		background: none;
-	}
-
-	.tile-name {
-		font-size: 0.78rem;
-		font-weight: 600;
 		color: var(--text-primary);
+		text-align: left;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.cover {
+		display: grid;
+		place-items: center;
+		width: 100%;
+		aspect-ratio: 1;
+		border-radius: 10px;
+		object-fit: cover;
+		background: var(--surface-1);
+		color: var(--text-subtle);
+		outline: 2px solid transparent;
+		outline-offset: 2px;
+		transition: transform 0.15s var(--ease), outline-color 0.15s var(--ease);
+	}
+
+	.cover.new {
+		background: none;
+		border: 1px dashed rgba(255, 255, 255, 0.16);
+		color: rgba(243, 243, 245, 0.5);
+	}
+
+	.tile:hover .cover {
+		transform: scale(1.02);
+	}
+
+	.tile.dragging .cover {
+		outline: 1px dashed rgba(var(--accent-rgb), 0.5);
+	}
+
+	.tile.over .cover {
+		outline: 2px solid var(--accent);
+		transform: scale(1.03);
+	}
+
+	.meta {
+		min-width: 0;
+	}
+
+	.name {
+		font-size: 13px;
+		font-weight: 500;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	.tile-count {
-		font-size: 0.7rem;
+	.count {
+		font-size: 12px;
 		color: var(--text-subtle);
+	}
+
+	.line {
+		height: 12px;
+		width: 70%;
+	}
+
+	@media (max-width: 759px) {
+		.dock {
+			width: 100%;
+		}
 	}
 </style>
