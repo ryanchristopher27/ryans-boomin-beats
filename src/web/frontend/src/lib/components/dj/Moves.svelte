@@ -4,7 +4,8 @@
 	// read the one `suggestions` store: one LLM call per track, however many
 	// move widgets are on screen.
 	import { flip } from 'svelte/animate';
-		import { MOVE_SUMMARY, moveLabel } from '$lib/dj/layout.js';
+		import { KEY_LABEL, MOVE_SUMMARY, moveLabel } from '$lib/dj/layout.js';
+	import { djContext } from './context.js';
 	import { queuedKeys } from '$lib/dj/logic.js';
 	import PickRow from './PickRow.svelte';
 	import Bars from '../ui/Bars.svelte';
@@ -23,6 +24,7 @@
 	export let kind = null;
 
 	const { suggestions, doc, player, moveFeedback, moveLoading } = dj;
+	const { flash } = djContext();
 
 	/** The move whose "What's off?" chips are open. */
 	let asking = null;
@@ -82,13 +84,14 @@
 	{:else}
 		<div class:groups={!kind}>
 			{#each moves as move, i (move.move)}
-				<section class="group" class:lead={move.move === 'toward' || move.move === 'drift'} style:animation-delay="{i * 40}ms">
+				<section class="group" class:lead={move.move === 'toward' || move.move === 'drift'} class:flash={$flash === move.move} style:animation-delay="{i * 40}ms">
 					<h3>
 						{#if !kind}
 							<span class="glyph mono" aria-hidden="true">{GLYPH[move.move] ?? '·'}</span>
 							<span class="name">{moveLabel(move.move)}</span>
 						{/if}
 						<span class="summary">{MOVE_SUMMARY[move.move] ?? ''}</span>
+						{#if kind && KEY_LABEL[move.move]}<kbd class="mono" title="Press {KEY_LABEL[move.move]} to add the first pick">{KEY_LABEL[move.move]}</kbd>{/if}
 						<button
 							class="refresh"
 							class:spin={$moveLoading[move.move]}
@@ -150,6 +153,32 @@
 		background: rgba(255, 255, 255, 0.025);
 		border: 1px solid rgba(255, 255, 255, 0.06);
 		animation: bbin 0.4s var(--ease) both;
+	}
+
+	/* A Compass key just added from this move. */
+	.group.flash {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 1px var(--accent);
+		transition: border-color 0.15s, box-shadow 0.15s;
+	}
+
+	.moves > div:not(.groups) > .group.flash {
+		border: none;
+		box-shadow: inset 0 0 0 1px var(--accent);
+		border-radius: 10px;
+	}
+
+	kbd {
+		flex: none;
+		min-width: 20px;
+		height: 20px;
+		display: grid;
+		place-items: center;
+		padding: 0 5px;
+		border-radius: 5px;
+		border: 1px solid var(--border-control);
+		font-size: calc(11px * var(--text-scale, 1));
+		color: var(--text-muted);
 	}
 
 	/* A single-move widget is one group without its own card. */

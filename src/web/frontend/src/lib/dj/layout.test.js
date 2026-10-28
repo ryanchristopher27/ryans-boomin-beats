@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { COLUMNS, PRESETS, WIDGETS, addable, completeSaved, itemsFor, loadLayout, nudgeBox } from './layout.js';
+import { COLUMNS, PRESETS, WIDGETS, addable, completeSaved, itemsFor, loadLayout, moveForKey, nudgeBox } from './layout.js';
 
 describe('layout', () => {
 	test('presets fit the grid and respect minimum sizes', () => {
@@ -44,5 +44,12 @@ describe('layout', () => {
 		expect(ids).toContain('upNext');
 		expect(ids).toContain('move-hold');
 		expect(ids).not.toContain('moves');
+	});
+	test('Compass keys map to moves, but never while typing or with a modifier', () => {
+		const key = (k, extra = {}) => moveForKey({ key: k, target: { tagName: 'DIV' }, ...extra });
+		expect([key('ArrowUp'), key('ArrowDown'), key('ArrowLeft'), key('ArrowRight'), key('h'), key('T')]).toEqual(['lift', 'drop', 'pivot', 'curveball', 'hold', 'toward']);
+		expect(key('x')).toBe(null);
+		expect(key('h', { target: { tagName: 'INPUT' } })).toBe(null);
+		expect(key('ArrowUp', { metaKey: true })).toBe(null);
 	});
 });

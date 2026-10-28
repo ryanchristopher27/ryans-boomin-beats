@@ -3,7 +3,9 @@
 	import { page, access_token } from '../../stores.js';
 	import { getDJ } from '$lib/dj/instance.js';
 	import { coverHue } from '$lib/dj/ambience.js';
-	import { PRESETS, STORAGE_KEY, WIDGETS, addable, itemsFor, loadLayout, moveLabel } from '$lib/dj/layout.js';
+	import { KEY_LABEL, PRESETS, STORAGE_KEY, WIDGETS, addable, itemsFor, loadLayout, moveForKey, moveLabel } from '$lib/dj/layout.js';
+	import { queuedKeys } from '$lib/dj/logic.js';
+	import { say } from '$lib/toast.js';
 	import Grid from '$lib/components/dj/Grid.svelte';
 	import Widget from '$lib/components/dj/Widget.svelte';
 	import NowPlaying from '$lib/components/dj/NowPlaying.svelte';
@@ -26,7 +28,7 @@
 
 	const dj = /** @type {any} */ (getDJ());
 	const { doc, suggestions, player } = dj;
-	provideDJContext();
+	const { flash } = provideDJContext();
 	// Screen-reader feedback for keyboard move/resize.
 	let announcement = '';
 
@@ -114,7 +116,21 @@
 	}
 
 	function onKey(e) {
-		if (editing && e.key === 'Escape' && !document.querySelector(':popover-open')) cancel();
+		if (editing) {
+			if (e.key === 'Escape' && !document.querySelector(':popover-open')) cancel();
+			return;
+		}
+		// Compass keys (F3g): add the move's first pick that isn't queued yet.
+		const move = moveForKey(e);
+		if (!move || document.querySelector('[role=dialog], :popover-open')) return;
+		e.preventDefault();
+		const q = $doc.queue;
+		const queued = queuedKeys([...q.sent, ...q.upcoming]);
+		const pick = $suggestions.moves.find((m) => m.move === move)?.tracks.find((t) => !queued.has(t.id) && !(t.isrc && queued.has(t.isrc)));
+		if (!pick) return say(`No ${moveLabel(move)} picks to add right now.`);
+		$flash = move;
+		setTimeout(() => $flash === move && ($flash = null), 500);
+		dj.addPick(pick).then((r) => say(r.ok ? `Queued ${pick.title} (${moveLabel(move)}, ${KEY_LABEL[move]}).` : `${pick.title} isn't on Spotify.`));
 	}
 
 	// Album-art ambience: the page's drifting colour takes the cover's hue and

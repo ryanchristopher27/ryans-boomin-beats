@@ -46,6 +46,21 @@ export const PRESETS = {
 			w('controls', 8, 9, 4, 6)
 		]
 	},
+	// F3g: the moves around Now playing; keys add from them (see MOVE_KEYS).
+	compass: {
+		label: 'Compass',
+		items: [
+			w('move', 0, 0, 4, 5, { kind: 'hold' }),
+			w('move', 4, 0, 4, 5, { kind: 'lift' }),
+			w('move', 8, 0, 4, 5, { kind: 'toward' }),
+			w('move', 0, 5, 4, 5, { kind: 'pivot' }),
+			w('nowPlaying', 4, 5, 4, 5),
+			w('move', 8, 5, 4, 5, { kind: 'curveball' }),
+			w('controls', 0, 10, 4, 5),
+			w('move', 4, 10, 4, 5, { kind: 'drop' }),
+			w('upNext', 8, 10, 4, 5)
+		]
+	},
 	focus: {
 		label: 'Focus',
 		items: [w('nowPlaying', 0, 0, 5, 8), w('controls', 0, 8, 5, 7), w('moves', 5, 0, 7, 15)]
@@ -114,6 +129,18 @@ export function addable(items) {
 }
 
 export const moveLabel = (kind) => kind[0].toUpperCase() + kind.slice(1);
+
+/** Compass keys (F3g): each adds that move's first pick that isn't queued yet. */
+export const MOVE_KEYS = { ArrowUp: 'lift', ArrowDown: 'drop', ArrowLeft: 'pivot', ArrowRight: 'curveball', h: 'hold', t: 'toward' };
+export const KEY_LABEL = { lift: '↑', drop: '↓', pivot: '←', curveball: '→', hold: 'H', toward: 'T' };
+
+/** The key a keydown means, or null when the host is typing or using a modifier. */
+export function moveForKey(e) {
+	if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return null;
+	const el = /** @type {any} */ (e.target);
+	if (el?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el?.tagName)) return null;
+	return MOVE_KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key] ?? null;
+}
 
 /** Move summaries, reused from iOS. */
 export const MOVE_SUMMARY = {

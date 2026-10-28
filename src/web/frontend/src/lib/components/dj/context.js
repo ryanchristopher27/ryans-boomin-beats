@@ -11,7 +11,9 @@ const KEY = Symbol('dj-page');
 export function provideDJContext() {
 	const ctx = {
 		/** @type {import('svelte/store').Writable<Song | null>} null = follow now playing */
-		selected: writable(null)
+		selected: writable(null),
+		/** The move a Compass key just added from; its card flashes (F3g). */
+		flash: writable(/** @type {string | null} */ (null))
 	};
 	setContext(KEY, ctx);
 	return ctx;
@@ -19,7 +21,7 @@ export function provideDJContext() {
 
 /** Outside the DJ page (or in tests) there's nothing to link, so hand back inert stores. */
 export function djContext() {
-	return getContext(KEY) ?? { selected: writable(null) };
+	return getContext(KEY) ?? { selected: writable(null), flash: writable(null) };
 }
 
 /** "Removed X." with Undo, in the app-wide toast. */
