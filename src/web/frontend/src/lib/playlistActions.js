@@ -159,7 +159,7 @@ export async function queueTracks(keys) {
  * (passing them straight to Spotify failed for any Deezer-shown song).
  * @returns {Promise<{ok: true, id: string, url: string, missing: number} | {ok: false, error: string}>}
  */
-export async function createPlaylist(name, keys = []) {
+export async function createPlaylist(name, keys = [], description = '') {
 	const token = get(access_token);
 	if (!token) return { ok: false, error: 'auth' };
 	const { ids, missing, error } = keys.length ? await toSpotifyIds(keys) : { ids: [], missing: 0, error: undefined };
@@ -168,7 +168,7 @@ export async function createPlaylist(name, keys = []) {
 		const res = await fetch(`${PUBLIC_API_URL}/spotify/create-playlist/`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', ...bearer(token) },
-			body: JSON.stringify({ name, track_ids: ids })
+			body: JSON.stringify({ name, track_ids: ids, description })
 		});
 		if (res.status === 401) return { ok: false, error: 'auth' };
 		const data = await res.json();

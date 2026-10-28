@@ -14,7 +14,7 @@ import re
 from typing import Annotated, Literal
 
 import requests
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, StringConstraints
 from spotipy import SpotifyException
 
@@ -433,6 +433,42 @@ def merge_recent(session: list[TrackRef], spotify: list[TrackRef], cap: int = 15
         seen.add(key)
         out.append(r)
     return out[:cap]
+
+
+class RecapRequest(BaseModel):
+    songs: list[TrackRef] = Field(min_length=1, max_length=100)
+
+
+_RECAP_SYSTEM = (
+    'You write Spotify playlist descriptions for a DJ set that just happened. Reply with the description only: '
+    'one or two sentences, at most 250 characters, describing the arc of the night and its standout sounds. '
+    'No emojis, no hashtags, no quotation marks.'
+)
+
+
+def recap_prompt(songs: list[TrackRef]) -> str:
+    lines = '\n'.join(f'{i + 1}. {r.title} — {r.artist}' for i, r in enumerate(songs))
+    return f'The set, in the order it played:\n{lines}'
+
+
+def clean_recap(text: str) -> str:
+    """One tidy line within Spotify's 300-character description limit."""
+    t = ' '.join(text.split()).strip().strip('"').strip()
+    return t if len(t) <= 300 else t[:297].rsplit(' ', 1)[0] + '…'
+
+
+@router.post('/dj/recap/')
+async def recap(body: RecapRequest, creds: LLMCredentials | None = Depends(get_optional_llm_credentials)):
+    """Save tonight's set (F3f): an AI-written description. Optional in the UI."""
+    if creds is None:
+        raise HTTPException(status_code=401, detail='Connect an AI in Settings to write a recap.')
+    client = LLMClient(provider=creds.provider, api_key=creds.api_key)
+    try:
+        text = await client.generate([{'role': 'user', 'content': recap_prompt(body.songs)}], _RECAP_SYSTEM)
+    except Exception as e:
+        log.warning('[dj] recap via %s failed: %s', creds.provider, e)
+        raise HTTPException(status_code=502, detail="Couldn't write a recap right now.")
+    return {'recap': clean_recap(text)}
 
 
 def similar_moves(similar: list[dict], now_playing: TrackRef, limit: int) -> dict[str, list[dict]]:

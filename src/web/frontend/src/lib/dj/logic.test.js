@@ -133,3 +133,20 @@ describe('sync merge', () => {
 		expect(merge(base, base, server)).toEqual(server);
 	});
 });
+
+describe("tonight's set", () => {
+	const song = (id, extra = {}) => ({ id, title: id, duration_ms: 180000, ...extra });
+	test('logs each song once, and a long gap starts a new set', async () => {
+		const { logPlay, SET_GAP_MS } = await import('./logic.js');
+		let log = logPlay([], song('a'), 0);
+		log = logPlay(log, song('a'), 1000); // still the same song
+		log = logPlay(log, song('b'), 200000);
+		expect(log.map((e) => e.id)).toEqual(['a', 'b']);
+		log = logPlay(log, song('c'), 200000 + SET_GAP_MS + 1);
+		expect(log.map((e) => e.id)).toEqual(['c']);
+	});
+	test('stats count time, DJ picks and guest requests', async () => {
+		const { setStats } = await import('./logic.js');
+		expect(setStats([song('a', { dj: true }), song('b', { guest: true }), song('c')])).toEqual({ songs: 3, minutes: 9, djPicks: 1, requests: 1 });
+	});
+});

@@ -87,6 +87,9 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	const moveFeedback = writable({});
 	/** @type {import('svelte/store').Writable<Record<string, boolean>>} */
 	const moveLoading = writable({});
+	// Tonight's set (F3f): what played on this device, for Save tonight's set.
+	const setlog = writable(load('dj_setlog') ?? []);
+	setlog.subscribe((log) => storage.set('dj_setlog', JSON.stringify(log)));
 
 	// Tabs in one browser share a device id (localStorage), so without this every
 	// open tab would drive: double-queuing tracks and flagging each other's sends
@@ -342,6 +345,21 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		});
 	}
 
+	/** A song started: note it in tonight's set, with who put it there. */
+	function logSong(track) {
+		const q = d().queue;
+		const entry = {
+			id: track.id,
+			title: track.title,
+			artists: track.artists ?? [],
+			image: track.image ?? '',
+			duration_ms: track.duration_ms ?? 0,
+			dj: !!q.sent.find((i) => i.trackID === track.id)?.addedByDJ,
+			guest: q.keptGuests.includes(track.id) || q.requests.some((r) => r.trackID === track.id)
+		};
+		setlog.update((log) => L.logPlay(log, entry, now()));
+	}
+
 	/** Everything in Up next, so an edit can be undone (F3b). */
 	function snapshotUpcoming() {
 		return structuredClone(d().queue.upcoming);
@@ -580,6 +598,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 				x.recent = L.pushFront(x.recent, L.trackRef(previous), 10);
 			});
 		}
+		if (s.track && previous?.id !== s.track.id) logSong(s.track);
 		fetchedAt = now();
 		player.update((p) => {
 			const stale = messageFromPoll || (p.message === L.NO_DEVICE && s.active);
@@ -833,6 +852,8 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		suggestions,
 		moveFeedback,
 		moveLoading,
+		setlog,
+		clearSet: () => setlog.set([]),
 		refreshMove,
 		// lifecycle
 		start,

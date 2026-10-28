@@ -19,6 +19,7 @@
 	import { page as route } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import SyncBanner from '$lib/components/dj/SyncBanner.svelte';
+	import SaveSet from '$lib/components/dj/SaveSet.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Blobs from '$lib/components/ui/Blobs.svelte';
 	import Bars from '$lib/components/ui/Bars.svelte';
@@ -42,6 +43,7 @@
 	let grid;
 	let before = items;
 	let addingSong = false;
+	let savingSet = false;
 	let addMenu;
 	let addButton;
 
@@ -170,6 +172,7 @@
 				{/each}
 			</div>
 			<button class="btn" on:click={startEditing}><Icon name="layout" size={16} /> Edit layout</button>
+			<button class="btn" on:click={() => (savingSet = true)}>Save tonight's set</button>
 		{/if}
 	</div>
 
@@ -233,6 +236,7 @@
 	{/if}
 
 	<p class="sr-only" aria-live="polite">{announcement}</p>
+	{#if savingSet}<SaveSet {dj} onClose={() => (savingSet = false)} />{/if}
 </div>
 
 <style>
@@ -246,7 +250,8 @@
 		overflow: hidden;
 	}
 
-	.dj-page > :global(:not(.blobs)) {
+	/* Above the drifting colour; fixed overlays (Save tonight's set) keep their own position. */
+	.dj-page > :global(:not(.blobs):not(.overlay)) {
 		position: relative;
 		z-index: 1;
 	}

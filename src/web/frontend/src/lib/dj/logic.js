@@ -223,3 +223,35 @@ export function describe(error) {
 	return "Spotify didn't allow that right now.";
 }
 export { NO_DEVICE };
+
+// --- Tonight's set (F3f) ---
+// Each device keeps a log of what played, for "Save tonight's set". History in
+// the synced doc is capped at 10, too short for a night.
+
+/** A gap this long starts a new set. */
+export const SET_GAP_MS = 6 * 60 * 60 * 1000;
+export const SET_MAX = 300;
+
+/**
+ * The set log after a song starts: a new set after a long gap, no repeat
+ * entry for the same song still playing.
+ * @param {{id: string, at: number}[]} log
+ * @param {{id: string}} entry
+ * @param {number} at
+ */
+export function logPlay(log, entry, at) {
+	const last = log.at(-1);
+	const fresh = !last || at - last.at > SET_GAP_MS ? [] : log;
+	if (fresh.at(-1)?.id === entry.id) return fresh;
+	return [...fresh, { ...entry, at }].slice(-SET_MAX);
+}
+
+/** Stats for the Save tonight's set summary. */
+export function setStats(log) {
+	return {
+		songs: log.length,
+		minutes: Math.round(log.reduce((s, e) => s + (e.duration_ms ?? 0), 0) / 60000),
+		djPicks: log.filter((e) => e.dj).length,
+		requests: log.filter((e) => e.guest).length
+	};
+}

@@ -1,7 +1,8 @@
 import logging
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StringConstraints
 from spotipy import Spotify, SpotifyException
 
 from routers.player import player_error
@@ -14,8 +15,10 @@ router = APIRouter()
 
 
 class CreatePlaylistRequest(BaseModel):
-    name: str
-    track_ids: list[str]
+    name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
+    track_ids: list[str] = Field(default=[], max_length=500)
+    # Spotify's limit is 300 characters (F3f: tonight's set's recap).
+    description: Annotated[str, StringConstraints(max_length=300)] = ''
 
 
 class QueueRequest(BaseModel):
@@ -35,9 +38,11 @@ class SaveTrackRequest(BaseModel):
 @router.post("/spotify/create-playlist/")
 def create_playlist(body: CreatePlaylistRequest, token: str = Depends(get_spotify_token)):
     spotify = user_client(token)
-    playlist = spotify._post("me/playlists", payload={"name": body.name, "public": False, "description": "Created by Boomin Beats"})
-    if body.track_ids:
-        spotify.playlist_add_items(playlist['id'], body.track_ids)
+    description = body.description.strip() or "Created by Boomin Beats"
+    playlist = spotify._post("me/playlists", payload={"name": body.name, "public": False, "description": description})
+    # Spotify takes at most 100 tracks per add.
+    for i in range(0, len(body.track_ids), 100):
+        spotify.playlist_add_items(playlist['id'], body.track_ids[i:i + 100])
     return {
         'playlist_url': playlist['external_urls']['spotify'],
         'playlist_id': playlist['id'],
