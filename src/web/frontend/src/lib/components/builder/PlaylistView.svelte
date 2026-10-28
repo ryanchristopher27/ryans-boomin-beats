@@ -1,7 +1,8 @@
 <script>
 	// The Builder's playlist column (R4): a cover-mosaic hero, Save / Queue /
 	// Add to a playlist, and the songs.
-	import { pendingAdd, playlistsPanelOpen } from '../../../stores.js';
+	import { djSetRequest, pendingAdd, playlistsPanelOpen } from '../../../stores.js';
+	import { goto } from '$app/navigation';
 	import { createPlaylist, getSavedStates, queueTracks, rememberSongs, setTrackSaved } from '$lib/playlistActions.js';
 	import { coverHue } from '$lib/dj/ambience.js';
 	import { playlistMeta } from '$lib/builder.js';
@@ -77,6 +78,12 @@
 		else say(r.error === 'auth' ? 'Log in to Spotify on the Profile page first.' : "Couldn't save the playlist.");
 	}
 
+	// F3h: the DJ page resolves these and appends them to Up next.
+	function startSet() {
+		$djSetRequest = songs.map((s) => s.spotify);
+		goto('/dj/');
+	}
+
 	function addToPlaylist() {
 		$pendingAdd = { trackIds: ids, label: `${ids.length} songs`, transient: !$playlistsPanelOpen };
 		$playlistsPanelOpen = true;
@@ -99,6 +106,7 @@
 					<button class="btn white pill" on:click={() => (naming = true)} disabled={!ids.length || building}>Save to Spotify</button>
 					<button class="btn pill ghost" on:click={queueAll} disabled={!ids.length || building}>Add all to queue</button>
 					<button class="btn pill ghost" on:click={addToPlaylist} disabled={!ids.length || building}><Icon name="playlist" size={15} /> Add to a playlist</button>
+						<button class="btn pill ghost" on:click={startSet} disabled={!ids.length || building}><Icon name="disc" size={15} /> Start a DJ set</button>
 				</div>
 			</div>
 		</div>

@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
-	import { page, access_token } from '../../stores.js';
+	import { page, access_token, djSetRequest } from '../../stores.js';
+	import { resolvedId, toSpotifyIds } from '$lib/playlistActions.js';
 	import { getDJ } from '$lib/dj/instance.js';
 	import { coverHue } from '$lib/dj/ambience.js';
 	import { KEY_LABEL, PRESETS, STORAGE_KEY, WIDGETS, addable, itemsFor, loadLayout, moveForKey, moveLabel } from '$lib/dj/layout.js';
@@ -16,6 +17,7 @@
 	import Requests from '$lib/components/dj/Requests.svelte';
 	import SongProfile from '$lib/components/dj/SongProfile.svelte';
 	import Recent from '$lib/components/dj/Recent.svelte';
+	import Playlist from '$lib/components/dj/Playlist.svelte';
 	import { provideDJContext } from '$lib/components/dj/context.js';
 	import { NIGHT, activePreset, applyPreset } from '$lib/dj/presets.js';
 	import { page as route } from '$app/stores';
@@ -57,8 +59,19 @@
 			applyPreset(dj, preset);
 			goto('/dj/', { replaceState: true, noScroll: true });
 		}
+		if ($djSetRequest) startSet($djSetRequest);
 		return dj.watchSuggestions();
 	});
+
+	// The Builder's "Start a DJ set": resolve its songs to Spotify (one batch), then append.
+	async function startSet(songs) {
+		$djSetRequest = null;
+		const { missing, error } = await toSpotifyIds(songs.map((s) => s.id));
+		if (error) return say(error === 'auth' ? 'Log in to Spotify on the Profile page first.' : "Couldn't look those songs up on Spotify.");
+		const tracks = songs.map((s) => ({ ...s, id: resolvedId(s.id) })).filter((t) => t.id);
+		await dj.addMany(tracks);
+		say(`Added ${tracks.length} song${tracks.length === 1 ? '' : 's'} to Up next.${missing ? ` ${missing} weren't on Spotify.` : ''}`);
+	}
 
 	function read() {
 		try {
@@ -242,6 +255,8 @@
 						<SongProfile {dj} />
 					{:else if item.type === 'recent'}
 						<Recent {dj} />
+					{:else if item.type === 'playlist'}
+						<Playlist {dj} />
 					{/if}
 				</Widget>
 			</Grid>

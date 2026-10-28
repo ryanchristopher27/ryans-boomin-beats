@@ -69,6 +69,11 @@ export const exploreTrail = persisted('exploreTrail', []);
 /** @type {import('svelte/store').Writable<string | null>} */
 export const builderRequest = writable(null);
 
+// Songs the Builder hands to the DJ (F3h: "Start a DJ set"); the DJ page
+// appends them to Up next on arrival.
+/** @type {import('svelte/store').Writable<{id: string, title: string, artists: string[], image: string, isrc?: string}[] | null>} */
+export const djSetRequest = writable(null);
+
 // Playlists side panel
 export const playlistsPanelOpen = persisted('playlistsPanelOpen', false);
 export const userPlaylists = writable([]);

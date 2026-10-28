@@ -82,6 +82,16 @@ describe('web DJ engine', () => {
 		expect(server.row.state.queue.sent.map((i) => i.trackID)).toEqual(['t1']);
 	});
 
+	test('addMany appends a whole set in order, sending only one ahead (F3h)', async () => {
+		const server = fakeServer();
+		const a = tab(server, 'a');
+		await a.refresh();
+		await a.addMany([track('t1'), track('t2'), track('t3')]);
+		await a.flush();
+		expect(server.queued).toEqual(['t1']);
+		expect(server.row.state.queue.upcoming.map((i) => i.trackID)).toEqual(['t2', 't3']);
+	});
+
 	test('a participant edits the shared queue but never sends to Spotify', async () => {
 		const server = fakeServer();
 		const a = tab(server, 'a');

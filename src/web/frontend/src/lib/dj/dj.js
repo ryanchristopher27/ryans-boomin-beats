@@ -294,6 +294,13 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		await topUp(depth);
 	}
 
+	/** Append several songs to Up next in one edit (F3h: a set from a playlist). */
+	async function addMany(tracks) {
+		if (!tracks.length) return;
+		edit((x) => x.queue.upcoming.push(...tracks.map((t) => L.queueItem(t))));
+		await topUp(depth);
+	}
+
 	/**
 	 * Queue a DJ pick (plan Q2). Picks come from Deezer with no Spotify id, so
 	 * this spends the one Spotify search a song costs: resolve by ISRC, then add.
@@ -866,6 +873,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		nextDelay,
 		// queue
 		add,
+		addMany,
 		addPick,
 		moveUpcoming,
 		snapshotUpcoming,

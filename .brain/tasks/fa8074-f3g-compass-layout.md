@@ -3,11 +3,11 @@ id: fa8074
 source: plan:ryans-boomin-beats:F3g
 title: F3g — Compass layout
 type: task
-status: doing
+status: review
 assignee: 
 scoped_dir: .
 created: 2026-10-28T03:31:49Z
-updated: 2026-10-28T03:44:26Z
+updated: 2026-10-28T03:46:48Z
 ---
 
 ## Brief
@@ -20,3 +20,4 @@ updated: 2026-10-28T03:44:26Z
 ## Updates
 - 2026-10-28T03:31:49Z · created
 - 2026-10-28T03:44:26Z · status: backlog → doing (building)
+- 2026-10-28T03:46:48Z · status: doing → review (built + verified)

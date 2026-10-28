@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, StringConstraints
 from spotipy import Spotify, SpotifyException
 
-from routers.player import player_error
+from routers.player import _track, player_error
 from services.spotify_auth import get_spotify_token
 from services.spotify_client import user_client
 
@@ -83,6 +83,35 @@ def list_playlists(token: str = Depends(get_spotify_token)):
             break
 
     return {'playlists': playlists}
+
+
+# A DJ set from a playlist doesn't need more than this (F3h).
+PLAYLIST_TRACKS_MAX = 300
+
+
+def playlist_tracks_from(spotify: Spotify, playlist_id: str, limit: int = PLAYLIST_TRACKS_MAX) -> list[dict]:
+    """A playlist's songs, in order. The newer API answers /items with each
+    entry's track under "item"; the older one used /tracks and "track"."""
+    tracks, offset = [], 0
+    while len(tracks) < limit:
+        page = spotify._get(f"playlists/{playlist_id}/items", limit=50, offset=offset)
+        for entry in page.get('items', []):
+            t = _track((entry or {}).get('item') or (entry or {}).get('track'))
+            # Local files have no Spotify id and can't be queued.
+            if t and t['id']:
+                tracks.append(t)
+        if not page.get('next'):
+            break
+        offset += 50
+    return tracks[:limit]
+
+
+@router.get("/spotify/playlist-tracks/")
+def playlist_tracks(
+    playlist_id: Annotated[str, StringConstraints(pattern=r'^[A-Za-z0-9]{1,64}$')],
+    token: str = Depends(get_spotify_token),
+):
+    return {'tracks': playlist_tracks_from(user_client(token), playlist_id)}
 
 
 @router.post("/spotify/add-to-playlist/")
