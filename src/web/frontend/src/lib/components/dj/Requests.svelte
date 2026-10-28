@@ -1,15 +1,18 @@
 <script>
+	// Guest requests (DJ5, restyled R6): songs that showed up in the Spotify
+	// queue without the app adding them. Keep / Later / Decline each one.
 	import { flip } from 'svelte/animate';
-	import { djContext, offerUndo } from './context.js';
+	import { offerUndo } from './context.js';
+	import SongRow from '../ui/SongRow.svelte';
+	import Icon from '../Icon.svelte';
 
 	/** @type {any} */
 	export let dj;
 	const { doc, sync } = dj;
-	const ctx = djContext();
 
 	function decline(r) {
 		dj.decline(r);
-		offerUndo(ctx, `Declined ${r.title}.`, () => dj.undoDecline(r));
+		offerUndo(`Declined ${r.title}.`, () => dj.undoDecline(r));
 	}
 	$: requests = $doc.queue.requests;
 </script>
@@ -19,22 +22,19 @@
 		<ul>
 			{#each requests as r (r.id)}
 				<li animate:flip={{ duration: 200 }}>
-					<img src={r.image} alt="" width="36" height="36" />
-					<div class="text">
-						<p class="title">{r.title}</p>
-						<p class="artist">{r.artists.join(', ')}</p>
-					</div>
-					<div class="actions">
-						<button class="btn small" on:click={() => dj.keep(r)} title="Leave it where Spotify put it">Keep</button>
-						<button class="btn small" on:click={() => dj.later(r)} title="Move it to the end of Up next">Later</button>
-						<button class="btn small danger" on:click={() => decline(r)} title="Skip it when it comes up">Decline</button>
-					</div>
+					<SongRow compact title={r.title} artists={r.artists} image={r.image}>
+						<svelte:fragment slot="actions">
+							<button class="btn primary keep" on:click={() => dj.keep(r)} title="Leave it where Spotify put it">Keep</button>
+							<button class="act" on:click={() => dj.later(r)} aria-label="Play {r.title} later" title="Move it to the end of Up next"><Icon name="later" size={14} /></button>
+							<button class="act decline" on:click={() => decline(r)} aria-label="Decline {r.title}" title="Skip it when it comes up"><Icon name="x" size={14} /></button>
+						</svelte:fragment>
+					</SongRow>
 				</li>
 			{/each}
 		</ul>
 	{:else}
 		<p class="empty">
-			Requests from your Spotify queue show up here.
+			Guests add songs from their own Spotify queue. They show up here.
 			{#if !$sync.isPrimary}The driving device picks them up.{/if}
 		</p>
 	{/if}
@@ -42,7 +42,7 @@
 
 <style>
 	.requests {
-		padding: 4px 16px 12px;
+		padding: 6px;
 	}
 
 	ul {
@@ -51,52 +51,43 @@
 		padding: 0;
 	}
 
-	li {
-		display: grid;
-		grid-template-columns: 36px minmax(0, 1fr);
-		gap: 6px 10px;
-		padding: 10px 0;
-	}
-
-	li + li {
-		border-top: 1px solid var(--border-subtle);
-	}
-
-	img {
-		border-radius: 4px;
-		background: var(--surface-2);
-		object-fit: cover;
-	}
-
-	p {
-		margin: 0;
-	}
-
-	.title {
-		font-size: 14px;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.artist {
+	.keep {
+		flex: none;
+		height: 28px;
+		padding: 0 10px;
+		border-radius: 7px;
 		font-size: 12px;
-		color: var(--text-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 
-	.actions {
-		grid-column: 2;
-		display: flex;
-		gap: 6px;
+	.act {
+		flex: none;
+		width: 28px;
+		height: 28px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 1px solid var(--border-control);
+		border-radius: 7px;
+		background: transparent;
+		color: var(--text-primary);
+		cursor: pointer;
+		transition: background-color var(--transition);
+	}
+
+	.act:hover {
+		background: var(--hover);
+	}
+
+	.decline {
+		border-color: rgba(255, 122, 122, 0.3);
+		color: var(--danger-text);
 	}
 
 	.empty {
-		margin: 16px 0;
+		margin: 0;
+		padding: 8px 10px;
 		font-size: 13px;
 		line-height: 1.5;
-		color: var(--text-muted);
+		color: rgba(243, 243, 245, 0.5);
 	}
 </style>

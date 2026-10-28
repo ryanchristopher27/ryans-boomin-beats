@@ -32,7 +32,7 @@
 	<p class="hint">{mode.summary}</p>
 
 	<label class="slider">
-		<span>Safe</span>
+		<span class="ends"><span>Safe</span><span>Bold</span></span>
 		<input
 			type="range"
 			min="0"
@@ -46,12 +46,11 @@
 				draft = null;
 			}}
 		/>
-		<span>Bold</span>
 	</label>
 
 	<label class="toggle">
-		<input type="checkbox" checked={o.clean} on:change={(e) => dj.setClean(e.currentTarget.checked)} />
-		<span>Clean only</span>
+		<span class="toggle-text">Clean only <span class="sub">Skip explicit songs in picks</span></span>
+		<input class="switch" type="checkbox" role="switch" checked={o.clean} on:change={(e) => dj.setClean(e.currentTarget.checked)} />
 	</label>
 
 	{#if withGoal}
@@ -81,49 +80,114 @@
 
 <style>
 	.controls {
-		padding: 14px 16px;
+		padding: 14px 16px 16px;
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 14px;
+	}
+
+	/* The mode picker sits on a dark track, the handoff's in-card segment. */
+	.controls :global(.segmented) {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		padding: 2px;
+		border: none;
+		border-radius: 9px;
+		background: rgba(0, 0, 0, 0.35);
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+
+	.controls :global(.segmented button) {
+		height: 30px;
+		padding: 0 6px;
+		font-size: 12px;
 	}
 
 	.docked {
 		margin: 2px -16px 0;
+		padding-top: 2px;
 		border-top: 1px solid var(--border-subtle);
 	}
 
 	.hint {
-		margin: -4px 0 0;
+		margin: -6px 0 0;
 		font-size: 13px;
-		line-height: 1.45;
-		color: var(--text-muted);
+		line-height: 1.4;
+		color: rgba(243, 243, 245, 0.55);
 	}
 
 	.slider {
 		display: flex;
-		align-items: center;
-		gap: 10px;
-		font-size: 13px;
-		color: var(--text-muted);
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.ends {
+		display: flex;
+		justify-content: space-between;
+		font-size: 12px;
+		color: rgba(243, 243, 245, 0.55);
 	}
 
 	.slider input {
-		flex: 1;
+		width: 100%;
 		accent-color: var(--accent);
 	}
 
 	.toggle {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		font-size: 14px;
+		justify-content: space-between;
+		gap: 12px;
 		cursor: pointer;
 	}
 
-	.toggle input {
+	.toggle-text {
+		display: flex;
+		flex-direction: column;
+		font-size: 14px;
+		font-weight: 500;
+	}
+
+	.sub {
+		font-size: 12px;
+		font-weight: 400;
+		color: rgba(243, 243, 245, 0.5);
+	}
+
+	/* A 36×22 switch with a 16px knob (the handoff's toggle). */
+	.switch {
+		appearance: none;
+		flex: none;
+		position: relative;
+		width: 36px;
+		height: 22px;
+		margin: 0;
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.16);
+		cursor: pointer;
+		transition: background-color var(--transition);
+	}
+
+	.switch::after {
+		content: '';
+		position: absolute;
+		top: 3px;
+		left: 3px;
 		width: 16px;
 		height: 16px;
-		accent-color: var(--accent);
+		border-radius: 50%;
+		background: #fff;
+		transition: transform 0.15s var(--ease);
+	}
+
+	.switch:checked {
+		background: var(--accent);
+	}
+
+	.switch:checked::after {
+		transform: translateX(14px);
 	}
 
 	.avoid summary {

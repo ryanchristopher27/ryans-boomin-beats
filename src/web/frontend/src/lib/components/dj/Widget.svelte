@@ -22,10 +22,9 @@
 		if (e.shiftKey) onNudge(0, 0, x, y);
 		else onNudge(x, y, 0, 0);
 	}
-	export let ambient = '';
 </script>
 
-<section class="widget" class:editing style:--ambient={ambient || null} aria-label={title}>
+<section class="widget" class:editing aria-label={title}>
 	<header class="widget-head" class:widget-handle={editing}>
 		{#if editing}
 			<button class="grip" on:keydown={onKey} aria-label="Move or resize {title}. Arrow keys move it; Shift and arrow keys resize it.">
@@ -53,11 +52,12 @@
 		height: 100%;
 		display: flex;
 		flex-direction: column;
-		background: var(--ambient, var(--surface-1));
+		background: var(--glass);
+		-webkit-backdrop-filter: var(--glass-blur);
+		backdrop-filter: var(--glass-blur);
 		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius);
+		border-radius: 16px;
 		overflow: hidden;
-		transition: background-color 400ms cubic-bezier(0.16, 1, 0.3, 1);
 	}
 
 	.widget.editing {
@@ -67,11 +67,11 @@
 
 	.widget-head {
 		flex: none;
-		height: 40px;
+		height: 44px;
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 0 8px 0 14px;
+		padding: 0 8px 0 16px;
 		border-bottom: 1px solid var(--border-subtle);
 	}
 
@@ -101,7 +101,7 @@
 	h2 {
 		margin: 0;
 		font-size: 14px;
-		font-weight: 600;
+		font-weight: 500;
 		color: var(--text-primary);
 		white-space: nowrap;
 		overflow: hidden;
@@ -120,11 +120,5 @@
 		min-height: 0;
 		overflow: auto;
 		overscroll-behavior: contain;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.widget {
-			transition: none;
-		}
 	}
 </style>

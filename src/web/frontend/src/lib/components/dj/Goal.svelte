@@ -47,12 +47,16 @@
 </script>
 
 <div class="goal">
-	<label class="row">
-		<span class="label">Steer toward</span>
-		<select value={editing ? 'destination' : choice} on:change={(e) => choose(e.currentTarget.value)}>
-			{#each CHOICES as c}<option value={c.id}>{c.label}</option>{/each}
-		</select>
-	</label>
+	<div class="row">
+		<span class="label" id="goal-label">Goal</span>
+		{#if goal?.kind === 'arc'}<span class="progress mono">{elapsed} of {goal.minutes} min</span>{:else if goal?.kind === 'destination'}<span class="progress">Toward {goal.destination}</span>{/if}
+	</div>
+	<div class="chips" role="radiogroup" aria-labelledby="goal-label">
+		{#each CHOICES as c}
+			{@const on = (editing ? 'destination' : choice) === c.id}
+			<button role="radio" aria-checked={on} class="goal-chip" class:on class:none={c.id === 'none'} on:click={() => choose(c.id)}>{c.label}</button>
+		{/each}
+	</div>
 
 	{#if editing || choice === 'destination'}
 		<form class="dest" on:submit|preventDefault={setDestination}>
@@ -74,9 +78,8 @@
 				<button role="radio" aria-checked={goal.minutes === m} class:active={goal.minutes === m} on:click={() => dj.setGoal({ ...goal, minutes: m })}>{m} min</button>
 			{/each}
 		</div>
-		<div class="arc" aria-label="{elapsed} of {goal.minutes} minutes">
+		<div class="arc" role="progressbar" aria-label="Goal progress" aria-valuemin={0} aria-valuemax={goal.minutes} aria-valuenow={elapsed}>
 			<div class="track"><div class="fill" style:transform="scaleX({elapsed / goal.minutes})" /></div>
-			<span>{elapsed} of {goal.minutes} min</span>
 		</div>
 	{:else if goal?.kind === 'drift'}
 		<p class="hint">The DJ wanders somewhere new, one step at a time.</p>
@@ -95,13 +98,59 @@
 
 	.row {
 		display: flex;
-		align-items: center;
+		align-items: baseline;
 		justify-content: space-between;
 		gap: 12px;
-		font-size: 14px;
+		font-size: 12px;
+		color: rgba(243, 243, 245, 0.55);
 	}
 
-	select,
+	.progress {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--accent-2-text);
+	}
+
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+
+	/* The goal's influence is the only purple in the content area. */
+	.goal-chip {
+		height: 28px;
+		padding: 0 10px;
+		border-radius: 999px;
+		border: 1px solid var(--border-control);
+		background: transparent;
+		color: rgba(243, 243, 245, 0.75);
+		font: inherit;
+		font-size: 12px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background-color var(--transition), border-color var(--transition), color var(--transition);
+	}
+
+	.goal-chip:hover {
+		background: var(--hover);
+	}
+
+	/* "None" is the absence of a goal, so it stays neutral. */
+	.goal-chip.on.none {
+		background: var(--surface-active);
+		border-color: var(--border-strong);
+		color: var(--text-primary);
+	}
+
+	.goal-chip.on:not(.none) {
+		background: rgba(162, 53, 255, 0.14);
+		border-color: rgba(196, 155, 255, 0.5);
+		color: var(--accent-2-light);
+	}
+
 	input {
 		background: var(--surface-2);
 		color: var(--text-primary);
@@ -110,10 +159,6 @@
 		font: inherit;
 		font-size: 14px;
 		padding: 6px 10px;
-	}
-
-	select {
-		color: var(--accent-2-text);
 	}
 
 	.dest {
@@ -132,11 +177,6 @@
 
 	.arc {
 		display: flex;
-		align-items: center;
-		gap: 10px;
-		font-size: 12px;
-		color: var(--text-muted);
-		font-variant-numeric: tabular-nums;
 	}
 
 	.arc .track {
@@ -149,7 +189,7 @@
 
 	.arc .fill {
 		height: 100%;
-		background: var(--accent-2);
+		background: linear-gradient(90deg, var(--accent-2), var(--accent-2-text));
 		transform-origin: left;
 	}
 

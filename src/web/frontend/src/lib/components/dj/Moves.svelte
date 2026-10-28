@@ -6,8 +6,11 @@
 	import { llmSettingsOpen } from '../../../stores.js';
 	import { MOVE_SUMMARY, moveLabel } from '$lib/dj/layout.js';
 	import { queuedKeys } from '$lib/dj/logic.js';
-	import Icon from '../Icon.svelte';
 	import PickRow from './PickRow.svelte';
+	import Bars from '../ui/Bars.svelte';
+
+	// The handoff's move glyphs.
+	const GLYPH = { hold: '=', lift: '↑', drop: '↓', pivot: '←', curveball: '→', toward: '◆', drift: '~' };
 
 	/** @type {any} */
 	export let dj;
@@ -43,11 +46,17 @@
 			<button class="btn primary" on:click={() => dj.loadSuggestions(undefined, true)}>Get moves</button>
 		</div>
 	{:else if s.status === 'loading'}
-		<ul class="list" aria-busy="true" aria-label="Loading moves">
-			{#each Array(kind ? 2 : 6) as _}
-				<li class="skeleton-row"><span class="sk art" /><span class="sk lines"><span class="sk l1" /><span class="sk l2" /></span></li>
+		<p class="reading" role="status"><Bars count={4} height={12} /> Reading the room…</p>
+		<div class:groups={!kind} aria-busy="true" aria-label="Loading moves">
+			{#each Array(kind ? 1 : 6) as _}
+				<div class="group">
+					{#if !kind}<div class="skeleton sk-head" />{/if}
+					{#each Array(3) as _}
+						<div class="sk-row"><span class="skeleton sk-art" /><span class="sk-lines"><span class="skeleton" style:width="60%" /><span class="skeleton" style:width="85%" /></span></div>
+					{/each}
+				</div>
 			{/each}
-		</ul>
+		</div>
 	{:else if s.status === 'failed'}
 		<div class="empty">
 			<p>{s.error}</p>
@@ -56,60 +65,87 @@
 	{:else if !moves.length}
 		<p class="empty">{missingCopy(kind)}</p>
 	{:else}
-		{#each moves as move (move.move)}
-			<section class="move" class:lead={move.move === 'toward' || move.move === 'drift'}>
-				{#if !kind}
+		<div class:groups={!kind}>
+			{#each moves as move, i (move.move)}
+				<section class="group" class:lead={move.move === 'toward' || move.move === 'drift'} style:animation-delay="{i * 40}ms">
 					<h3>
-						<Icon name={move.move} size={16} />
-						<span>{moveLabel(move.move)}</span>
+						{#if !kind}
+							<span class="glyph mono" aria-hidden="true">{GLYPH[move.move] ?? '·'}</span>
+							<span class="name">{moveLabel(move.move)}</span>
+						{/if}
 						<span class="summary">{MOVE_SUMMARY[move.move] ?? ''}</span>
 					</h3>
-				{:else}
-					<p class="single-summary">{MOVE_SUMMARY[move.move] ?? ''}</p>
-				{/if}
-				<ul class="list">
-					{#each move.tracks as pick (pick.id)}
-						<li animate:flip={{ duration: 200 }}>
-							<PickRow {dj} {pick} queued={queued.has(pick.id)} />
-						</li>
-					{/each}
-				</ul>
-			</section>
-		{/each}
+					<ul class="list">
+						{#each move.tracks as pick (pick.id)}
+							<li animate:flip={{ duration: 200 }}>
+								<PickRow {dj} {pick} compact queued={queued.has(pick.id)} />
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/each}
+		</div>
 	{/if}
 </div>
 
 <style>
 	.moves {
-		padding: 4px 16px 12px;
+		padding: 8px;
 	}
 
-	.move + .move {
-		margin-top: 12px;
+	.groups {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+		gap: 8px;
+	}
+
+	.group {
+		padding: 4px;
+		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.025);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		animation: bbin 0.4s var(--ease) both;
+	}
+
+	/* A single-move widget is one group without its own card. */
+	.moves > div:not(.groups) > .group {
+		padding: 0;
+		border: none;
+		background: none;
 	}
 
 	h3 {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		margin: 10px 0 2px;
-		font-size: 14px;
-		font-weight: 600;
-		color: var(--text-primary);
-	}
-
-	.summary,
-	.single-summary {
+		min-width: 0;
+		margin: 0;
+		padding: 6px 8px 4px;
 		font-size: 13px;
-		font-weight: 400;
-		color: var(--text-muted);
+		font-weight: 600;
 	}
 
-	.single-summary {
-		margin: 10px 0 0;
+	.glyph {
+		width: 14px;
+		text-align: center;
+	}
+
+	.summary {
+		flex: 1;
+		min-width: 0;
+		font-size: 12px;
+		font-weight: 400;
+		color: rgba(243, 243, 245, 0.5);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	/* The goal's influence is the only purple in the content area. */
+	.lead {
+		border-color: rgba(196, 155, 255, 0.25);
+	}
+
 	.lead h3 {
 		color: var(--accent-2-text);
 	}
@@ -120,8 +156,46 @@
 		padding: 0;
 	}
 
-	.list > li + li {
-		border-top: 1px solid var(--border-subtle);
+	.reading {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 0;
+		padding: 6px 8px 12px;
+		font-size: 13px;
+		color: rgba(243, 243, 245, 0.65);
+	}
+
+	.sk-head {
+		height: 12px;
+		width: 45%;
+		margin: 8px;
+	}
+
+	.sk-row {
+		display: flex;
+		gap: 10px;
+		align-items: center;
+		padding: 6px 8px;
+	}
+
+	.sk-art {
+		flex: none;
+		width: 34px;
+		height: 34px;
+		border-radius: 7px;
+	}
+
+	.sk-lines {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.sk-lines .skeleton {
+		height: 9px;
+		border-radius: 4px;
 	}
 
 	.empty {
@@ -135,47 +209,5 @@
 
 	.empty p {
 		margin: 0 0 12px;
-	}
-
-	.skeleton-row {
-		display: flex;
-		gap: 12px;
-		padding: 10px 0;
-		border-top: 1px solid var(--border-subtle);
-	}
-
-	.skeleton-row:first-child {
-		border-top: none;
-	}
-
-	.sk {
-		display: block;
-		background: var(--surface-2);
-		border-radius: 4px;
-	}
-
-	.sk.art {
-		width: 44px;
-		height: 44px;
-		flex: none;
-	}
-
-	.sk.lines {
-		flex: 1;
-		background: none;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		padding-top: 4px;
-	}
-
-	.sk.l1 {
-		height: 12px;
-		width: 60%;
-	}
-
-	.sk.l2 {
-		height: 10px;
-		width: 85%;
 	}
 </style>

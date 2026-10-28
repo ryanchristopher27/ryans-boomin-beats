@@ -23,7 +23,7 @@
 
 	function remove(item, i) {
 		dj.removeUpcoming(item.id);
-		offerUndo(ctx, `Removed ${item.title}.`, () => dj.restoreUpcoming(item, i));
+		offerUndo(`Removed ${item.title}.`, () => dj.restoreUpcoming(item, i));
 	}
 	$: q = $doc.queue;
 	const reduced = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page, access_token } from '../../stores.js';
 	import { getDJ } from '$lib/dj/instance.js';
-	import { sampleCover } from '$lib/dj/ambience.js';
+	import { coverHue } from '$lib/dj/ambience.js';
 	import { PRESETS, STORAGE_KEY, WIDGETS, addable, itemsFor, loadLayout, moveLabel } from '$lib/dj/layout.js';
 	import Grid from '$lib/components/dj/Grid.svelte';
 	import Widget from '$lib/components/dj/Widget.svelte';
@@ -17,10 +17,12 @@
 	import { provideDJContext } from '$lib/components/dj/context.js';
 	import SyncBanner from '$lib/components/dj/SyncBanner.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import Blobs from '$lib/components/ui/Blobs.svelte';
+	import Bars from '$lib/components/ui/Bars.svelte';
 
 	const dj = /** @type {any} */ (getDJ());
 	const { doc, suggestions, player } = dj;
-	const { toast } = provideDJContext();
+	provideDJContext();
 	// Screen-reader feedback for keyboard move/resize.
 	let announcement = '';
 
@@ -104,15 +106,19 @@
 		if (editing && e.key === 'Escape' && !document.querySelector(':popover-open')) cancel();
 	}
 
-	// Album-art ambience: the Now playing widget takes a tint of the cover.
-	let ambient = '';
-	$: cover = $player.state?.track?.image ?? '';
-	$: sampleCover(cover).then((c) => {
-		if (cover === ($player.state?.track?.image ?? '')) ambient = c;
+	// Album-art ambience: the page's drifting colour takes the cover's hue and
+	// only moves while music plays.
+	let hue = 235;
+	$: track = $player.state?.track;
+	$: playing = !!($player.state?.active && $player.state.is_playing);
+	$: if (track) coverHue(track.image, track.title).then((h) => {
+		if (track === $player.state?.track) hue = h;
 	});
 
 	const titleFor = (item) => (item.type === 'move' ? moveLabel(item.kind) : WIDGETS[item.type].title);
 	$: requestCount = $doc.queue.requests.length;
+	$: upNextCount = $doc.queue.sent.length + $doc.queue.upcoming.length;
+	$: pickCount = $suggestions.status === 'loaded' ? $suggestions.moves.reduce((n, m) => n + m.tracks.length, 0) : 0;
 	$: choices = [...Object.entries(PRESETS).map(([id, p]) => ({ id, label: p.label })), ...(layout.custom ? [{ id: 'custom', label: 'Your layout' }] : [])];
 </script>
 
@@ -124,6 +130,7 @@
 <svelte:window on:keydown={onKey} />
 
 <div class="dj-page">
+	<Blobs {hue} moving={playing} />
 	<div class="bar">
 		<h1>DJ</h1>
 		<SyncBanner {dj} />
@@ -155,11 +162,17 @@
 		</div>
 	{:else}
 		{#key gridKey}
-			<Grid bind:this={grid} bind:items {editing} let:item>
-				<Widget title={titleFor(item)} {editing} onRemove={() => grid.remove(item.id)} onNudge={(dx, dy, dw, dh) => nudge(item, dx, dy, dw, dh)} ambient={item.type === 'nowPlaying' ? ambient : ''}>
+			<Grid bind:this={grid} bind:items {editing} fill let:item>
+				<Widget title={titleFor(item)} {editing} onRemove={() => grid.remove(item.id)} onNudge={(dx, dy, dw, dh) => nudge(item, dx, dy, dw, dh)}>
 					<svelte:fragment slot="badge">
 						{#if item.type === 'requests' && requestCount}
-							<span class="badge" aria-label="{requestCount} pending">{requestCount}</span>
+							<span class="badge mono" aria-label="{requestCount} pending">{requestCount}</span>
+						{:else if item.type === 'nowPlaying' && playing}
+							<Bars count={3} height={10} />
+						{:else if item.type === 'moves' && pickCount}
+							<span class="count mono">{pickCount} picks</span>
+						{:else if item.type === 'upNext' && upNextCount}
+							<span class="count mono">{upNextCount}</span>
 						{/if}
 					</svelte:fragment>
 					<svelte:fragment slot="actions">
@@ -202,57 +215,89 @@
 	{/if}
 
 	<p class="sr-only" aria-live="polite">{announcement}</p>
-	<div class="toast-region" aria-live="polite">
-		{#if $toast}
-			<div class="toast">
-				<span>{$toast.message}</span>
-				<button class="btn small" on:click={() => { $toast?.undo(); toast.set(null); }}>Undo</button>
-			</div>
-		{/if}
-	</div>
 </div>
 
 <style>
+	/* Full bleed under the page padding, so the drifting colour reaches the edges. */
 	.dj-page {
+		position: relative;
 		min-width: 0;
+		min-height: calc(100vh - var(--header-height));
+		margin: calc(var(--primary-spacing) * -1);
+		padding: 16px 20px 0;
+		overflow: hidden;
+	}
+
+	.dj-page > :global(:not(.blobs)) {
+		position: relative;
+		z-index: 1;
 	}
 
 	.bar {
 		display: flex;
 		align-items: center;
-		gap: 12px;
-		min-height: 44px;
-		margin-bottom: 10px;
+		gap: 10px;
+		min-height: 36px;
+		margin-bottom: 7px;
 		flex-wrap: wrap;
 	}
 
 	h1 {
-		margin: 0 8px 0 0;
+		margin: 0 4px 0 0;
 		font-size: 24px;
-		font-weight: 600;
-		text-align: left;
+		font-weight: 700;
+		letter-spacing: -0.02em;
 	}
 
 	.spacer {
 		flex: 1;
 	}
 
-	.segmented {
-		min-width: 260px;
+	.bar .segmented,
+	.bar .btn {
+		-webkit-backdrop-filter: blur(20px);
+		backdrop-filter: blur(20px);
+	}
+
+	.bar .segmented {
+		padding: 2px;
+		border-radius: 9px;
+		border-color: var(--border-subtle);
+	}
+
+	.bar .segmented button {
+		height: 28px;
+		padding: 0 11px;
+		font-size: 12px;
+	}
+
+	.bar .btn {
+		height: 32px;
+		padding: 0 12px;
+		border-color: var(--border-control);
+		background: var(--glass);
+	}
+
+	.bar .btn.primary {
+		background: var(--accent);
 	}
 
 	.badge {
 		min-width: 18px;
 		height: 18px;
 		padding: 0 5px;
-		box-sizing: border-box;
-		border-radius: 9px;
+		border-radius: 999px;
 		background: var(--danger);
-		color: #160505;
+		color: #1a0505;
 		font-size: 11px;
-		font-weight: 700;
+		font-weight: 600;
 		display: inline-grid;
 		place-items: center;
+	}
+
+	.count {
+		font-size: 12px;
+		color: var(--text-subtle);
 	}
 
 	.menu {
@@ -261,10 +306,13 @@
 		margin: 0;
 		padding: 4px;
 		min-width: 200px;
-		background: var(--surface-2);
+		background: var(--popover);
+		-webkit-backdrop-filter: blur(30px);
+		backdrop-filter: blur(30px);
 		color: var(--text-primary);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius-sm);
+		border: 1px solid var(--border-control);
+		border-radius: 12px;
+		box-shadow: var(--shadow-pop);
 	}
 
 	.menu button {
@@ -276,13 +324,13 @@
 		background: none;
 		color: inherit;
 		font: inherit;
-		font-size: 14px;
-		border-radius: 6px;
+		font-size: 13px;
+		border-radius: 8px;
 		cursor: pointer;
 	}
 
 	.menu button:hover {
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--hover);
 	}
 
 	.signin {
@@ -300,29 +348,16 @@
 		white-space: nowrap;
 	}
 
-	.toast-region {
-		position: fixed;
-		left: 50%;
-		bottom: 24px;
-		transform: translateX(-50%);
-		z-index: 60;
-	}
-
-	.toast {
-		display: flex;
-		align-items: center;
-		gap: 14px;
-		padding: 8px 8px 8px 16px;
-		background: var(--surface-2);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius);
-		font-size: 14px;
-	}
-
 	.edit-hint {
 		margin: 10px 0 0;
 		font-size: 12px;
 		color: var(--text-muted);
 		text-align: center;
+	}
+
+	@media (max-width: 759px) {
+		.dj-page {
+			padding: 12px 12px 0;
+		}
 	}
 </style>

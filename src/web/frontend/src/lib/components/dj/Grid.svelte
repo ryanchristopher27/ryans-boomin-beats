@@ -8,6 +8,13 @@
 
 	export let items = [];
 	export let editing = false;
+	/** Desktop only (12 columns): rows stretch so the grid fills the window
+	    and each widget scrolls on its own (R6, the handoff's no-page-scroll). */
+	export let fill = false;
+
+	const CELL = 48;
+	const MIN_CELL = 32;
+	const BOTTOM_GAP = 20;
 
 	let el;
 	/** @type {any} */
@@ -19,7 +26,7 @@
 		grid = GridStack.init(
 			{
 				column: COLUMNS,
-				cellHeight: 48,
+				cellHeight: CELL,
 				margin: 5,
 				float: false,
 				animate: !reduced,
@@ -44,9 +51,34 @@
 			},
 			el
 		);
+		grid.on('change added removed', fit);
+		fit();
+		addEventListener('resize', onResize);
 	});
 
-	onDestroy(() => grid?.destroy(false));
+	onDestroy(() => {
+		removeEventListener('resize', onResize);
+		clearTimeout(resizeTimer);
+		grid?.destroy(false);
+	});
+
+	/** Stretch the rows to the window's height on desktop; fixed 48px otherwise. */
+	function fit() {
+		if (!grid) return;
+		const rows = Math.max(1, ...grid.engine.nodes.map((n) => n.y + n.h));
+		const top = el.getBoundingClientRect().top + scrollY;
+		const room = innerHeight - top - BOTTOM_GAP;
+		const cell = fill && grid.getColumn() === COLUMNS ? Math.max(MIN_CELL, Math.floor(room / rows)) : CELL;
+		if (cell !== grid.getCellHeight()) grid.cellHeight(cell);
+	}
+	$: if (grid) (fill, fit());
+
+	// gridstack changes its column count on its own (throttled) resize, so fit after it.
+	let resizeTimer;
+	function onResize() {
+		clearTimeout(resizeTimer);
+		resizeTimer = setTimeout(fit, 200);
+	}
 
 	$: grid?.setStatic(!editing);
 
