@@ -4,6 +4,7 @@
 	import { pendingAdd, playlistsPanelOpen } from '../../../stores.js';
 	import { queueTracks, rememberSongs } from '$lib/playlistActions.js';
 	import { say } from '$lib/toast.js';
+	import { cleanFilter, cleanOnly } from '$lib/clean.js';
 	import SongRow from '../ui/SongRow.svelte';
 	import Icon from '../Icon.svelte';
 
@@ -20,7 +21,8 @@
 	export let onRemove = (kind, label) => {};
 	export let onOpen = (song) => {};
 
-	$: songs = results.filter((s, i, arr) => arr.findIndex((x) => x.spotify.id === s.spotify.id) === i);
+	$: unique = results.filter((s, i, arr) => arr.findIndex((x) => x.spotify.id === s.spotify.id) === i);
+	$: ({ shown: songs, hidden } = cleanFilter(unique, $cleanOnly));
 	// Results are Deezer-checked (Q3); their ids resolve to Spotify only when used.
 	$: rememberSongs(songs.map((s) => s.spotify));
 	$: ids = songs.map((s) => s.spotify.id);
@@ -91,6 +93,7 @@
 					<button class="link" on:click={save}>Save as playlist</button>
 				</span>
 			</div>
+			{#if hidden}<p class="short">Clean only: {hidden} explicit song{hidden > 1 ? 's' : ''} hidden.</p>{/if}
 			{#if requested > 0 && songs.length < requested}
 				<p class="short">Could only confirm {songs.length} of {requested} songs on Spotify.</p>
 			{/if}
@@ -141,18 +144,18 @@
 
 	h2 {
 		margin: 0;
-		font-size: 16px;
+		font-size: calc(16px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
 	.count {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
 	.hint {
 		margin: 0;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		line-height: 1.5;
 		color: rgba(243, 243, 245, 0.5);
 	}
@@ -174,7 +177,7 @@
 		background: rgba(var(--accent-rgb), 0.12);
 		color: var(--accent-tint-text);
 		font: inherit;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		cursor: pointer;
 	}
@@ -186,7 +189,7 @@
 	.find {
 		height: 44px;
 		border-radius: 11px;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		gap: 10px;
 	}
 
@@ -208,7 +211,7 @@
 
 	.error {
 		margin: 0;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--danger-text);
 	}
 
@@ -226,7 +229,7 @@
 		align-items: center;
 		gap: 8px;
 		padding: 6px 10px 8px;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 500;
 		color: var(--text-muted);
 	}
@@ -243,7 +246,7 @@
 		background: none;
 		color: var(--accent);
 		font: inherit;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 500;
 		cursor: pointer;
 	}
@@ -255,7 +258,7 @@
 	.short,
 	.drag-hint {
 		margin: 4px 10px 8px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
@@ -263,7 +266,7 @@
 		margin: 0;
 		padding: 28px 16px;
 		text-align: center;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 

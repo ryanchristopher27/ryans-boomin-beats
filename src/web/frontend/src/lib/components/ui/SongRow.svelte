@@ -5,6 +5,7 @@
 	// slot. The preview badge on the cover arrives with F2.
 	import Icon from '../Icon.svelte';
 	import { nameHue } from '$lib/dj/ambience.js';
+	import { compactRows } from '$lib/settings.js';
 
 	export let title = '';
 	/** @type {string | string[]} */
@@ -40,6 +41,8 @@
 	/** A Spotify track id: makes the row draggable onto a playlist. */
 	export let dragId = '';
 
+	// Compact rows (Settings) tighten every list; a list can also ask for it.
+	$: dense = compact || $compactRows;
 	$: artistText = Array.isArray(artists) ? artists.join(', ') : artists;
 	// A deliberate placeholder when a song has no art: a gradient from the
 	// title's hue (the handoff's cover formula) with its initials.
@@ -61,7 +64,7 @@
 	}
 </script>
 
-<div class="row" class:compact class:selected class:openable={!!onOpen} title={reason || undefined} draggable={dragId ? 'true' : undefined} on:dragstart={dragId ? onDragStart : undefined}>
+<div class="row" class:compact={dense} class:selected class:openable={!!onOpen} title={reason || undefined} draggable={dragId ? 'true' : undefined} on:dragstart={dragId ? onDragStart : undefined}>
 	<slot name="lead" />
 	{#if index != null}<span class="rank mono">{index}</span>{/if}
 	<!-- A button only when the row opens something; otherwise plain content. -->
@@ -138,7 +141,7 @@
 		flex: none;
 		width: 20px;
 		text-align: right;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		color: var(--text-subtle);
 	}
@@ -183,7 +186,7 @@
 		display: grid;
 		place-items: center;
 		background: linear-gradient(140deg, oklch(0.66 0.12 var(--h)), oklch(0.32 0.08 calc(var(--h) + 45)));
-		font-size: 11px;
+		font-size: calc(11px * var(--text-scale, 1));
 		font-weight: 600;
 		letter-spacing: 0.02em;
 		color: rgba(255, 255, 255, 0.82);
@@ -217,33 +220,33 @@
 	}
 
 	.title {
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		font-weight: 500;
 	}
 
 	.artist {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--text-muted);
 	}
 
 	.compact .title {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 	}
 
 	.compact .artist {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 	}
 
 	.dj {
 		flex: none;
-		font-size: 11px;
+		font-size: calc(11px * var(--text-scale, 1));
 		color: var(--accent);
 	}
 
 	.reason,
 	.note {
 		margin-top: 2px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		line-height: 1.4;
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
@@ -276,7 +279,7 @@
 
 	.dur {
 		flex: none;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
@@ -327,7 +330,7 @@
 		background: transparent;
 		color: var(--danger-text);
 		font: inherit;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 	}
 

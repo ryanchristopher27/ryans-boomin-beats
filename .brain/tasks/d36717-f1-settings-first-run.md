@@ -3,11 +3,11 @@ id: d36717
 source: plan:ryans-boomin-beats:F1
 title: F1 — Settings + first run
 type: task
-status: backlog
+status: doing
 assignee: 
 scoped_dir: .
 created: 2026-10-28T01:23:26Z
-updated: 2026-10-28T01:23:26Z
+updated: 2026-10-28T02:58:43Z
 ---
 
 ## Brief
@@ -19,3 +19,4 @@ General tab (text size, compact, motion, clean, duck) persisted; first-run onboa
 
 ## Updates
 - 2026-10-28T01:23:26Z · created
+- 2026-10-28T02:58:43Z · status: backlog → doing (building)

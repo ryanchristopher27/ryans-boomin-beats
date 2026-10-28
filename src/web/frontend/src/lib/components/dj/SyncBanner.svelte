@@ -51,7 +51,7 @@
 		border: 1px solid var(--border-subtle);
 		-webkit-backdrop-filter: blur(20px);
 		backdrop-filter: blur(20px);
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.7);
 		white-space: nowrap;
 	}
@@ -90,7 +90,7 @@
 		background: var(--surface-active);
 		color: var(--text-primary);
 		font: inherit;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		cursor: pointer;
 	}

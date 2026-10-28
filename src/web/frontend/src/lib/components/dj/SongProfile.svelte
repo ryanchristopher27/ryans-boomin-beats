@@ -142,7 +142,7 @@
 	}
 
 	.title {
-		font-size: 16px;
+		font-size: calc(16px * var(--text-scale, 1));
 		font-weight: 600;
 		white-space: nowrap;
 		overflow: hidden;
@@ -151,7 +151,7 @@
 
 	.artist,
 	.source {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--text-muted);
 		white-space: nowrap;
 		overflow: hidden;
@@ -159,7 +159,7 @@
 	}
 
 	.source {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 	}
 
 	.tags {
@@ -172,7 +172,7 @@
 	}
 
 	.tags li {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		padding: 3px 9px;
 		border-radius: 999px;
 		background: var(--surface-2);
@@ -190,7 +190,7 @@
 		display: grid;
 		grid-template-columns: auto 1fr;
 		gap: 6px 12px;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		line-height: 1.45;
 	}
 
@@ -203,7 +203,7 @@
 	}
 
 	.about {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		line-height: 1.5;
 		color: var(--text-muted);
 		display: -webkit-box;
@@ -215,7 +215,7 @@
 
 	.empty,
 	.note {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		line-height: 1.5;
 		color: var(--text-muted);
 	}

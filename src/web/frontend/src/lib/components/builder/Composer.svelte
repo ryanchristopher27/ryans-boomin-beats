@@ -70,14 +70,14 @@
 	.eyebrow {
 		margin: 0;
 		font-family: var(--font-mono);
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		color: rgba(243, 243, 245, 0.6);
 	}
 
 	h1 {
 		margin: 0;
-		font-size: clamp(44px, 9vw, 84px);
+		font-size: calc(clamp(44px, 9vw, 84px) * var(--text-scale, 1));
 		font-weight: 700;
 		line-height: 0.95;
 		letter-spacing: -0.05em;
@@ -87,7 +87,7 @@
 	.lede {
 		margin: 0;
 		max-width: 560px;
-		font-size: 17px;
+		font-size: calc(17px * var(--text-scale, 1));
 		line-height: 1.5;
 		color: rgba(243, 243, 245, 0.7);
 		text-wrap: pretty;
@@ -115,7 +115,7 @@
 		border: none;
 		background: transparent;
 		color: var(--text-primary);
-		font-size: 18px;
+		font-size: calc(18px * var(--text-scale, 1));
 		line-height: 1.5;
 	}
 
@@ -135,7 +135,7 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.55);
 	}
 
@@ -153,7 +153,7 @@
 		border-radius: 999px;
 		background: none;
 		color: var(--text-muted);
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 500;
 		cursor: pointer;
 	}
@@ -167,7 +167,7 @@
 		height: 42px;
 		padding: 0 18px;
 		border-radius: 999px;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 	}
 
 	.examples {

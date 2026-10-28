@@ -83,13 +83,13 @@
 
 	h2 {
 		margin: 0;
-		font-size: 20px;
+		font-size: calc(20px * var(--text-scale, 1));
 		font-weight: 600;
 		letter-spacing: -0.02em;
 	}
 
 	.head a {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 500;
 	}
 
@@ -140,7 +140,7 @@
 	}
 
 	.initials {
-		font-size: 28px;
+		font-size: calc(28px * var(--text-scale, 1));
 		font-weight: 600;
 		color: rgba(255, 255, 255, 0.82);
 	}
@@ -152,7 +152,7 @@
 		top: 0;
 		padding: 8px 10px 14px 10px;
 		background: radial-gradient(circle at 0 0, rgba(0, 0, 0, 0.45), transparent 70%);
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		color: rgba(255, 255, 255, 0.85);
 	}
@@ -165,12 +165,12 @@
 	}
 
 	.title {
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		font-weight: 500;
 	}
 
 	.artist {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.55);
 	}
 
@@ -179,7 +179,7 @@
 		padding: 20px;
 		border-radius: 14px;
 		border: 1px dashed rgba(255, 255, 255, 0.12);
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		line-height: 1.5;
 		color: rgba(243, 243, 245, 0.55);
 	}

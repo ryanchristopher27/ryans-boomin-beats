@@ -56,7 +56,7 @@
 		height: 28px;
 		padding: 0 10px;
 		border-radius: 7px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 	}
 
 	.act {
@@ -86,7 +86,7 @@
 	.empty {
 		margin: 0;
 		padding: 8px 10px;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		line-height: 1.5;
 		color: rgba(243, 243, 245, 0.5);
 	}

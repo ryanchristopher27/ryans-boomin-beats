@@ -57,7 +57,7 @@
 
 	h2 {
 		margin: 0;
-		font-size: 16px;
+		font-size: calc(16px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
@@ -68,7 +68,7 @@
 		border: 1px solid var(--border-control);
 		background: rgba(0, 0, 0, 0.35);
 		color: var(--text-primary);
-		font-size: 15px;
+		font-size: calc(15px * var(--text-scale, 1));
 	}
 
 	input:focus {

@@ -3610,3 +3610,26 @@ Not built, and why:
 - **Board and Focus:** kept. They aren't in the handoff and nothing replaces them.
 
 Type-check errors dropped from 25 to 3. The 3 left are pre-existing, in `spotifyAuth.js`.
+
+### F1 result (2026-10-27): Settings and first run
+
+- **Settings → General:**
+  - Text size: 80–120%, default 90% (the handoff's default).
+  - Compact song rows.
+  - Clean only. It drives the DJ's synced `clean` option and now also hides explicit songs in
+    Builder and Explore results, with a "N hidden" note.
+  - Playback animations: pauses the visualizer, bars, cover glow and drifting colour. Spinners
+    and skeletons keep moving.
+  - Account row with Log out.
+  - Reset to defaults.
+  - Saved per device under `bb-zoom`, `bb-compact` and `bb-motion`.
+- **Settings → AI:** the existing AI panel, now shared with first run through `lib/llm.js` and
+  `AiForm`.
+- **First run:** Connect Spotify → pick an AI or "Skip for now" → choose where to start.
+  - It's saved per step (`bb-onboarding`), so it survives Spotify's sign-in redirect.
+  - Logging out brings it back. People already signed in never see it.
+- **Deviation, text size:** it multiplies every `font-size` by `--text-scale` rather than
+  zooming. CSS zoom breaks the DJ grid (R0 spike), so spacing and control sizes don't scale.
+- **Deviation, previewing:** "Lower Spotify while previewing" moves to F2, with the previews.
+- **Deviation, AI skip:** the design's "Skip, use Last.fm only" is "Skip for now". A DJ that
+  needs no AI key is part of F3.

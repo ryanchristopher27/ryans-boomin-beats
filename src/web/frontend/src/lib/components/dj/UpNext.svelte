@@ -136,7 +136,7 @@
 	h3 {
 		margin: 12px 8px 4px;
 		font-family: var(--font-mono);
-		font-size: 11px;
+		font-size: calc(11px * var(--text-scale, 1));
 		font-weight: 500;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
@@ -177,7 +177,7 @@
 
 	.hint {
 		margin: 8px 8px 0;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		line-height: 1.45;
 		color: var(--text-muted);
 	}

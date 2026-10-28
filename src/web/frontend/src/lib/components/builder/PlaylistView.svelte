@@ -6,6 +6,7 @@
 	import { coverHue } from '$lib/dj/ambience.js';
 	import { playlistMeta } from '$lib/builder.js';
 	import { say } from '$lib/toast.js';
+	import { cleanFilter, cleanOnly } from '$lib/clean.js';
 	import SongRow from '../ui/SongRow.svelte';
 	import PlaylistNameModal from '../PlaylistNameModal.svelte';
 	import Icon from '../Icon.svelte';
@@ -22,7 +23,8 @@
 	export let refining = false;
 	export let onOpen = (song) => {};
 
-	$: songs = tracks.filter((s, i, arr) => arr.findIndex((x) => x.spotify.id === s.spotify.id) === i);
+	$: unique = tracks.filter((s, i, arr) => arr.findIndex((x) => x.spotify.id === s.spotify.id) === i);
+	$: ({ shown: songs, hidden } = cleanFilter(unique, $cleanOnly));
 	// Results are Deezer-checked (Q3); their ids resolve to Spotify only when used.
 	$: rememberSongs(songs.map((s) => s.spotify));
 	$: ids = songs.map((s) => s.spotify.id);
@@ -103,6 +105,7 @@
 	</div>
 
 	<div class="list-wrap">
+		{#if hidden && !building}<p class="short">Clean only: {hidden} explicit song{hidden > 1 ? 's' : ''} hidden.</p>{/if}
 		{#if requested > 0 && !building && songs.length && songs.length < requested}
 			<p class="short">Found {songs.length} of {requested} songs on Spotify. Refine it to ask for more.</p>
 		{/if}
@@ -211,14 +214,14 @@
 	.eyebrow {
 		margin: 0;
 		font-family: var(--font-mono);
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		color: rgba(243, 243, 245, 0.65);
 	}
 
 	h1 {
 		margin: 0;
-		font-size: clamp(40px, 7vw, 68px);
+		font-size: calc(clamp(40px, 7vw, 68px) * var(--text-scale, 1));
 		font-weight: 700;
 		line-height: 0.95;
 		letter-spacing: -0.045em;
@@ -227,7 +230,7 @@
 
 	.sub {
 		margin: 0;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.75);
 	}
 
@@ -242,7 +245,7 @@
 		height: 44px;
 		padding: 0 18px;
 		border-radius: 999px;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 	}
 
 	.ghost {
@@ -262,7 +265,7 @@
 		border-radius: 10px;
 		background: rgba(255, 180, 84, 0.07);
 		border: 1px solid rgba(255, 180, 84, 0.2);
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--warning);
 	}
 
@@ -284,7 +287,7 @@
 
 	.hint {
 		margin: 16px 0 0;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 

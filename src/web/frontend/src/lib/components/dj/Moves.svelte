@@ -1,10 +1,10 @@
 <script>
+	import { openSettings } from '$lib/settings.js';
 	// The Next moves widget, and (with `kind`) a single-move widget. All of them
 	// read the one `suggestions` store: one LLM call per track, however many
 	// move widgets are on screen.
 	import { flip } from 'svelte/animate';
-	import { llmSettingsOpen } from '../../../stores.js';
-	import { MOVE_SUMMARY, moveLabel } from '$lib/dj/layout.js';
+		import { MOVE_SUMMARY, moveLabel } from '$lib/dj/layout.js';
 	import { queuedKeys } from '$lib/dj/logic.js';
 	import PickRow from './PickRow.svelte';
 	import Bars from '../ui/Bars.svelte';
@@ -38,7 +38,7 @@
 	{:else if s.status === 'needsKey'}
 		<div class="empty">
 			<p>Add an AI key in Settings to get suggestions.</p>
-			<button class="btn" on:click={() => ($llmSettingsOpen = true)}>Open AI settings</button>
+			<button class="btn" on:click={() => openSettings('ai')}>Open AI settings</button>
 		</div>
 	{:else if s.status === 'idle'}
 		<div class="empty">
@@ -121,7 +121,7 @@
 		min-width: 0;
 		margin: 0;
 		padding: 6px 8px 4px;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
@@ -133,7 +133,7 @@
 	.summary {
 		flex: 1;
 		min-width: 0;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 400;
 		color: rgba(243, 243, 245, 0.5);
 		white-space: nowrap;
@@ -162,7 +162,7 @@
 		gap: 10px;
 		margin: 0;
 		padding: 6px 8px 12px;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.65);
 	}
 
@@ -202,7 +202,7 @@
 		margin: 24px auto;
 		max-width: 34ch;
 		text-align: center;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		line-height: 1.5;
 		color: var(--text-muted);
 	}

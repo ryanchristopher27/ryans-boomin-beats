@@ -101,7 +101,7 @@
 	.controls :global(.segmented button) {
 		height: 30px;
 		padding: 0 6px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 	}
 
 	.docked {
@@ -112,7 +112,7 @@
 
 	.hint {
 		margin: -6px 0 0;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		line-height: 1.4;
 		color: rgba(243, 243, 245, 0.55);
 	}
@@ -126,7 +126,7 @@
 	.ends {
 		display: flex;
 		justify-content: space-between;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.55);
 	}
 
@@ -146,12 +146,12 @@
 	.toggle-text {
 		display: flex;
 		flex-direction: column;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		font-weight: 500;
 	}
 
 	.sub {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 400;
 		color: rgba(243, 243, 245, 0.5);
 	}
@@ -191,7 +191,7 @@
 	}
 
 	.avoid summary {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--text-muted);
 		cursor: pointer;
 	}
@@ -207,7 +207,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 8px;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		padding: 2px 0;
 	}
 

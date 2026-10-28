@@ -11,7 +11,7 @@
 
 <span class="bars" class:paused style:height="{height}px" style:--bar={color} aria-hidden="true">
 	{#each Array(count) as _, i}
-		<span style:animation-duration="{SPEEDS[i % SPEEDS.length]}s" style:animation-delay="-{(i * 0.37) % 1}s" />
+		<span class="playback-anim" style:animation-duration="{SPEEDS[i % SPEEDS.length]}s" style:animation-delay="-{(i * 0.37) % 1}s" />
 	{/each}
 </span>
 

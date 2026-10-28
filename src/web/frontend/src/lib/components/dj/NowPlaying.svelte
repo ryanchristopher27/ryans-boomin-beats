@@ -53,7 +53,7 @@
 		<div class="song">
 			<div class="cover" class:playing>
 				{#key track.id}
-					<img class="glow" src={track.image} alt="" aria-hidden="true" />
+					<img class="glow playback-anim" src={track.image} alt="" aria-hidden="true" />
 					<img class="art" src={track.image} alt="" width="100" height="100" />
 				{/key}
 			</div>
@@ -153,7 +153,7 @@
 		animation: bbglow 4.5s ease-in-out infinite;
 	}
 
-	.cover.playing .art {
+	:global([data-motion="on"]) .cover.playing .art {
 		animation: bbpop 0.55s var(--ease), bbbreath 5s ease-in-out 0.55s infinite;
 	}
 
@@ -174,7 +174,7 @@
 	}
 
 	.title {
-		font-size: 19px;
+		font-size: calc(19px * var(--text-scale, 1));
 		font-weight: 600;
 		line-height: 1.15;
 		letter-spacing: -0.02em;
@@ -185,7 +185,7 @@
 	}
 
 	.artists {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.65);
 		white-space: nowrap;
 		overflow: hidden;
@@ -221,7 +221,7 @@
 	.times {
 		display: flex;
 		justify-content: space-between;
-		font-size: 11px;
+		font-size: calc(11px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.5);
 	}
 
@@ -279,13 +279,13 @@
 		display: flex;
 		align-items: center;
 		gap: 6px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.5);
 	}
 
 	.empty,
 	.message {
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		line-height: 1.5;
 		color: var(--text-muted);
 	}
@@ -296,7 +296,7 @@
 	}
 
 	.message {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--warning);
 	}
 
@@ -333,6 +333,6 @@
 
 	.compact .title {
 		-webkit-line-clamp: 1;
-		font-size: 16px;
+		font-size: calc(16px * var(--text-scale, 1));
 	}
 </style>

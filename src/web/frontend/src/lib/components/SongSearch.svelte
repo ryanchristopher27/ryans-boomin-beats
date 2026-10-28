@@ -151,7 +151,7 @@
 		border-radius: 10px;
 		background: var(--surface-1);
 		color: var(--text-primary);
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		transition: border-color var(--transition);
 	}
 
@@ -177,7 +177,7 @@
 		background: rgba(10, 10, 12, 0.55);
 		-webkit-backdrop-filter: blur(12px);
 		backdrop-filter: blur(12px);
-		font-size: 18px;
+		font-size: calc(18px * var(--text-scale, 1));
 	}
 
 	.hero .suggestions {
@@ -187,7 +187,7 @@
 
 	.none {
 		padding: 16px;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		color: var(--text-muted);
 		cursor: default;
 	}

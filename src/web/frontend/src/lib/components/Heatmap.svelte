@@ -52,7 +52,7 @@
 		flex: 1;
 		min-width: 0;
 		text-align: center;
-		font-size: 0.62rem;
+		font-size: calc(10px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 </style>

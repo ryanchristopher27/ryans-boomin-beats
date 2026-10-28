@@ -9,9 +9,9 @@
 
 <div class="blobs" class:hero class:still={!moving} style:--h={hue} aria-hidden="true">
 	<div class="wash" />
-	<span class="b1" />
-	<span class="b2" />
-	<span class="b3" />
+	<span class="b1 playback-anim" />
+	<span class="b2 playback-anim" />
+	<span class="b3 playback-anim" />
 </div>
 
 <style>

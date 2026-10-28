@@ -14,7 +14,7 @@
 
 <div class="viz" class:paused={!playing} style:height="{height}px" aria-hidden="true">
 	{#each bars as b}
-		<span style:animation-duration="{b.speed}s" style:animation-delay="{b.delay}s" />
+		<span class="playback-anim" style:animation-duration="{b.speed}s" style:animation-delay="{b.delay}s" />
 	{/each}
 </div>
 

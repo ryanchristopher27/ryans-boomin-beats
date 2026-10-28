@@ -9,6 +9,7 @@
 	import { PERIOD_LABELS, insights, peakHour, summaryParts } from '$lib/profile.js';
 	import { nameHue } from '$lib/dj/ambience.js';
 	import { say } from '$lib/toast.js';
+	import { onboarding } from '$lib/onboarding.js';
 	import DashboardModule from '$lib/components/DashboardModule.svelte';
 	import TrendChart from '$lib/components/TrendChart.svelte';
 	import ColumnChart from '$lib/components/ColumnChart.svelte';
@@ -88,6 +89,7 @@
 		logoutSpotify();
 		token = '';
 		user_profile = null;
+		$onboarding = 1;
 	}
 
 	// --- Taste over time ---
@@ -448,7 +450,7 @@
 
 	.signin-card h1 {
 		margin: 0;
-		font-size: 36px;
+		font-size: calc(36px * var(--text-scale, 1));
 		font-weight: 700;
 		letter-spacing: -0.035em;
 		line-height: 1.05;
@@ -456,7 +458,7 @@
 
 	.signin-card p {
 		margin: 0;
-		font-size: 15px;
+		font-size: calc(15px * var(--text-scale, 1));
 		color: var(--text-muted);
 	}
 
@@ -464,7 +466,7 @@
 		height: 46px;
 		padding: 0 20px;
 		border-radius: 11px;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 	}
 
 	/* --- Header --- */
@@ -488,7 +490,7 @@
 		display: grid;
 		place-items: center;
 		background: linear-gradient(140deg, oklch(0.62 0.1 var(--h)), oklch(0.32 0.08 calc(var(--h) + 50)));
-		font-size: 22px;
+		font-size: calc(22px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
@@ -502,7 +504,7 @@
 
 	h1 {
 		margin: 0;
-		font-size: clamp(32px, 5vw, 56px);
+		font-size: calc(clamp(32px, 5vw, 56px) * var(--text-scale, 1));
 		font-weight: 700;
 		line-height: 1;
 		letter-spacing: -0.04em;
@@ -510,7 +512,7 @@
 
 	.name p {
 		margin: 0;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
@@ -522,7 +524,7 @@
 	.error {
 		margin: 0;
 		color: var(--danger-text);
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 	}
 
 	.link {
@@ -537,7 +539,7 @@
 	.summary {
 		margin: 0;
 		max-width: 880px;
-		font-size: 22px;
+		font-size: calc(22px * var(--text-scale, 1));
 		font-weight: 500;
 		line-height: 1.45;
 		letter-spacing: -0.015em;
@@ -578,13 +580,13 @@
 	}
 
 	.insight-label {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		color: rgba(243, 243, 245, 0.5);
 	}
 
 	.insight-value {
-		font-size: 20px;
+		font-size: calc(20px * var(--text-scale, 1));
 		font-weight: 600;
 		line-height: 1.2;
 		letter-spacing: -0.02em;
@@ -592,7 +594,7 @@
 	}
 
 	.insight-action {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 500;
 		color: var(--accent);
 	}
@@ -609,13 +611,13 @@
 
 	.fresh h2 {
 		margin: 0;
-		font-size: 18px;
+		font-size: calc(18px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
 	.fresh p {
 		margin: 0;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		line-height: 1.55;
 		color: var(--text-muted);
 	}
@@ -682,7 +684,7 @@
 		flex: none;
 		width: 20px;
 		text-align: right;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		color: var(--text-subtle);
 	}
@@ -700,7 +702,7 @@
 		display: grid;
 		place-items: center;
 		background: linear-gradient(140deg, oklch(0.66 0.12 var(--h)), oklch(0.32 0.08 calc(var(--h) + 45)));
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
@@ -712,12 +714,12 @@
 	}
 
 	.artist-name {
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		font-weight: 500;
 	}
 
 	.artist-genres {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 		white-space: nowrap;
 		overflow: hidden;
@@ -738,13 +740,13 @@
 	}
 
 	.div-word {
-		font-size: 30px;
+		font-size: calc(30px * var(--text-scale, 1));
 		font-weight: 700;
 		letter-spacing: -0.03em;
 	}
 
 	.div-sub {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
@@ -758,11 +760,11 @@
 		display: flex;
 		justify-content: space-between;
 		gap: 8px;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 	}
 
 	.gbar-head .mono {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
@@ -791,7 +793,7 @@
 		display: flex;
 		justify-content: space-between;
 		gap: 12px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 	}
 
 	.stats dt {
@@ -805,14 +807,14 @@
 
 	.clock-label {
 		margin: 0;
-		font-size: 11px;
+		font-size: calc(11px * var(--text-scale, 1));
 		letter-spacing: 0.04em;
 		color: var(--text-subtle);
 	}
 
 	.note {
 		margin: 0;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
@@ -833,7 +835,7 @@
 			grid-column: span 12;
 		}
 		.summary {
-			font-size: 18px;
+			font-size: calc(18px * var(--text-scale, 1));
 		}
 	}
 </style>

@@ -93,7 +93,7 @@
 
 	.x-label {
 		fill: var(--text-subtle);
-		font-size: 11px;
+		font-size: calc(11px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
@@ -109,7 +109,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		font-size: 0.74rem;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-muted);
 	}
 

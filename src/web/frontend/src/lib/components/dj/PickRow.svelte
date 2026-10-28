@@ -98,7 +98,7 @@
 		background: none;
 		color: inherit;
 		font: inherit;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		border-radius: 8px;
 		cursor: pointer;
 	}

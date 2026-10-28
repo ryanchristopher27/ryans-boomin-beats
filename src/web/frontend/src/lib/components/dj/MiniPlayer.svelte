@@ -51,7 +51,7 @@
 		<div class="song">
 			<div class="cover" class:playing>
 				{#key track.id}
-					<img class="glow" src={track.image} alt="" aria-hidden="true" />
+					<img class="glow playback-anim" src={track.image} alt="" aria-hidden="true" />
 					<img class="art" src={track.image} alt="" width="40" height="40" />
 				{/key}
 			</div>
@@ -160,7 +160,7 @@
 		animation: bbglow 4.5s ease-in-out infinite;
 	}
 
-	.cover.playing .art {
+	:global([data-motion="on"]) .cover.playing .art {
 		animation: bbpop 0.55s var(--ease), bbbreath 5s ease-in-out 0.55s infinite;
 	}
 
@@ -179,7 +179,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		font-weight: 500;
 	}
 
@@ -189,7 +189,7 @@
 	}
 
 	.artist {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.55);
 	}
 
@@ -246,7 +246,7 @@
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.5);
 	}
 
@@ -255,7 +255,7 @@
 	}
 
 	.time {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 

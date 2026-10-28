@@ -1,4 +1,5 @@
 <script>
+	import { openSettings } from '$lib/settings.js';
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { PUBLIC_API_URL } from '$env/static/public';
@@ -9,8 +10,7 @@
 		discoveryRequested,
 		exploreSession,
 		exploreTrail,
-		builderRequest,
-		llmSettingsOpen
+		builderRequest
 	} from '../stores.js';
 	import { llmHeaders } from '$lib/llmHeaders.js';
 	import { spotifyHeaders } from '$lib/spotifyHeaders.js';
@@ -221,7 +221,7 @@
 					onOpen={exploreFrom}
 				/>
 				{#if discoverError.startsWith('Add an AI key')}
-					<button class="btn small key" on:click={() => ($llmSettingsOpen = true)}>Open AI settings</button>
+					<button class="btn small key" on:click={() => openSettings('ai')}>Open AI settings</button>
 				{/if}
 			</div>
 		</div>
@@ -238,7 +238,7 @@
 	.eyebrow {
 		margin: 0;
 		font-family: var(--font-mono);
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		color: rgba(243, 243, 245, 0.6);
 	}
@@ -261,7 +261,7 @@
 
 	h1 {
 		margin: 0;
-		font-size: clamp(44px, 9vw, 84px);
+		font-size: calc(clamp(44px, 9vw, 84px) * var(--text-scale, 1));
 		font-weight: 700;
 		line-height: 0.95;
 		letter-spacing: -0.05em;
@@ -334,7 +334,7 @@
 	}
 
 	.path-label {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		color: var(--text-subtle);
 	}
@@ -360,7 +360,7 @@
 	}
 
 	.sep {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.25);
 	}
 
@@ -375,7 +375,7 @@
 		background: transparent;
 		color: var(--text-muted);
 		font: inherit;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		white-space: nowrap;
 		cursor: pointer;
@@ -439,7 +439,7 @@
 		display: grid;
 		place-items: center;
 		background: linear-gradient(140deg, oklch(0.66 0.12 var(--h)), oklch(0.32 0.08 calc(var(--h) + 45)));
-		font-size: 40px;
+		font-size: calc(40px * var(--text-scale, 1));
 		font-weight: 600;
 		color: rgba(255, 255, 255, 0.8);
 	}
@@ -453,20 +453,20 @@
 	}
 
 	.song-meta h1 {
-		font-size: clamp(40px, 8vw, 76px);
+		font-size: calc(clamp(40px, 8vw, 76px) * var(--text-scale, 1));
 		letter-spacing: -0.045em;
 	}
 
 	.artist {
 		margin: 0;
-		font-size: 20px;
+		font-size: calc(20px * var(--text-scale, 1));
 		font-weight: 500;
 		color: rgba(243, 243, 245, 0.8);
 	}
 
 	.stats {
 		margin: 0;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.5);
 	}
 
@@ -479,7 +479,7 @@
 		height: 44px;
 		padding: 0 20px;
 		border-radius: 999px;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 	}
 
 	.columns {

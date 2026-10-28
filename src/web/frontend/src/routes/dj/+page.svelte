@@ -244,7 +244,7 @@
 
 	h1 {
 		margin: 0 4px 0 0;
-		font-size: 24px;
+		font-size: calc(24px * var(--text-scale, 1));
 		font-weight: 700;
 		letter-spacing: -0.02em;
 	}
@@ -268,7 +268,7 @@
 	.bar .segmented button {
 		height: 28px;
 		padding: 0 11px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 	}
 
 	.bar .btn {
@@ -289,14 +289,14 @@
 		border-radius: 999px;
 		background: var(--danger);
 		color: #1a0505;
-		font-size: 11px;
+		font-size: calc(11px * var(--text-scale, 1));
 		font-weight: 600;
 		display: inline-grid;
 		place-items: center;
 	}
 
 	.count {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
@@ -324,7 +324,7 @@
 		background: none;
 		color: inherit;
 		font: inherit;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		border-radius: 8px;
 		cursor: pointer;
 	}
@@ -350,7 +350,7 @@
 
 	.edit-hint {
 		margin: 10px 0 0;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-muted);
 		text-align: center;
 	}

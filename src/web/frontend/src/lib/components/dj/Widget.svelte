@@ -100,7 +100,7 @@
 
 	h2 {
 		margin: 0;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		font-weight: 500;
 		color: var(--text-primary);
 		white-space: nowrap;

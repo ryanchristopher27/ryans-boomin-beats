@@ -1,8 +1,9 @@
 <script>
+	import { openSettings } from '$lib/settings.js';
 	// The Explore song page's left column (R3): Tags, What the AI hears, Sound
 	// profile and About. Picks go to exploreSession; the recipe column reads them.
 	import { PUBLIC_API_URL } from '$env/static/public';
-	import { exploreSession, llmConfig, llmSettingsOpen } from '../../stores.js';
+	import { exploreSession, llmConfig } from '../../stores.js';
 	import { llmHeaders } from '../llmHeaders.js';
 	import { spotifyHeaders } from '../spotifyHeaders.js';
 	import Icon from './Icon.svelte';
@@ -102,7 +103,7 @@
 			{:else if !$llmConfig.connected}
 				<div class="missing">
 					<p>Add an AI key to see a song analysis. Tags still work without one.</p>
-					<button class="btn primary small" on:click={() => ($llmSettingsOpen = true)}>Add AI key</button>
+					<button class="btn primary small" on:click={() => openSettings('ai')}>Add AI key</button>
 				</div>
 			{:else}
 				<!-- Profiled before an AI was connected (the profile is cached per song). -->
@@ -165,12 +166,12 @@
 
 	h2 {
 		margin: 0;
-		font-size: 16px;
+		font-size: calc(16px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
 	.aside {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 		text-align: right;
 	}
@@ -224,7 +225,7 @@
 	}
 
 	.aspect-label {
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		font-weight: 500;
 	}
 
@@ -245,7 +246,7 @@
 	}
 
 	.aspect-note {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		line-height: 1.4;
 		color: rgba(243, 243, 245, 0.5);
 	}
@@ -262,7 +263,7 @@
 
 	.missing p {
 		margin: 0;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		color: var(--text-muted);
 	}
 
@@ -281,7 +282,7 @@
 	.score-head {
 		display: flex;
 		justify-content: space-between;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-muted);
 	}
 
@@ -300,7 +301,7 @@
 
 	.about {
 		margin: 0;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		line-height: 1.6;
 		color: rgba(243, 243, 245, 0.68);
 		text-wrap: pretty;

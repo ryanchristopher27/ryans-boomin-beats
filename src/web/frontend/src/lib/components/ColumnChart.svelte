@@ -83,7 +83,7 @@
 
 	.y-label {
 		fill: var(--text-subtle);
-		font-size: 9px;
+		font-size: calc(9px * var(--text-scale, 1));
 	}
 
 	.bar {
@@ -92,13 +92,13 @@
 
 	.bar-value {
 		fill: var(--text-muted);
-		font-size: 10px;
+		font-size: calc(10px * var(--text-scale, 1));
 		font-weight: 700;
 	}
 
 	.x-label {
 		fill: var(--text-subtle);
-		font-size: 10px;
+		font-size: calc(10px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 </style>

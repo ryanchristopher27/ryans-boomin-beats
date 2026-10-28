@@ -115,13 +115,13 @@
 
 	.label-name {
 		fill: var(--text-muted);
-		font-size: 10px;
+		font-size: calc(10px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
 	.label-value {
 		fill: var(--accent);
-		font-size: 11px;
+		font-size: calc(11px * var(--text-scale, 1));
 		font-weight: 700;
 	}
 </style>

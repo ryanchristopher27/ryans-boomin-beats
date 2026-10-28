@@ -49,7 +49,7 @@
 
 	.empty {
 		margin: 8px 6px 0;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		line-height: 1.45;
 		color: var(--text-muted);
 	}

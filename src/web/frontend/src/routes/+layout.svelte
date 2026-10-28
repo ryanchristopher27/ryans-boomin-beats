@@ -5,14 +5,20 @@
 	import PlaylistsPanel from '$lib/components/PlaylistsPanel.svelte';
 	import MiniPlayer from '$lib/components/dj/MiniPlayer.svelte';
 	import Toast from '$lib/components/Toast.svelte';
+	import Onboarding from '$lib/components/settings/Onboarding.svelte';
+	import { onboarding } from '$lib/onboarding.js';
+	import { loadStoredToken } from '$lib/spotifyAuth.js';
 	import { hydrateToken } from '$lib/spotifyAuth.js';
 	import { getDJ } from '$lib/dj/instance.js';
 	import { access_token, playlistsPanelOpen } from '../stores.js';
+	import { playbackMotion, textScale } from '$lib/settings.js';
 	import './styles.css';
 
 	// Load the Spotify session app-wide so account actions work on every page,
 	// not just Profile. Skips the OAuth callback (handled by the Profile page).
 	onMount(() => {
+		// First run for someone who has never signed in here; existing users skip it.
+		if ($onboarding == null) $onboarding = loadStoredToken() ? 0 : 1;
 		if (!new URLSearchParams(window.location.search).has('code')) {
 			hydrateToken();
 		}
@@ -26,6 +32,11 @@
 	// driving (and the mini player stays live) on every page.
 	// ...and stops on sign-out instead of polling with no token (review W4).
 	$: if (browser) $access_token ? getDJ()?.start() : getDJ()?.stop();
+
+	// General settings apply app-wide: every font-size multiplies --text-scale,
+	// and data-motion pauses the playback animations (styles.css).
+	$: if (browser) document.documentElement.style.setProperty('--text-scale', String($textScale));
+	$: if (browser) document.documentElement.dataset.motion = $playbackMotion ? 'on' : 'off';
 </script>
 
 <div class="app" class:panel-open={$playlistsPanelOpen}>
@@ -39,6 +50,7 @@
 	<PlaylistsPanel />
 	{#if browser}<MiniPlayer />{/if}
 	<Toast />
+	{#if browser && $onboarding}<Onboarding />{/if}
 </div>
 
 <style>
@@ -71,7 +83,7 @@
 		border-radius: 9px;
 		background: var(--accent);
 		color: var(--accent-on);
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 600;
 		transform: translateY(-200%);
 	}

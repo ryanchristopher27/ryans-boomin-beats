@@ -101,7 +101,7 @@
 		align-items: baseline;
 		justify-content: space-between;
 		gap: 12px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.55);
 	}
 
@@ -128,7 +128,7 @@
 		background: transparent;
 		color: rgba(243, 243, 245, 0.75);
 		font: inherit;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		font-weight: 500;
 		cursor: pointer;
 		transition: background-color var(--transition), border-color var(--transition), color var(--transition);
@@ -157,7 +157,7 @@
 		border: 1px solid var(--border-subtle);
 		border-radius: var(--radius-sm);
 		font: inherit;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		padding: 6px 10px;
 	}
 
@@ -195,7 +195,7 @@
 
 	.hint {
 		margin: 0;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		line-height: 1.45;
 		color: var(--text-muted);
 	}

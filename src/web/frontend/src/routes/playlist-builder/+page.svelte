@@ -1,4 +1,5 @@
 <script>
+	import { openSettings } from '$lib/settings.js';
 	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { PUBLIC_API_URL } from '$env/static/public';
@@ -9,7 +10,6 @@
 		playlistRequested,
 		builderRequest,
 		llmConfig,
-		llmSettingsOpen,
 		selectedSong,
 		exploreTrail,
 		discoveryPlaylist
@@ -113,7 +113,7 @@
 		{#if error}
 			<div class="empty-error" role="alert">
 				<p>{error}</p>
-				{#if needsKey}<button class="btn small primary" on:click={() => ($llmSettingsOpen = true)}>Open AI settings</button>{/if}
+				{#if needsKey}<button class="btn small primary" on:click={() => openSettings('ai')}>Open AI settings</button>{/if}
 			</div>
 		{/if}
 	{:else}
@@ -138,7 +138,7 @@
 					{error}
 					onSend={send}
 					onReset={reset}
-					onOpenSettings={needsKey ? () => ($llmSettingsOpen = true) : null}
+					onOpenSettings={needsKey ? () => openSettings('ai') : null}
 				/>
 			</div>
 		</div>
@@ -164,7 +164,7 @@
 		background: var(--popover);
 		border: 1px solid rgba(255, 122, 122, 0.25);
 		color: #ffb0b0;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 	}
 
 	.empty-error p {

@@ -237,7 +237,7 @@
 
 	h2 {
 		margin: 0;
-		font-size: 15px;
+		font-size: calc(15px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
@@ -261,7 +261,7 @@
 		background: var(--accent-tint);
 		border: 1px solid var(--accent-tint-border);
 		color: var(--accent-tint-text);
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 	}
 
 	.pending span {
@@ -278,7 +278,7 @@
 	.state {
 		margin: 0;
 		padding: 18px;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--text-muted);
 	}
 
@@ -303,7 +303,7 @@
 		border-radius: 9px;
 		border: 1px solid rgba(255, 255, 255, 0.08);
 		background: var(--surface-1);
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 	}
 
 	.tools input {
@@ -322,14 +322,14 @@
 		padding: 0 10px;
 		color: rgba(243, 243, 245, 0.7);
 		font-weight: 500;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		cursor: pointer;
 	}
 
 	.hint {
 		margin: 0;
 		padding: 0 18px 8px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
@@ -397,7 +397,7 @@
 	}
 
 	.name {
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 500;
 		white-space: nowrap;
 		overflow: hidden;
@@ -405,7 +405,7 @@
 	}
 
 	.count {
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 

@@ -98,7 +98,7 @@
 
 	h2 {
 		margin: 0;
-		font-size: 15px;
+		font-size: calc(15px * var(--text-scale, 1));
 		font-weight: 600;
 	}
 
@@ -107,7 +107,7 @@
 		padding: 0 10px;
 		border-color: rgba(255, 255, 255, 0.08);
 		color: rgba(243, 243, 245, 0.7);
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 	}
 
 	.log {
@@ -128,7 +128,7 @@
 		max-width: 88%;
 		padding: 11px 14px;
 		border-radius: 14px;
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 		line-height: 1.5;
 		animation: bbin 0.2s var(--ease);
 	}
@@ -179,7 +179,7 @@
 		align-items: center;
 		gap: 10px;
 		margin: 0;
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--text-subtle);
 	}
 
@@ -225,7 +225,7 @@
 	.refine {
 		height: 28px;
 		padding: 0 10px;
-		font-size: 12px;
+		font-size: calc(12px * var(--text-scale, 1));
 		color: rgba(243, 243, 245, 0.75);
 	}
 
@@ -255,7 +255,7 @@
 		border: none;
 		background: transparent;
 		color: var(--text-primary);
-		font-size: 14px;
+		font-size: calc(14px * var(--text-scale, 1));
 	}
 
 	.follow input:focus {

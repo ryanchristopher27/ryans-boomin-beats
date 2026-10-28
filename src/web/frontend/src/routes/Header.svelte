@@ -1,7 +1,8 @@
 <script>
 	import { page, llmConfig, playlistsPanelOpen, llmSettingsOpen } from '../stores.js';
 	import BoominBeatsLogo from '$lib/images/BoominBeatsLogo.jpg';
-	import LLMSettingsPanel from '$lib/components/LLMSettingsPanel.svelte';
+	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
+	import { settingsTab } from '$lib/settings.js';
 	import Icon from '$lib/components/Icon.svelte';
 	import { getDJ } from '$lib/dj/instance.js';
 
@@ -45,7 +46,10 @@
 		<button
 			class="gear"
 			class:on={$llmSettingsOpen}
-			on:click={() => ($llmSettingsOpen = !$llmSettingsOpen)}
+			on:click={() => {
+				if (!$llmSettingsOpen) $settingsTab = 'general';
+				$llmSettingsOpen = !$llmSettingsOpen;
+			}}
 			aria-label={$llmConfig.connected ? 'Settings (AI connected)' : 'Settings (no AI connected)'}
 			aria-expanded={$llmSettingsOpen}
 		>
@@ -56,7 +60,7 @@
 </header>
 
 {#if $llmSettingsOpen}
-	<LLMSettingsPanel onClose={() => ($llmSettingsOpen = false)} />
+	<SettingsPanel onClose={() => ($llmSettingsOpen = false)} />
 {/if}
 
 <style>
@@ -81,7 +85,7 @@
 		align-items: center;
 		gap: 10px;
 		color: var(--text-primary);
-		font-size: 15px;
+		font-size: calc(15px * var(--text-scale, 1));
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
@@ -114,7 +118,7 @@
 		padding: 0 14px;
 		border-radius: 8px;
 		color: var(--text-muted);
-		font-size: 13px;
+		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 500;
 		transition: background-color var(--transition), color var(--transition);
 	}

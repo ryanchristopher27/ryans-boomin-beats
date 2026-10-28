@@ -186,7 +186,7 @@ button:focus:not(:focus-visible) {
 	background: transparent;
 	color: var(--text-primary);
 	font: inherit;
-	font-size: 13px;
+	font-size: calc(13px * var(--text-scale, 1));
 	font-weight: 500;
 	cursor: pointer;
 	white-space: nowrap;
@@ -205,7 +205,7 @@ button:focus:not(:focus-visible) {
 .btn.small {
 	height: 32px;
 	padding: 0 12px;
-	font-size: 13px;
+	font-size: calc(13px * var(--text-scale, 1));
 }
 
 .btn.glass {
@@ -280,7 +280,7 @@ button:focus:not(:focus-visible) {
 	background: none;
 	color: var(--text-muted);
 	font: inherit;
-	font-size: 13px;
+	font-size: calc(13px * var(--text-scale, 1));
 	font-weight: 500;
 	cursor: pointer;
 	white-space: nowrap;
@@ -298,7 +298,7 @@ button:focus:not(:focus-visible) {
 
 .segmented.small button {
 	height: 26px;
-	font-size: 12px;
+	font-size: calc(12px * var(--text-scale, 1));
 }
 
 /* A chip: Last.fm tags, mood and example prompts, goal picks. */
@@ -313,7 +313,7 @@ button:focus:not(:focus-visible) {
 	background: transparent;
 	color: var(--text-primary);
 	font: inherit;
-	font-size: 13px;
+	font-size: calc(13px * var(--text-scale, 1));
 	cursor: pointer;
 	transition: background-color var(--transition), border-color var(--transition), color var(--transition);
 }
@@ -337,7 +337,7 @@ button:focus:not(:focus-visible) {
 
 .eyebrow {
 	font-family: var(--font-mono);
-	font-size: 12px;
+	font-size: calc(12px * var(--text-scale, 1));
 	font-weight: 500;
 	color: var(--text-subtle);
 }
@@ -425,6 +425,12 @@ button:focus:not(:focus-visible) {
 	to {
 		transform: rotate(360deg);
 	}
+}
+
+/* Settings → Playback animations off: the visualizer, bars, cover glow and
+   drifting colour hold still. Spinners and skeletons keep moving. */
+:root[data-motion='off'] .playback-anim {
+	animation-play-state: paused !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
