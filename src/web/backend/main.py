@@ -2,15 +2,16 @@ import hmac
 import logging
 
 import requests
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from spotipy import SpotifyException
 
-from config import ALLOWED_ORIGINS, DEVICE_KEY
+from config import ALLOWED_ORIGINS, ALLOWED_SPOTIFY_USERS, DEVICE_KEY
 from routers import search, profile
 from routers import llm_connect, llm_playlist, spotify_actions, song_profile, player, dj, dj_state, tracks
-from services import spotify_client
+from services import spotify_client, spotify_identity
 
 # Without this, every log.info in services/ was dropped (Python's default is
 # WARNING); the search counter (plan Q4) relies on INFO reaching the logs.
@@ -36,11 +37,12 @@ _UNGUARDED_PATHS = {'/'}
 # the "CORS error masking the real status" problem from the 2026-06-05 reflect.
 @app.middleware("http")
 async def require_device_key(request: Request, call_next):
-    """Guard the hosted instance with a shared secret.
+    """Guard the hosted instance: the iOS app's shared device key, or (the
+    hosted web app) a Spotify token for an allowlisted account.
 
     No-op when DEVICE_KEY is unset, which is the local instance's configuration.
-    Not user authentication — it exists so a public URL can't be used by anyone
-    who finds it to burn the Spotify client-credentials quota.
+    It exists so a public URL can't be used by anyone who finds it to burn the
+    Spotify client-credentials quota or the server's AI calls.
     """
     if not DEVICE_KEY:
         return await call_next(request)
@@ -50,15 +52,27 @@ async def require_device_key(request: Request, call_next):
         return await call_next(request)
 
     presented = request.headers.get('x-device-key', '')
-    if not hmac.compare_digest(presented, DEVICE_KEY):
-        log.warning(
-            '[device-key] rejected %s %s from %s',
-            request.method, request.url.path,
-            request.client.host if request.client else 'unknown',
-        )
-        return JSONResponse(status_code=401, content={'detail': 'Missing or invalid X-Device-Key.'})
+    if presented and hmac.compare_digest(presented, DEVICE_KEY):
+        return await call_next(request)
 
-    return await call_next(request)
+    # The hosted web app: a Spotify token for an allowlisted account.
+    scheme, _, token = request.headers.get('authorization', '').partition(' ')
+    if ALLOWED_SPOTIFY_USERS and scheme.lower() == 'bearer' and token.strip():
+        try:
+            uid = await run_in_threadpool(spotify_identity.user_id, token.strip())
+        except HTTPException as e:
+            return JSONResponse(status_code=e.status_code, content={'detail': e.detail})
+        if uid in ALLOWED_SPOTIFY_USERS:
+            return await call_next(request)
+        log.warning('[device-key] rejected Spotify account not on the allowlist for %s', request.url.path)
+        return JSONResponse(status_code=403, content={'detail': "This Spotify account isn't set up for Boomin Beats."})
+
+    log.warning(
+        '[device-key] rejected %s %s from %s',
+        request.method, request.url.path,
+        request.client.host if request.client else 'unknown',
+    )
+    return JSONResponse(status_code=401, content={'detail': 'Missing or invalid X-Device-Key.'})
 
 
 app.add_middleware(

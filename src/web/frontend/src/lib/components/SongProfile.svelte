@@ -4,6 +4,7 @@
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { exploreSession, llmConfig, llmSettingsOpen } from '../../stores.js';
 	import { llmHeaders } from '../llmHeaders.js';
+	import { spotifyHeaders } from '../spotifyHeaders.js';
 	import Icon from './Icon.svelte';
 	import { parseAnalysis } from '$lib/explore.js';
 
@@ -31,7 +32,7 @@
 		try {
 			const artist = s.artists?.[0] ?? s.artist ?? '';
 			const params = new URLSearchParams({ title: s.title, artist });
-			const res = await fetch(`${PUBLIC_API_URL}/song/profile/?${params}`, { headers: llmHeaders() });
+			const res = await fetch(`${PUBLIC_API_URL}/song/profile/?${params}`, { headers: { ...spotifyHeaders(), ...llmHeaders() } });
 			const data = await res.json();
 			$exploreSession = { ...$exploreSession, key, profile: data };
 		} catch {

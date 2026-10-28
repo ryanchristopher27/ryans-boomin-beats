@@ -15,6 +15,7 @@
 		discoveryPlaylist
 	} from '../../stores.js';
 	import { llmHeaders } from '$lib/llmHeaders.js';
+	import { spotifyHeaders } from '$lib/spotifyHeaders.js';
 	import { playlistName } from '$lib/builder.js';
 	import Composer from '$lib/components/builder/Composer.svelte';
 	import Conversation from '$lib/components/builder/Conversation.svelte';
@@ -60,7 +61,7 @@
 		try {
 			const res = await fetch(`${PUBLIC_API_URL}/llm/generate-playlist/`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...llmHeaders() },
+				headers: { 'Content-Type': 'application/json', ...spotifyHeaders(), ...llmHeaders() },
 				body: JSON.stringify({ prompt, messages: history, count })
 			});
 			if (res.status === 401) {

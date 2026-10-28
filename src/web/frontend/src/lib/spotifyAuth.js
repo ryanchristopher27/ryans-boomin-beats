@@ -6,7 +6,9 @@ import { access_token } from '../stores.js';
 export const CLIENT_ID = 'a700071d47504ba68082a5a59d2b0bc0';
 export const AUTHORIZE_ENDPOINT = 'https://accounts.spotify.com/authorize';
 export const TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
-export const REDIRECT_URI = 'http://127.0.0.1:5173/profile';
+// Wherever the app is served from: 127.0.0.1:5173 locally, the Vercel domain
+// when hosted. Each must be registered in the Spotify app's Redirect URIs.
+export const REDIRECT_URI = typeof location !== 'undefined' ? `${location.origin}/profile` : 'http://127.0.0.1:5173/profile';
 // user-read-playback-state is required to list devices and read player state.
 // Without it /me/player and /me/player/devices return 401 "Permissions missing",
 // so queueing can only fail with an opaque 404 and never explain why.

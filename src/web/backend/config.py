@@ -18,6 +18,14 @@ LASTFM_API_KEY = os.environ.get('LASTFM_API_KEY', '')
 # unaffected. Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 DEVICE_KEY = os.environ.get('DEVICE_KEY', '')
 
+# The hosted web app can't hold the device key (its code is public), so the
+# guard also accepts a Spotify bearer token from one of these Spotify user ids
+# (comma-separated). Required: any Spotify account can mint a valid token, so
+# without the list the guard would admit everyone. Unset = bearer path off.
+ALLOWED_SPOTIFY_USERS = {
+    u.strip() for u in os.environ.get('ALLOWED_SPOTIFY_USERS', '').split(',') if u.strip()
+}
+
 # DJ sync (SY1). Both local and hosted instances point at the same Supabase
 # project, so devices on either one share state. Unset = sync disabled; the
 # rest of the backend runs unchanged and sync routes answer 503.

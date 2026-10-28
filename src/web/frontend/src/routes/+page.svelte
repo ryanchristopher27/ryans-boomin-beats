@@ -13,6 +13,7 @@
 		llmSettingsOpen
 	} from '../stores.js';
 	import { llmHeaders } from '$lib/llmHeaders.js';
+	import { spotifyHeaders } from '$lib/spotifyHeaders.js';
 	import { queueTracks, rememberSongs } from '$lib/playlistActions.js';
 	import { coverHue, nameHue } from '$lib/dj/ambience.js';
 	import { builderPrompt, discoverPrompt, extendTrail, parseAnalysis } from '$lib/explore.js';
@@ -99,7 +100,7 @@
 		try {
 			const res = await fetch(`${PUBLIC_API_URL}/llm/generate-playlist/`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json', ...llmHeaders() },
+				headers: { 'Content-Type': 'application/json', ...spotifyHeaders(), ...llmHeaders() },
 				body: JSON.stringify({ prompt: discoverPrompt(song, $exploreSession.selectedTags, chosen), messages: [], count: 12 })
 			});
 			if (res.status === 401) {

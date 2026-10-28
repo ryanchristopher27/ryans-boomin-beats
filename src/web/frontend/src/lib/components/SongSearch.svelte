@@ -1,6 +1,7 @@
 <script>
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import SongRow from './ui/SongRow.svelte';
+	import { spotifyHeaders } from '../spotifyHeaders.js';
 
 	export let onSelect = (song) => {};
 	export let placeholder = 'Search for a song';
@@ -34,7 +35,7 @@
 			return;
 		}
 		try {
-			const res = await fetch(`${PUBLIC_API_URL}/search/?searchValue=${encodeURIComponent(q)}`);
+			const res = await fetch(`${PUBLIC_API_URL}/search/?searchValue=${encodeURIComponent(q)}`, { headers: spotifyHeaders() });
 			if (!res.ok) return;
 			const data = await res.json();
 			tracks = (data.tracks ?? []).slice(0, 6);
