@@ -184,7 +184,7 @@
 		if (card.kind === 'build') {
 			$builderRequest = card.prompt;
 			goto('/playlist-builder/');
-		} else goto('/dj/');
+		} else goto(`/dj/?preset=${card.preset}`);
 	}
 
 	// --- Top tracks ---

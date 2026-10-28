@@ -53,7 +53,7 @@ export function insights({ period, genres, decades, peak, topArtist }) {
 	}
 	if (peak != null) {
 		const late = peak >= 21 || peak < 4;
-		out.push({ label: 'Listening clock', value: `You listen most around ${hourLabel(peak)}`, action: late ? 'Start a late-night DJ set' : 'Start an evening DJ set', kind: 'dj' });
+		out.push({ label: 'Listening clock', value: `You listen most around ${hourLabel(peak)}`, action: late ? 'Start a late-night DJ set' : 'Start an evening DJ set', kind: 'dj', preset: late ? 'afterparty' : 'pregame' });
 	}
 	if (topArtist) out.push({ label: 'Top artist', value: `${topArtist} is your #1`, action: `Build songs like ${topArtist}`, kind: 'build', prompt: `songs like ${topArtist}` });
 	return out;

@@ -3633,3 +3633,26 @@ Type-check errors dropped from 25 to 3. The 3 left are pre-existing, in `spotify
 - **Deviation, previewing:** "Lower Spotify while previewing" moves to F2, with the previews.
 - **Deviation, AI skip:** the design's "Skip, use Last.fm only" is "Skip for now". A DJ that
   needs no AI key is part of F3.
+
+---
+
+## F3 breakdown: DJ features (2026-10-27)
+
+F3 runs as eight sub-milestones, smallest and frontend-only first. Each is committed and
+checked on its own. The live check with real music waits for the owner's OK, because Spotify
+quota and AI tokens are real costs.
+
+| # | Sub-milestone | Scope | Backend |
+|---|---|---|---|
+| F3a | Night presets | Dinner / Pregame / Peak / Afterparty in the DJ toolbar. Each sets Safe↔Bold and the goal (Familiar↔New joins in F3d). Profile's "Start an evening DJ set" opens the DJ with the preset applied | — |
+| F3b | Up next editing | Undo on every queue edit (remove, reorder, later, clear), Clear, Play next | — |
+| F3c | Per-move refresh + feedback | Each move group gets its own refresh, with "What's off about these?" chips. Only that move is re-asked; the feedback is shown as "Avoiding: …" | `moves` and `feedback` fields on `/dj/suggest/` |
+| F3d | Familiar ↔ New | A slider (From your library / Mix / Mostly new), seeded with the listener's top tracks (b951bf) | `familiar` + `library` refs in the prompt |
+| F3e | DJ without an AI key | Last.fm similar tracks, checked on Deezer, as a "Like this one" move; the controls show the pick source (9341cc) | A no-LLM branch in `/dj/suggest/` |
+| F3f | Save tonight's set | A modal with the name, stats (time played, DJ picks kept, guest requests), the songs played and an optional AI recap, then save to Spotify (9da022) | `description` on create-playlist; a recap prompt |
+| F3g | Compass layout | A 3×3 preset around Now playing, with keys: arrows for Lift / Drop / Pivot / Curveball, H for Hold, T for Toward. The card flashes when a key adds a pick | — |
+| F3h | Playlist widget | Pick one of your playlists, filter it, + to queue. The Builder's "Start a DJ set from it" sends its songs to Up next | Playlist-tracks route, if one is missing |
+
+**Play next instead of Play now.** True "play now" would mean skipping past songs already sent
+to Spotify's queue, which the app can't take back. "Play next" (move the song to the top of Up
+next) is honest and safe.

@@ -23,7 +23,7 @@ describe('profile', () => {
 		const cards = insights({ period: 'short_term', genres: ['rap'], decades, peak: 23, topArtist: 'Don Toliver' });
 		expect(cards.map((c) => c.label)).toEqual(['Top genre', 'Eras', 'Listening clock', 'Top artist']);
 		expect(cards[1]).toMatchObject({ value: 'Mostly the 2020s, some 2010s', prompt: 'my kind of music from the 2010s' });
-		expect(cards[2]).toMatchObject({ kind: 'dj', action: 'Start a late-night DJ set' });
+		expect(cards[2]).toMatchObject({ kind: 'dj', action: 'Start a late-night DJ set', preset: 'afterparty' });
 		expect(cards[3].prompt).toBe('songs like Don Toliver');
 	});
 });

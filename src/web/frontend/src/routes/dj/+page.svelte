@@ -15,6 +15,9 @@
 	import SongProfile from '$lib/components/dj/SongProfile.svelte';
 	import Recent from '$lib/components/dj/Recent.svelte';
 	import { provideDJContext } from '$lib/components/dj/context.js';
+	import { NIGHT, activePreset, applyPreset } from '$lib/dj/presets.js';
+	import { page as route } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import SyncBanner from '$lib/components/dj/SyncBanner.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Blobs from '$lib/components/ui/Blobs.svelte';
@@ -44,6 +47,12 @@
 
 	onMount(() => {
 		$page = 'DJ';
+		// Profile's "Start an evening DJ set" links here with ?preset=pregame.
+		const preset = $route.url.searchParams.get('preset');
+		if (preset && NIGHT[preset]) {
+			applyPreset(dj, preset);
+			goto('/dj/', { replaceState: true, noScroll: true });
+		}
 		return dj.watchSuggestions();
 	});
 
@@ -116,6 +125,7 @@
 	});
 
 	const titleFor = (item) => (item.type === 'move' ? moveLabel(item.kind) : WIDGETS[item.type].title);
+	$: night = activePreset($doc.options);
 	$: requestCount = $doc.queue.requests.length;
 	$: upNextCount = $doc.queue.sent.length + $doc.queue.upcoming.length;
 	$: pickCount = $suggestions.status === 'loaded' ? $suggestions.moves.reduce((n, m) => n + m.tracks.length, 0) : 0;
@@ -146,6 +156,14 @@
 			<button class="btn" on:click={cancel}>Cancel</button>
 			<button class="btn primary" on:click={done}>Done</button>
 		{:else}
+			<div class="night">
+				<span class="night-label" id="night-label">Night</span>
+				<div class="segmented" role="radiogroup" aria-labelledby="night-label">
+					{#each Object.entries(NIGHT) as [id, p] (id)}
+						<button role="radio" aria-checked={night === id} class:active={night === id} on:click={() => applyPreset(dj, id)} title="{p.label}: sets how bold the DJ is and its goal">{p.label}</button>
+					{/each}
+				</div>
+			</div>
 			<div class="segmented" role="radiogroup" aria-label="Layout">
 				{#each choices as c (c.id)}
 					<button role="radio" aria-checked={layout.preset === c.id} class:active={layout.preset === c.id} on:click={() => choose(c.id)}>{c.label}</button>
@@ -280,6 +298,17 @@
 
 	.bar .btn.primary {
 		background: var(--accent);
+	}
+
+	.night {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	.night-label {
+		font-size: calc(12px * var(--text-scale, 1));
+		color: rgba(243, 243, 245, 0.5);
 	}
 
 	.badge {

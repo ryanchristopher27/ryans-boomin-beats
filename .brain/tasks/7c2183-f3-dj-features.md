@@ -3,11 +3,11 @@ id: 7c2183
 source: plan:ryans-boomin-beats:F3
 title: F3 — DJ features
 type: task
-status: backlog
+status: doing
 assignee: 
 scoped_dir: .
 created: 2026-10-28T01:23:26Z
-updated: 2026-10-28T01:23:26Z
+updated: 2026-10-28T03:31:49Z
 ---
 
 ## Brief
@@ -19,3 +19,4 @@ Night presets, per-move feedback, Familiar-New (b951bf), no-key DJ (9341cc), Sav
 
 ## Updates
 - 2026-10-28T01:23:26Z · created
+- 2026-10-28T03:31:49Z · status: backlog → doing (split into F3a-F3h)
