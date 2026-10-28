@@ -97,6 +97,11 @@ class SuggestRequest(BaseModel):
     avoid_tracks: list[TrackRef] = _refs()
     avoid_artists: list[_Text] = _refs()
     goal: Goal | None = None
+    # F3c: re-ask only these moves (a per-move refresh), say what was off about
+    # their last picks, and keep those picks out of this round.
+    only_moves: list[Annotated[str, StringConstraints(max_length=20)]] = Field(default=[], max_length=8)
+    feedback: dict[Annotated[str, StringConstraints(max_length=20)], list[Annotated[str, StringConstraints(max_length=60)]]] = Field(default={}, max_length=8)
+    exclude: list[TrackRef] = _refs()
 
 
 # Concrete markers, because a bare "step energy UP" was followed weakly at
@@ -159,11 +164,29 @@ def _adventure_line(a: float) -> str:
             'Skip anything a casual listener would already expect.')
 
 
+def asked_moves(body: SuggestRequest) -> dict[str, str]:
+    """The moves this round asks for: all of them, or only the ones being refreshed."""
+    allowed = moves_for(body.goal)
+    picked = {m: allowed[m] for m in body.only_moves if m in allowed}
+    return picked or allowed
+
+
+def feedback_lines(body: SuggestRequest, moves: dict[str, str]) -> str:
+    """What the host said was off about a move's last picks (F3c), per move asked."""
+    out = []
+    for move, notes in body.feedback.items():
+        notes = [n.strip() for n in notes[:6] if n.strip()]
+        if move in moves and notes:
+            out.append(f'- "{move}": the last picks were {", ".join(notes).lower()}. Correct for that.')
+    return ('The host refreshed these moves; fix what was off:\n' + '\n'.join(out) + '\n\n') if out else ''
+
+
 def build_prompt(body: SuggestRequest, tags: list[str]) -> str:
     def lines(refs: list[TrackRef]) -> str:
         return '\n'.join(f'- {r.title} — {r.artist}' for r in refs) or '- (none)'
 
-    moves = '\n'.join(f'- "{name}": {desc}' for name, desc in moves_for(body.goal).items())
+    asked = asked_moves(body)
+    moves = '\n'.join(f'- "{name}": {desc}' for name, desc in asked.items())
     tag_line = ', '.join(tags) if tags else '(no tags available)'
     # The clean filter drops explicit tracks after validation (DJ4: one extra left
     # whole moves empty), so ask for more when it's on.
@@ -177,6 +200,8 @@ def build_prompt(body: SuggestRequest, tags: list[str]) -> str:
         + (f'The host wants LESS like (avoid this direction):\n{lines(body.disliked)}\n\n' if body.disliked else '')
         + (f'The host skipped these early (a sign they did not land):\n{lines(body.skipped)}\n\n' if body.skipped else '')
         + (f'Never suggest these artists: {", ".join(body.avoid_artists)}\n\n' if body.avoid_artists else '')
+        + (f'Just shown and being replaced (do not suggest these):\n{lines(body.exclude)}\n\n' if body.exclude else '')
+        + feedback_lines(body, asked)
         + ('Clean versions only: no explicit songs.\n\n' if body.clean else '')
         + f'{_adventure_line(body.adventurousness)}\n\n'
         + f'Give {n} songs for each of these moves:\n{moves}'
@@ -415,16 +440,16 @@ async def suggest(
         return {'moves': [], 'tags': tags, 'error': message}
 
     try:
-        moves = normalize_moves(extract_json(raw, context='dj'), moves_for(body.goal))
+        moves = normalize_moves(extract_json(raw, context='dj'), asked_moves(body))
     except LLMParseError as e:
-        moves = normalize_moves(salvage_truncated(e.raw), moves_for(body.goal))
+        moves = normalize_moves(salvage_truncated(e.raw), asked_moves(body))
         log.warning('[dj] parse failed (%d chars); salvaged %d moves', len(e.raw), len(moves))
         if not moves:
             return {'moves': [], 'tags': tags, 'error': _CUT_OFF}
 
     # Played, queued and avoided songs are excluded by ISRC, or by title+artist
     # for refs without one (picks no longer have Spotify ids to compare).
-    refs = [body.now_playing, *all_recent, *body.upcoming, *body.avoid_tracks]
+    refs = [body.now_playing, *all_recent, *body.upcoming, *body.avoid_tracks, *body.exclude]
     exclude = {r.isrc for r in refs if r.isrc}
     exclude_keys = {song_key(r.title, r.artist) for r in refs if r.title}
     result = await fill_moves(moves, exclude, body.per_move, body.avoid_artists, body.clean, exclude_keys=exclude_keys)

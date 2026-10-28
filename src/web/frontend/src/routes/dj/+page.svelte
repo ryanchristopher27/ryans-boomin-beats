@@ -194,7 +194,7 @@
 						{/if}
 					</svelte:fragment>
 					<svelte:fragment slot="actions">
-						{#if item.type === 'moves' || item.type === 'move'}
+						{#if item.type === 'moves'}
 							<button class="icon-btn" on:click={() => dj.loadSuggestions(undefined, true)} disabled={$suggestions.status === 'loading'} aria-label="Refresh moves" title="Refresh moves">
 								<Icon name="refresh" size={16} />
 							</button>

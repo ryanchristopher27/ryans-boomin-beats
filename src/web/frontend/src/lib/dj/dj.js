@@ -81,6 +81,12 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	const sync = writable({ status: 'unavailable', error: null, primary: null, notice: null, isPrimary, deviceID, label });
 	/** @type {import('svelte/store').Writable<{status: string, moves: any[], error: string | null}>} */
 	const suggestions = writable({ status: 'idle', moves: [], error: null });
+	// F3c: what the host said was off about each move this session, and which
+	// moves are being re-asked right now.
+	/** @type {import('svelte/store').Writable<Record<string, string[]>>} */
+	const moveFeedback = writable({});
+	/** @type {import('svelte/store').Writable<Record<string, boolean>>} */
+	const moveLoading = writable({});
 
 	// Tabs in one browser share a device id (localStorage), so without this every
 	// open tab would drive: double-queuing tracks and flagging each other's sends
@@ -639,23 +645,12 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 
 	const ref = (t) => ({ id: t.trackID ?? t.id ?? '', isrc: t.isrc ?? null, title: t.title, artist: t.artists?.[0] ?? t.artist ?? '' });
 
-	async function loadSuggestions(track = get(player).state?.track, force = false) {
-		if (!track) return;
-		if (!hasLLM()) return suggestions.set({ status: 'needsKey', moves: [], error: null });
+	/** The /dj/suggest/ request for a track: the night so far, the host's taste and controls. */
+	function suggestBody(track, extra = {}) {
 		const o = d().options;
-		// Settings that change the answer are part of the key.
-		const key = `${track.id}|${Math.floor(o.adventurousness * 3)}|${o.clean}|${L.goalKey(o.goal, now())}`;
-		if (!force && cache.has(key)) {
-			suggestions.set({ status: 'loaded', moves: cache.get(key), error: null });
-			return autopilot();
-		}
-		// Don't stack requests for the same answer (Groq's per-minute token limit).
-		if (inFlight === key) return;
-		inFlight = key;
-		suggestions.update((s) => ({ ...s, status: 'loading' }));
 		const q = d().queue;
 		const f = d().feedback;
-		const body = {
+		return {
 			now_playing: ref(track),
 			recent: d().recent.map(ref),
 			upcoming: [...q.sent, ...q.upcoming].map(ref),
@@ -672,8 +667,54 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 				shape: o.goal.shape ?? 'build',
 				minutes: o.goal.minutes ?? 30,
 				elapsed_minutes: Math.max(0, L.elapsedMinutes(o.goal, now()))
-			}
+			},
+			feedback: get(moveFeedback),
+			...extra
 		};
+	}
+
+	/**
+	 * Re-ask one move (F3c), optionally saying what was off about its picks.
+	 * Only that move's picks change; the rest of the round stays.
+	 * @param {string} move
+	 * @param {string} [note] e.g. 'Too slow'; none = "just show new ones"
+	 */
+	async function refreshMove(move, note) {
+		const track = get(player).state?.track;
+		if (!track || !hasLLM() || get(moveLoading)[move]) return;
+		if (note) moveFeedback.update((fb) => ({ ...fb, [move]: [...new Set([...(fb[move] ?? []), note])].slice(-6) }));
+		moveLoading.update((m) => ({ ...m, [move]: true }));
+		const shown = get(suggestions).moves.find((m) => m.move === move)?.tracks ?? [];
+		try {
+			const r = await request('POST', 'dj/suggest/', { json: suggestBody(track, { only_moves: [move], exclude: shown.map(ref) }) });
+			const fresh = r.data?.moves?.find((m) => m.move === move);
+			if (r.status !== 200 || !fresh?.tracks.length) return { ok: false };
+			if (get(player).state?.track?.id !== track.id) return { ok: false }; // the song changed meanwhile
+			suggestions.update((s) => ({ ...s, moves: s.moves.map((m) => (m.move === move ? fresh : m)) }));
+			cache.clear(); // a cached round would bring the replaced picks back
+			return { ok: true };
+		} catch {
+			return { ok: false };
+		} finally {
+			moveLoading.update((m) => ({ ...m, [move]: false }));
+		}
+	}
+
+	async function loadSuggestions(track = get(player).state?.track, force = false) {
+		if (!track) return;
+		if (!hasLLM()) return suggestions.set({ status: 'needsKey', moves: [], error: null });
+		const o = d().options;
+		// Settings that change the answer are part of the key.
+		const key = `${track.id}|${Math.floor(o.adventurousness * 3)}|${o.clean}|${L.goalKey(o.goal, now())}|${JSON.stringify(get(moveFeedback))}`;
+		if (!force && cache.has(key)) {
+			suggestions.set({ status: 'loaded', moves: cache.get(key), error: null });
+			return autopilot();
+		}
+		// Don't stack requests for the same answer (Groq's per-minute token limit).
+		if (inFlight === key) return;
+		inFlight = key;
+		suggestions.update((s) => ({ ...s, status: 'loading' }));
+		const body = suggestBody(track);
 		try {
 			const r = await request('POST', 'dj/suggest/', { json: body });
 			if (inFlight !== key) return; // a newer track started its own load
@@ -770,6 +811,9 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		player,
 		sync,
 		suggestions,
+		moveFeedback,
+		moveLoading,
+		refreshMove,
 		// lifecycle
 		start,
 		stop,

@@ -40,6 +40,14 @@ function fakeServer() {
 			s.row = { ...s.row, version: want + 1, state: structuredClone(json.state) };
 			return { status: 200, data: doc() };
 		}
+		if (path === 'dj/suggest/' && s.suggestMoves) {
+			s.suggestBodies = [...(s.suggestBodies ?? []), json];
+			const pick = (id) => ({ id, title: id, artists: ['A'], image: '', reason: '' });
+			const all = [{ move: 'hold', tracks: [pick('h1')] }, { move: 'lift', tracks: [pick('l1')] }];
+			const round = s.suggestBodies.length;
+			const moves = json.only_moves?.length ? json.only_moves.map((m) => ({ move: m, tracks: [pick(`${m[0]}${round}`)] })) : all;
+			return { status: 200, data: { moves } };
+		}
 		if (path === 'dj/primary') {
 			s.row.primary = { device: json.device, label: json.label, online: true };
 			return { status: 200, data: doc() };
@@ -180,6 +188,29 @@ describe('web DJ engine', () => {
 		stop();
 		a.setMode('driver');
 		expect(asks()).toBe(2); // Driver queues picks itself
+	});
+
+	test('a per-move refresh re-asks only that move, with feedback, and keeps the rest', async () => {
+		const server = fakeServer();
+		server.suggestMoves = true;
+		const storage = memoryStorage();
+		storage.set('dj_device_id', 'a');
+		const a = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0, locks: null });
+		await a.refresh();
+		const stop = a.watchSuggestions();
+		await new Promise((r) => setTimeout(r, 0));
+		const tracksOf = (m) => g(a.suggestions).moves.find((x) => x.move === m).tracks.map((t) => t.id);
+		expect(tracksOf('lift')).toEqual(['l1']);
+
+		await a.refreshMove('lift', 'Too slow');
+		const body = server.suggestBodies.at(-1);
+		expect(body.only_moves).toEqual(['lift']);
+		expect(body.feedback).toEqual({ lift: ['Too slow'] });
+		expect(body.exclude.map((r) => r.title)).toEqual(['l1']);
+		expect(tracksOf('lift')).toEqual(['l2']);
+		expect(tracksOf('hold')).toEqual(['h1']); // untouched
+		expect(g(a.moveFeedback)).toEqual({ lift: ['Too slow'] });
+		stop();
 	});
 
 	test('two tabs of one browser: only the tab holding the lock drives (review C1)', async () => {

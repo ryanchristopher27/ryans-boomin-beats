@@ -8,6 +8,11 @@
 	import { queuedKeys } from '$lib/dj/logic.js';
 	import PickRow from './PickRow.svelte';
 	import Bars from '../ui/Bars.svelte';
+	import Icon from '../Icon.svelte';
+	import { say } from '$lib/toast.js';
+
+	// F3c: why a move's picks missed; the last chip just asks for different ones.
+	const WHY = ['Too slow', 'Too intense', 'Heard recently', 'Wrong genre', 'Too obvious'];
 
 	// The handoff's move glyphs.
 	const GLYPH = { hold: '=', lift: '↑', drop: '↓', pivot: '←', curveball: '→', toward: '◆', drift: '~' };
@@ -17,7 +22,17 @@
 	/** @type {string | null} */
 	export let kind = null;
 
-	const { suggestions, doc, player } = dj;
+	const { suggestions, doc, player, moveFeedback, moveLoading } = dj;
+
+	/** The move whose "What's off?" chips are open. */
+	let asking = null;
+
+	async function refresh(move, note) {
+		asking = null;
+		const r = await dj.refreshMove(move, note);
+		if (r?.ok) say(note ? `Got it: fewer picks that are ${note.toLowerCase()}.` : 'Here are some different ones.');
+		else if (r) say("Couldn't get new picks for that move. Try again.");
+	}
 
 	$: s = $suggestions;
 	$: moves = kind ? s.moves.filter((m) => m.move === kind) : s.moves;
@@ -74,14 +89,43 @@
 							<span class="name">{moveLabel(move.move)}</span>
 						{/if}
 						<span class="summary">{MOVE_SUMMARY[move.move] ?? ''}</span>
+						<button
+							class="refresh"
+							class:spin={$moveLoading[move.move]}
+							on:click={() => (asking = asking === move.move ? null : move.move)}
+							disabled={$moveLoading[move.move]}
+							aria-expanded={asking === move.move}
+							aria-label="New {moveLabel(move.move)} picks"
+							title="New {moveLabel(move.move)} picks"
+						>
+							<Icon name="refresh" size={13} />
+						</button>
 					</h3>
-					<ul class="list">
-						{#each move.tracks as pick (pick.id)}
-							<li animate:flip={{ duration: 200 }}>
-								<PickRow {dj} {pick} compact queued={queued.has(pick.id)} />
-							</li>
+					{#if asking === move.move}
+						<div class="ask">
+							<p>What's off about these?</p>
+							<div class="why">
+								{#each WHY as w}<button class="chip why-chip" on:click={() => refresh(move.move, w)}>{w}</button>{/each}
+								<button class="chip why-chip new" on:click={() => refresh(move.move)}>Just show new ones</button>
+							</div>
+						</div>
+					{/if}
+					{#if $moveFeedback[move.move]?.length}
+						<p class="learned mono" title="Sent with every {moveLabel(move.move)} request this session">Avoiding: {$moveFeedback[move.move].join(', ').toLowerCase()}</p>
+					{/if}
+					{#if $moveLoading[move.move]}
+						{#each Array(move.tracks.length || 2) as _}
+							<div class="sk-row" aria-hidden="true"><span class="skeleton sk-art" /><span class="sk-lines"><span class="skeleton" style:width="60%" /><span class="skeleton" style:width="85%" /></span></div>
 						{/each}
-					</ul>
+					{:else}
+						<ul class="list">
+							{#each move.tracks as pick (pick.id)}
+								<li animate:flip={{ duration: 200 }}>
+									<PickRow {dj} {pick} compact queued={queued.has(pick.id)} />
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				</section>
 			{/each}
 		</div>
@@ -123,6 +167,72 @@
 		padding: 6px 8px 4px;
 		font-size: calc(13px * var(--text-scale, 1));
 		font-weight: 600;
+	}
+
+	.refresh {
+		flex: none;
+		width: 26px;
+		height: 26px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: none;
+		border-radius: 7px;
+		background: transparent;
+		color: rgba(243, 243, 245, 0.55);
+		cursor: pointer;
+		transition: background-color var(--transition), color var(--transition);
+	}
+
+	.refresh:hover:not(:disabled),
+	.refresh[aria-expanded='true'] {
+		background: rgba(255, 255, 255, 0.08);
+		color: var(--text-primary);
+	}
+
+	.refresh.spin :global(svg) {
+		animation: bbspin 0.7s linear infinite;
+	}
+
+	.ask {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 6px 8px 8px;
+		animation: bbin 0.18s var(--ease);
+	}
+
+	.ask p {
+		margin: 0;
+		font-size: calc(12px * var(--text-scale, 1));
+		color: rgba(243, 243, 245, 0.6);
+	}
+
+	.why {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 5px;
+	}
+
+	.why-chip {
+		height: 26px;
+		padding: 0 10px;
+		font-size: calc(12px * var(--text-scale, 1));
+	}
+
+	.why-chip.new {
+		border-color: var(--accent-tint-border);
+		color: var(--accent-tint-text);
+	}
+
+	.learned {
+		margin: 0;
+		padding: 0 8px 4px;
+		font-size: calc(11px * var(--text-scale, 1));
+		color: var(--accent-tint-text);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.glyph {

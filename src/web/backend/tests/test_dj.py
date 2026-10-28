@@ -205,5 +205,36 @@ class BuildPrompt(unittest.TestCase):
         self.assertIn('Give 4 songs', p)
 
 
+class RefreshOneMove(unittest.TestCase):
+    """F3c: a per-move refresh asks only for that move, says what was off,
+    and keeps the replaced picks out."""
+    np = TrackRef(title='Redbone', artist='Childish Gambino')
+
+    def test_only_the_refreshed_move_is_asked(self):
+        p = build_prompt(SuggestRequest(now_playing=self.np, only_moves=['lift']), [])
+        self.assertIn('"lift"', p)
+        self.assertNotIn('"hold"', p)
+        self.assertNotIn('"pivot"', p)
+
+    def test_unknown_moves_fall_back_to_all(self):
+        p = build_prompt(SuggestRequest(now_playing=self.np, only_moves=['nonsense']), [])
+        self.assertIn('"hold"', p)
+        self.assertIn('"lift"', p)
+
+    def test_feedback_and_replaced_picks_are_in_the_prompt(self):
+        body = SuggestRequest(now_playing=self.np, only_moves=['lift'], feedback={'lift': ['Too slow', 'Wrong genre'], 'hold': ['Too obvious']},
+                              exclude=[TrackRef(title='Pump It Louder', artist='Tiësto')])
+        p = build_prompt(body, [])
+        self.assertIn('"lift": the last picks were too slow, wrong genre', p)
+        self.assertNotIn('too obvious', p)  # feedback for a move not being asked is ignored
+        self.assertIn('Pump It Louder — Tiësto', p)
+
+    def test_feedback_is_bounded(self):
+        with self.assertRaises(Exception):
+            SuggestRequest(now_playing=self.np, feedback={'lift': ['x' * 61]})
+        with self.assertRaises(Exception):
+            SuggestRequest(now_playing=self.np, only_moves=['lift'] * 9)
+
+
 if __name__ == '__main__':
     unittest.main()
