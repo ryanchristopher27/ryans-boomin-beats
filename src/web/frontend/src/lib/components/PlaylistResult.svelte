@@ -143,7 +143,6 @@
 					saved={savedMap[song.spotify.id] || false}
 					onSaveToggle={handleSaveToggle}
 				/>
-				<hr class="divider" />
 			{/each}
 		</div>
 
@@ -265,11 +264,6 @@
 		margin-bottom: 16px;
 	}
 
-	.divider {
-		border: none;
-		border-top: 1px solid var(--border-subtle);
-		margin: 0;
-	}
 
 	.action-bar {
 		display: flex;

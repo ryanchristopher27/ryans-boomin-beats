@@ -300,9 +300,11 @@
         {#if !expandedModule || expandedModule === 'tracks'}
             <div class='col col-tracks' class:full={expandedModule === 'tracks'}>
                 <DashboardModule title="Top Tracks" fullHeight expanded={expandedModule === 'tracks'} onToggleExpand={() => toggleModule('tracks')}>
-                    {#each trackCards as card (card.spotify.id)}
+                    {#each trackCards as card, i (card.spotify.id)}
                         <SongCard
                             song={card}
+                            index={i + 1}
+                            compact
                             saved={savedMap[card.spotify.id] || false}
                             onSaveToggle={handleSaveToggle}
                             onExplore={exploreTrack}

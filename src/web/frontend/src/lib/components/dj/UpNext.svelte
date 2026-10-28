@@ -2,6 +2,7 @@
 	import { flip } from 'svelte/animate';
 	import SongSearch from '$lib/components/SongSearch.svelte';
 	import Icon from '../Icon.svelte';
+	import SongRow from '../ui/SongRow.svelte';
 	import { asSong, djContext, offerUndo } from './context.js';
 
 	/** @type {any} */
@@ -60,15 +61,21 @@
 		<ul class="list">
 			{#each q.sent as item (item.id)}
 				<li class="row" class:skipping={item.skipOnArrival} animate:flip={anim}>
-					<img src={item.image} alt="" width="36" height="36" />
-					<div class="text">
-						<p class="title">{item.title}{#if item.addedByDJ}<span class="dj" title="Added by the DJ"><Icon name="sparkle" size={12} label="Added by the DJ" /></span>{/if}</p>
-						<p class="artist">{item.skipOnArrival ? 'Skipping when it comes up' : item.artists.join(', ')}</p>
-					</div>
-					{#if !item.skipOnArrival}
-						<button class="icon-btn" on:click={() => dj.playLater(item)} aria-label="Play {item.title} later" title="Play later"><Icon name="later" size={16} /></button>
-						<button class="icon-btn" on:click={() => dj.removeSent(item.id)} aria-label="Remove {item.title}" title="Remove"><Icon name="x" size={16} /></button>
-					{/if}
+					<SongRow
+						compact
+						title={item.title}
+						artists={item.artists}
+						image={item.image}
+						dj={item.addedByDJ}
+						note={item.skipOnArrival ? 'Skipping when it comes up' : ''}
+					>
+						<svelte:fragment slot="actions">
+							{#if !item.skipOnArrival}
+								<button class="row-btn" on:click={() => dj.playLater(item)} aria-label="Play {item.title} later" title="Play later"><Icon name="later" size={15} /></button>
+								<button class="row-btn" on:click={() => dj.removeSent(item.id)} aria-label="Remove {item.title}" title="Remove"><Icon name="x" size={15} /></button>
+							{/if}
+						</svelte:fragment>
+					</SongRow>
 				</li>
 			{/each}
 		</ul>
@@ -89,17 +96,23 @@
 					on:drop|preventDefault={() => onDrop(i)}
 					on:dragend={() => (dragFrom = dropAt = null)}
 				>
-					<button class="icon-btn grip" data-row={item.id} on:keydown={(e) => onKey(e, i)} aria-label="Reorder {item.title}" aria-describedby="reorder-hint">
-						<Icon name="grip" size={14} />
-					</button>
-					<button class="select" class:selected={$selected?.id === item.trackID} on:click={() => selected.set(asSong(item))} aria-label="Show the profile of {item.title}">
-						<img src={item.image} alt="" width="36" height="36" />
-						<span class="text">
-							<span class="title">{item.title}{#if item.addedByDJ}<span class="dj" title="Added by the DJ"><Icon name="sparkle" size={12} label="Added by the DJ" /></span>{/if}</span>
-							<span class="artist">{item.artists.join(', ')}</span>
-						</span>
-					</button>
-					<button class="icon-btn" on:click={() => remove(item, i)} aria-label="Remove {item.title}" title="Remove"><Icon name="x" size={16} /></button>
+					<SongRow
+						compact
+						title={item.title}
+						artists={item.artists}
+						image={item.image}
+						dj={item.addedByDJ}
+						selected={$selected?.id === item.trackID}
+						onOpen={() => selected.set(asSong(item))}
+						openLabel="Show the profile of {item.title}"
+					>
+						<button slot="lead" class="row-btn grip" data-row={item.id} on:keydown={(e) => onKey(e, i)} aria-label="Reorder {item.title}" aria-describedby="reorder-hint">
+							<Icon name="grip" size={14} />
+						</button>
+						<svelte:fragment slot="actions">
+							<button class="row-btn" on:click={() => remove(item, i)} aria-label="Remove {item.title}" title="Remove"><Icon name="x" size={15} /></button>
+						</svelte:fragment>
+					</SongRow>
 				</li>
 			{/each}
 		</ul>
@@ -113,18 +126,21 @@
 
 <style>
 	.upnext {
-		padding: 8px 16px 12px;
+		padding: 8px 10px 12px;
 	}
 
 	.search {
-		padding-top: 10px;
+		padding: 10px 6px 0;
 	}
 
 	h3 {
-		margin: 12px 0 4px;
-		font-size: 13px;
-		font-weight: 600;
-		color: var(--text-muted);
+		margin: 12px 8px 4px;
+		font-family: var(--font-mono);
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--text-subtle);
 	}
 
 	.list {
@@ -134,16 +150,7 @@
 	}
 
 	.row {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 6px 4px;
-		border-radius: 6px;
-		border-top: 1px solid transparent;
-	}
-
-	.row + .row {
-		border-top-color: var(--border-subtle);
+		border-radius: var(--radius-row);
 	}
 
 	.row[draggable='true'] {
@@ -158,78 +165,10 @@
 		opacity: 0.55;
 	}
 
-	.skipping .title {
-		text-decoration: line-through;
-	}
-
 	.grip {
-		width: 22px;
-		color: var(--text-subtle);
-		cursor: grab;
-	}
-
-	img {
-		border-radius: 4px;
-		object-fit: cover;
-		background: var(--surface-2);
-		flex: none;
-	}
-
-	.text {
-		flex: 1;
-		min-width: 0;
-	}
-
-	.select {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 2px;
-		border: none;
-		background: none;
-		color: inherit;
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-		border-radius: 6px;
-	}
-
-	.select.selected {
-		background: rgba(var(--accent-rgb), 0.1);
-	}
-
-	.text {
-		display: flex;
-		flex-direction: column;
-	}
-
-	p {
-		margin: 0;
-	}
-
-	.title {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-size: 14px;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.artist {
-		font-size: 12px;
-		color: var(--text-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.dj {
-		color: var(--accent);
-		display: inline-flex;
+		width: 20px !important;
+		margin-right: -4px;
+		cursor: grab !important;
 	}
 
 	.hint.warn {
@@ -237,7 +176,7 @@
 	}
 
 	.hint {
-		margin: 8px 0 0;
+		margin: 8px 8px 0;
 		font-size: 12px;
 		line-height: 1.45;
 		color: var(--text-muted);

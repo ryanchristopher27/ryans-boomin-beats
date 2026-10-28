@@ -1,5 +1,6 @@
 <script>
 	import { PUBLIC_API_URL } from '$env/static/public';
+	import SongRow from './ui/SongRow.svelte';
 
 	export let onSelect = (song) => {};
 	export let placeholder = 'Search for a song...';
@@ -9,6 +10,7 @@
 	let open = false;
 	let activeIndex = -1;
 	let debounceTimer;
+	const listId = `songs-${Math.random().toString(36).slice(2)}`;
 
 	function onInput() {
 		clearTimeout(debounceTimer);
@@ -89,29 +91,24 @@
 		on:focus={onFocus}
 		on:blur={onBlur}
 		autocomplete="off"
+		role="combobox"
+		aria-expanded={open}
+		aria-controls={listId}
+		aria-activedescendant={open && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
 	/>
 
 	{#if open}
-		<ul class="suggestions">
+		<ul class="suggestions" id={listId} role="listbox">
 			{#each tracks as track, i}
-				<li>
-					<button
-						type="button"
-						class="suggestion"
-						class:active={i === activeIndex}
-						on:mousedown|preventDefault={() => choose(track)}
-						on:mouseenter={() => (activeIndex = i)}
-					>
-						{#if track.image}
-							<img class="suggestion-img" src={track.image} alt="" />
-						{:else}
-							<div class="suggestion-img placeholder"></div>
-						{/if}
-						<div class="suggestion-text">
-							<div class="suggestion-title">{track.title}</div>
-							<div class="suggestion-artist">{track.artists.join(', ')}</div>
-						</div>
-					</button>
+				<li
+					id="{listId}-{i}"
+					role="option"
+					aria-selected={i === activeIndex}
+					class:active={i === activeIndex}
+					on:mousedown|preventDefault={() => choose(track)}
+					on:mouseenter={() => (activeIndex = i)}
+				>
+					<SongRow title={track.title} artists={track.artists} image={track.image} />
 				</li>
 			{/each}
 		</ul>
@@ -164,65 +161,29 @@
 		margin: 0;
 		padding: 6px;
 		list-style: none;
-		background-color: var(--surface-1);
-		border: 1px solid var(--border-subtle);
-		border-radius: var(--radius);
-		box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+		background: var(--popover);
+		-webkit-backdrop-filter: blur(30px);
+		backdrop-filter: blur(30px);
+		border: 1px solid var(--border-control);
+		border-radius: 16px;
+		box-shadow: var(--shadow-pop);
 		z-index: 60;
 		max-height: 380px;
 		overflow-y: auto;
-		animation: bbin 0.15s ease;
+		animation: bbin 0.18s var(--ease);
 	}
 
-	.suggestion {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		width: 100%;
-		padding: 8px 10px;
-		background: none;
-		border: none;
-		border-radius: var(--radius-sm);
+	li {
+		border-radius: var(--radius-row);
 		cursor: pointer;
-		text-align: left;
-		transition: background-color var(--transition);
 	}
 
-	.suggestion.active {
-		background-color: var(--surface-2);
+	/* The row's own hover is replaced by the keyboard/mouse active option. */
+	li :global(.row:hover) {
+		background: none;
 	}
 
-	.suggestion-img {
-		width: 40px;
-		height: 40px;
-		border-radius: var(--radius-sm);
-		object-fit: cover;
-		flex-shrink: 0;
-	}
-
-	.suggestion-img.placeholder {
-		background-color: var(--surface-2);
-	}
-
-	.suggestion-text {
-		min-width: 0;
-		flex: 1;
-	}
-
-	.suggestion-title {
-		color: var(--text-primary);
-		font-size: 0.88rem;
-		font-weight: 600;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.suggestion-artist {
-		color: var(--text-muted);
-		font-size: 0.78rem;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+	li.active {
+		background: var(--hover);
 	}
 </style>

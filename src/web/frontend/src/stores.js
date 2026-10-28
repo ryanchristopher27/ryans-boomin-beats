@@ -66,7 +66,7 @@ export const playlistsPanelOpen = persisted('playlistsPanelOpen', false);
 export const userPlaylists = writable([]);
 // Holds songs queued to be added to a playlist via the panel's "pick a
 // playlist" mode (from a song's "+" or a bulk action).
-// Shape: { trackIds: string[], label: string, transient: boolean } | null
+/** @type {import('svelte/store').Writable<{ trackIds: string[], label: string, transient: boolean } | null>} */
 export const pendingAdd = writable(null);
 
 // Cached song profile + selections, keyed to the song so returning to the same
