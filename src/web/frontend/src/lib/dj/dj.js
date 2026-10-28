@@ -702,7 +702,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	 */
 	async function refreshMove(move, note) {
 		const track = get(player).state?.track;
-		if (!track || !hasLLM() || get(moveLoading)[move]) return;
+		if (!track || get(moveLoading)[move]) return;
 		if (note) moveFeedback.update((fb) => ({ ...fb, [move]: [...new Set([...(fb[move] ?? []), note])].slice(-6) }));
 		moveLoading.update((m) => ({ ...m, [move]: true }));
 		const shown = get(suggestions).moves.find((m) => m.move === move)?.tracks ?? [];
@@ -723,7 +723,6 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 
 	async function loadSuggestions(track = get(player).state?.track, force = false) {
 		if (!track) return;
-		if (!hasLLM()) return suggestions.set({ status: 'needsKey', moves: [], error: null });
 		const o = d().options;
 		// Settings that change the answer are part of the key.
 		const key = `${track.id}|${Math.floor(o.adventurousness * 3)}|${Math.floor((o.familiar ?? 0.5) * 3)}|${o.clean}|${L.goalKey(o.goal, now())}|${JSON.stringify(get(moveFeedback))}`;
@@ -746,7 +745,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 			}
 			if (cache.size > 20) cache.clear();
 			cache.set(key, moves);
-			suggestions.set({ status: 'loaded', moves, error: null });
+			suggestions.set({ status: 'loaded', moves, error: null, source: r.data?.source ?? 'ai' });
 			await autopilot();
 		} catch {
 			if (inFlight === key) suggestions.set({ status: 'failed', moves: [], error: "Couldn't reach the server." });

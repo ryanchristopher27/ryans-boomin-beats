@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from spotipy import SpotifyException
 
 from services import lastfm_client
-from services.llm_auth import LLMCredentials, get_llm_credentials
+from services.llm_auth import LLMCredentials, get_optional_llm_credentials
 from services.llm_client import LLMClient
 from services.claude_code import ClaudeCodeError
 from services.llm_json import LLMParseError, extract_json
@@ -435,10 +435,35 @@ def merge_recent(session: list[TrackRef], spotify: list[TrackRef], cap: int = 15
     return out[:cap]
 
 
+def similar_moves(similar: list[dict], now_playing: TrackRef, limit: int) -> dict[str, list[dict]]:
+    """Last.fm's similar tracks as the no-AI-key DJ's one move (F3e)."""
+    entries = [{'title': t['title'], 'artist': t['artist'],
+                'reason': f'Last.fm listeners who play {now_playing.title} also play this.'}
+               for t in similar if t.get('title') and t.get('artist')]
+    return {'similar': entries[:limit]} if entries else {}
+
+
+async def suggest_without_llm(body: SuggestRequest, tags: list[str], all_recent: list[TrackRef]):
+    """No AI key: songs Last.fm listeners play alongside now playing, checked on Deezer."""
+    similar = await lastfm_client.track_similar(body.now_playing.title, body.now_playing.artist)
+    refs = [body.now_playing, *all_recent, *body.upcoming, *body.avoid_tracks, *body.exclude]
+    exclude = {r.isrc for r in refs if r.isrc}
+    exclude_keys = {song_key(r.title, r.artist) for r in refs if r.title}
+    per_move = max(body.per_move, 3) * 2  # one move instead of five: show more of it
+    moves = similar_moves(similar, body.now_playing, per_move * 3)
+    result = await fill_moves(moves, exclude, per_move, body.avoid_artists, body.clean, exclude_keys=exclude_keys) if moves else []
+    return {
+        'moves': result,
+        'tags': tags,
+        'source': 'lastfm',
+        'error': None if result else "Last.fm has no similar songs for this one. Add an AI key for more picks.",
+    }
+
+
 @router.post('/dj/suggest/')
 async def suggest(
     body: SuggestRequest,
-    creds: LLMCredentials = Depends(get_llm_credentials),
+    creds: LLMCredentials | None = Depends(get_optional_llm_credentials),
     token: str = Depends(get_spotify_token),
 ):
     info, spotify_recent = await asyncio.gather(
@@ -449,6 +474,9 @@ async def suggest(
     # Everything played recently is excluded below, but only the head goes in the prompt.
     all_recent = merge_recent(body.recent, spotify_recent, cap=50)
     body.recent = all_recent[:15]
+
+    if creds is None:
+        return await suggest_without_llm(body, tags, all_recent)
 
     client = LLMClient(provider=creds.provider, api_key=creds.api_key)
     try:
@@ -476,5 +504,6 @@ async def suggest(
     return {
         'moves': result,
         'tags': tags,
+        'source': 'ai',
         'error': None if result else 'None of the suggestions could be found this time. Try again.',
     }

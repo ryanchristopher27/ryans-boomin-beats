@@ -75,7 +75,9 @@ export function detectRequests({ previous, current, appIDs, ignoring, insertions
 export function autopilotCandidates(moves, adventurousness, queued, lead = null) {
 	const a = adventurousness;
 	const order =
-		a < 0.34 ? ['hold', 'lift', 'drop'] : a < 0.67 ? ['hold', 'lift', 'pivot', 'drop', 'curveball'] : ['pivot', 'curveball', 'lift', 'hold'];
+		(a < 0.34 ? ['hold', 'lift', 'drop'] : a < 0.67 ? ['hold', 'lift', 'pivot', 'drop', 'curveball'] : ['pivot', 'curveball', 'lift', 'hold']).concat(
+			'similar' // the no-AI-key DJ's one move (F3e)
+		);
 	const tracksOf = (name) => moves.find((m) => m.move === name)?.tracks;
 	const lists = order.map(tracksOf).filter(Boolean);
 	const candidates = (lead ? tracksOf(lead) ?? [] : []).filter((p) => !queued.has(p.id));

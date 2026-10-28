@@ -15,7 +15,7 @@
 	const WHY = ['Too slow', 'Too intense', 'Heard recently', 'Wrong genre', 'Too obvious'];
 
 	// The handoff's move glyphs.
-	const GLYPH = { hold: '=', lift: '↑', drop: '↓', pivot: '←', curveball: '→', toward: '◆', drift: '~' };
+	const GLYPH = { hold: '=', lift: '↑', drop: '↓', pivot: '←', curveball: '→', toward: '◆', drift: '~', similar: '≈' };
 
 	/** @type {any} */
 	export let dj;
@@ -105,7 +105,8 @@
 						<div class="ask">
 							<p>What's off about these?</p>
 							<div class="why">
-								{#each WHY as w}<button class="chip why-chip" on:click={() => refresh(move.move, w)}>{w}</button>{/each}
+								<!-- Last.fm's picks can't take notes; only an AI round can. -->
+								{#each move.move === 'similar' ? [] : WHY as w}<button class="chip why-chip" on:click={() => refresh(move.move, w)}>{w}</button>{/each}
 								<button class="chip why-chip new" on:click={() => refresh(move.move)}>Just show new ones</button>
 							</div>
 						</div>

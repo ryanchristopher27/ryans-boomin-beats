@@ -123,5 +123,6 @@ export const MOVE_SUMMARY = {
 	pivot: 'Change genre, keep a thread',
 	curveball: 'Something unexpected',
 	toward: 'Next step toward your goal',
-	drift: 'Somewhere new'
+	drift: 'Somewhere new',
+	similar: 'Like this one'
 };

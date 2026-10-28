@@ -1,6 +1,9 @@
 <script>
 	import Icon from '../Icon.svelte';
 	import Goal from './Goal.svelte';
+	import { llmConfig } from '../../../stores.js';
+	import { PROVIDERS } from '$lib/llm.js';
+	import { openSettings } from '$lib/settings.js';
 
 	/** @type {any} */
 	export let dj;
@@ -16,6 +19,8 @@
 	];
 
 	$: o = $doc.options;
+	// Where picks come from (F3e): the connected AI, or Last.fm without one.
+	$: aiName = PROVIDERS.find((p) => p.id === $llmConfig.provider)?.label ?? $llmConfig.provider;
 	$: mode = MODES.find((m) => m.id === o.mode) ?? MODES[1];
 	$: avoiding = o.avoidTracks.length + o.avoidArtists.length;
 	// The slider moves freely; the DJ re-asks only when it's released.
@@ -77,6 +82,16 @@
 	{#if withGoal}
 		<div class="docked"><Goal {dj} /></div>
 	{/if}
+
+	<div class="source" role="status">
+		<span class="dot" class:on={$llmConfig.connected} />
+		{#if $llmConfig.connected}
+			<span>Picks from {aiName}.</span>
+		{:else}
+			<span>No AI key: picks are Last.fm similar tracks.</span>
+			<button class="link" on:click={() => openSettings('ai')}>Add key</button>
+		{/if}
+	</div>
 
 	{#if avoiding}
 		<details class="avoid">
@@ -213,6 +228,44 @@
 
 	.switch:checked::after {
 		transform: translateX(14px);
+	}
+
+	.source {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 10px 12px;
+		border-radius: 10px;
+		background: rgba(0, 0, 0, 0.3);
+		font-size: calc(12px * var(--text-scale, 1));
+		line-height: 1.4;
+		color: rgba(243, 243, 245, 0.6);
+	}
+
+	.source span:not(.dot) {
+		flex: 1;
+	}
+
+	.dot {
+		flex: none;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: rgba(243, 243, 245, 0.3);
+	}
+
+	.dot.on {
+		background: var(--success);
+	}
+
+	.link {
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--accent);
+		font: inherit;
+		font-weight: 500;
+		cursor: pointer;
 	}
 
 	.avoid summary {

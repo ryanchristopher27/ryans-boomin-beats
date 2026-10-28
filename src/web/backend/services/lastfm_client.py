@@ -46,6 +46,29 @@ async def track_search(query: str, limit: int = 15) -> list[dict]:
     return out
 
 
+async def track_similar(title: str, artist: str, limit: int = 30) -> list[dict]:
+    """[{title, artist, match}] that Last.fm listeners play alongside this track,
+    best match first, or [] on any failure. The DJ's no-AI-key picks (F3e)."""
+    if not LASTFM_API_KEY:
+        return []
+    params = {'method': 'track.getSimilar', 'artist': artist, 'track': title, 'api_key': LASTFM_API_KEY,
+              'format': 'json', 'autocorrect': 1, 'limit': limit}
+    try:
+        async with httpx.AsyncClient() as client:
+            data = (await client.get(BASE_URL, params=params, timeout=4.0)).json()
+        tracks = data['similartracks']['track']
+    except Exception as e:
+        log.info('[lastfm] similar failed: %s', e)
+        return []
+    out = []
+    for t in tracks if isinstance(tracks, list) else [tracks]:
+        try:
+            out.append({'title': t['name'], 'artist': t['artist']['name'], 'match': float(t.get('match') or 0)})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
 async def track_info(title: str, artist: str) -> dict:
     params = {
         'method': 'track.getInfo',
