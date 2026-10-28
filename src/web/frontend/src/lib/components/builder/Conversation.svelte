@@ -14,6 +14,7 @@
 	export let error = '';
 	export let onSend = (text) => {};
 	export let onReset = () => {};
+	/** @type {null | (() => void)} */
 	export let onOpenSettings = null;
 
 	const STEPS = ['Picking songs', 'Checking each one is on Spotify'];
