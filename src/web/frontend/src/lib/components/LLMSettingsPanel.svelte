@@ -13,9 +13,9 @@
 
 	// 'Your Claude Code' uses the CLI login on this Mac; there's no key to paste.
 	const PROVIDERS = [
-		{ id: 'claude', label: 'Claude', note: 'Anthropic API key', placeholder: 'sk-ant-...' },
-		{ id: 'openai', label: 'OpenAI', note: 'OpenAI API key', placeholder: 'sk-...' },
-		{ id: 'groq', label: 'Groq', note: 'Free tier, faster, lighter picks', placeholder: 'gsk_...' },
+		{ id: 'claude', label: 'Claude', note: 'Anthropic API key', placeholder: 'sk-ant-…' },
+		{ id: 'openai', label: 'OpenAI', note: 'OpenAI API key', placeholder: 'sk-…' },
+		{ id: 'groq', label: 'Groq', note: 'Free tier, faster, lighter picks', placeholder: 'gsk_…' },
 		{ id: 'claude-code', label: 'Your Claude Code', note: 'Runs on this Mac. No key needed. Works while the backend runs locally.' }
 	];
 	$: chosen = PROVIDERS.find((p) => p.id === provider) ?? PROVIDERS[0];

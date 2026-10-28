@@ -26,7 +26,7 @@
 	/* --- Text --- */
 	--text-primary: #f3f3f5;
 	--text-muted: rgba(243, 243, 245, 0.6);
-	--text-subtle: rgba(243, 243, 245, 0.45);
+	--text-subtle: rgba(243, 243, 245, 0.5); /* 4.5:1 on the page and on glass */
 
 	/* --- Accent --- */
 	--accent: #5ec9ff;

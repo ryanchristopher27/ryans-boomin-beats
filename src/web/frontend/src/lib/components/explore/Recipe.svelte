@@ -264,7 +264,7 @@
 		padding: 28px 16px;
 		text-align: center;
 		font-size: 13px;
-		color: rgba(243, 243, 245, 0.35);
+		color: var(--text-subtle);
 	}
 
 	.skel-row {

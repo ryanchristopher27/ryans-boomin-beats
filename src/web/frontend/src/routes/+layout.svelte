@@ -29,9 +29,10 @@
 </script>
 
 <div class="app" class:panel-open={$playlistsPanelOpen}>
+	<a class="skip" href="#main">Skip to content</a>
 	<Header />
 
-	<main>
+	<main id="main" tabindex="-1">
 		<slot />
 	</main>
 
@@ -54,10 +55,32 @@
 		flex-direction: column;
 		padding: var(--primary-spacing);
 		background-color: var(--surface-0);
-		transition: margin-right 0.2s var(--ease);
 	}
 
-	/* Make room for the docked Playlists panel. */
+	main:focus {
+		outline: none;
+	}
+
+	/* Hidden until a keyboard user tabs to it. */
+	.skip {
+		position: fixed;
+		left: 16px;
+		top: 12px;
+		z-index: 100;
+		padding: 8px 14px;
+		border-radius: 9px;
+		background: var(--accent);
+		color: var(--accent-on);
+		font-size: 13px;
+		font-weight: 600;
+		transform: translateY(-200%);
+	}
+
+	.skip:focus {
+		transform: none;
+	}
+
+	/* Make room for the docked Playlists panel (it animates in; the page just reflows once). */
 	.app.panel-open main {
 		margin-right: var(--panel-width);
 	}

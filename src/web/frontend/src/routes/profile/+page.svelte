@@ -348,7 +348,7 @@
 									{#each genreBars as g, i}
 										<div class="gbar">
 											<div class="gbar-head"><span>{g.label}</span><span class="mono">{g.pct}%</span></div>
-											<div class="gtrack"><div class="gfill" style:width="{g.w}%" style:opacity={1 - i * 0.08} /></div>
+											<div class="gtrack"><div class="gfill" style:transform="scaleX({g.w / 100})" style:opacity={1 - i * 0.08} /></div>
 										</div>
 									{/each}
 								</div>
@@ -776,7 +776,8 @@
 		height: 100%;
 		border-radius: 6px;
 		background: var(--accent);
-		transition: width 0.25s var(--ease);
+		transform-origin: left;
+		transition: transform 0.25s var(--ease);
 	}
 
 	.stats {

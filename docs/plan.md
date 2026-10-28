@@ -3580,3 +3580,33 @@ zoom on.
 **Decision:** no `zoom`. Part 1 uses the handoff's sizes at 100%. The 90% default text size
 (the handoff's "Text size" setting) is now part of F1. It needs a mechanism that leaves the DJ
 grid unzoomed, such as a root font-size scale with rem-based type.
+
+### Part 1 result (2026-10-27)
+
+R0–R6 are on `dev`, in commits 4b3e1ae..HEAD. Each page was checked in a headless browser with
+mocked backend data at 1280 and 924 wide, then in the signed-in browser with real data.
+
+The audit found and fixed these:
+- **Layout animations:** the dock's margin and the genre bars' width animated layout
+  properties. Now the page reflows once and the bars use a transform. The detector is clean.
+- **Contrast:** `--text-subtle` went from 0.45 to 0.5 for 4.5:1, along with every hard-coded
+  35–45% text colour.
+- **Guidelines:** curly quotes, real ellipses, `theme-color`, and a skip link.
+- **Explore:** a restored song with no Path gets a crumb.
+
+Bugs found on the way:
+- The Playlists panel's "New playlist" sent Deezer keys to Spotify without resolving them.
+- Profile's expand never re-rendered.
+- TrendChart's edge labels clipped.
+
+Not built, and why:
+- **Explore Play button:** no play-this-song endpoint.
+- **Builder Swap:** the backend never returns unmatched songs.
+- **Builder playlist name:** the backend doesn't name playlists, so the name comes from the
+  prompt.
+- **Profile's "Start an evening DJ set":** opens the DJ; night presets are F3.
+- **Explore results:** the per-song heart and Add selected are gone. The Builder keeps the
+  heart.
+- **Board and Focus:** kept. They aren't in the handoff and nothing replaces them.
+
+Type-check errors dropped from 25 to 3. The 3 left are pre-existing, in `spotifyAuth.js`.

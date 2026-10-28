@@ -121,7 +121,7 @@
 					<SongRow title={track.title} artists={track.artists} image={track.image} />
 				</li>
 			{/each}
-			{#if !tracks.length}<li class="none" role="presentation">No songs match "{searched}". Try an artist name.</li>{/if}
+			{#if !tracks.length}<li class="none" role="presentation">No songs match “{searched}”. Try an artist name.</li>{/if}
 		</ul>
 	{/if}
 </div>

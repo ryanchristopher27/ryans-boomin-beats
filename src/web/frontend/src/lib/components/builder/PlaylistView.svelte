@@ -92,7 +92,7 @@
 			<div class="meta">
 				<p class="eyebrow">Playlist · made with {aiLabel}</p>
 				<h1>{building ? 'Building…' : name}</h1>
-				<p class="sub">{building ? 'Picking songs…' : `${playlistMeta(songs)} · made for "${prompt}"`}</p>
+				<p class="sub">{building ? 'Picking songs…' : `${playlistMeta(songs)} · made for “${prompt}”`}</p>
 				<div class="actions">
 					<button class="btn white pill" on:click={() => (naming = true)} disabled={!ids.length || building}>Save to Spotify</button>
 					<button class="btn pill ghost" on:click={queueAll} disabled={!ids.length || building}>Add all to queue</button>
@@ -285,7 +285,7 @@
 	.hint {
 		margin: 16px 0 0;
 		font-size: 12px;
-		color: rgba(243, 243, 245, 0.35);
+		color: var(--text-subtle);
 	}
 
 	.skel-row {

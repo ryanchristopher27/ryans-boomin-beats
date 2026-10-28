@@ -47,6 +47,8 @@
 	$: song = $selectedSong;
 	let songHue = 235;
 	$: if (song) coverHue(song.image, song.title).then((h) => (songHue = h));
+	// A song restored from before the Path existed still gets its crumb.
+	$: crumbs = $exploreTrail.length ? $exploreTrail : song ? [song] : [];
 	$: profile = $exploreSession.profile;
 	$: aspects = parseAnalysis(profile?.analysis);
 	$: picked = [
@@ -166,7 +168,7 @@
 			<button class="square" on:click={newSearch} aria-label="Back to Explore"><Icon name="back" size={16} /></button>
 			<span class="path-label mono">Path</span>
 			<ol class="trail">
-				{#each $exploreTrail as t, i (t.id)}
+				{#each crumbs as t, i (t.id)}
 					<li>
 						{#if i > 0}<span class="sep" aria-hidden="true">→</span>{/if}
 						<button class="crumb" class:current={t.id === song.id} aria-current={t.id === song.id ? 'step' : undefined} on:click={() => show(t)}>

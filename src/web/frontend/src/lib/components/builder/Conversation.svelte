@@ -180,7 +180,7 @@
 		gap: 10px;
 		margin: 0;
 		font-size: 13px;
-		color: rgba(243, 243, 245, 0.35);
+		color: var(--text-subtle);
 	}
 
 	.step.done {
