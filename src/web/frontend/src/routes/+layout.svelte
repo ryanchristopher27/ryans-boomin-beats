@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import Header from './Header.svelte';
+	import TabBar from '$lib/components/TabBar.svelte';
 	import PlaylistsPanel from '$lib/components/PlaylistsPanel.svelte';
 	import MiniPlayer from '$lib/components/dj/MiniPlayer.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
@@ -14,6 +15,7 @@
 	import { getDJ } from '$lib/dj/instance.js';
 	import { access_token, playlistsPanelOpen } from '../stores.js';
 	import { playbackMotion, textScale } from '$lib/settings.js';
+	import { bpFor } from '$lib/breakpoint.js';
 	import './styles.css';
 
 	// Load the Spotify session app-wide so account actions work on every page,
@@ -38,8 +40,17 @@
 	// General settings apply app-wide: every font-size multiplies --text-scale,
 	// and data-motion pauses the playback animations (styles.css).
 	$: if (browser) document.documentElement.style.setProperty('--text-scale', String($textScale));
+	// Layout breakpoints on effective width (lib/breakpoint.js); data-narrow = below desktop.
+	let innerWidth = 0;
+	$: if (browser && innerWidth) {
+		const bp = bpFor(innerWidth, $textScale);
+		document.documentElement.dataset.bp = bp;
+		document.documentElement.toggleAttribute('data-narrow', bp !== 'desktop');
+	}
 	$: if (browser) document.documentElement.dataset.motion = $playbackMotion ? 'on' : 'off';
 </script>
+
+<svelte:window bind:innerWidth />
 
 <div class="app" class:panel-open={$playlistsPanelOpen}>
 	<a class="skip" href="#main">Skip to content</a>
@@ -50,6 +61,7 @@
 	</main>
 
 	<PlaylistsPanel />
+	<TabBar />
 	{#if browser}<MiniPlayer />{/if}
 	<CommandPalette />
 	<PreviewPill />
@@ -101,9 +113,8 @@
 		margin-right: var(--panel-width);
 	}
 
-	@media (max-width: 759px) {
-		main {
-			padding: 16px;
-		}
+	/* Room for the phone tab bar. */
+	.app {
+		padding-bottom: var(--tab-h);
 	}
 </style>

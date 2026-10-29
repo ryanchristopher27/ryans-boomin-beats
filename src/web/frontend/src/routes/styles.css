@@ -61,8 +61,15 @@
 
 	--color-text: var(--text-primary);
 	--primary-spacing: 28px;
+	--tab-h: 0px; /* the phone tab bar's height; set below */
 	font-family: var(--font-body);
 	color: var(--color-text);
+}
+
+/* Phone (effective width < 760, see lib/breakpoint.js): page padding and the bottom tab bar. */
+:root[data-bp='phone'] {
+	--primary-spacing: 16px;
+	--tab-h: calc(52px + env(safe-area-inset-bottom, 0px));
 }
 
 * {

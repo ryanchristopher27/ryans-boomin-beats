@@ -5,13 +5,8 @@
 	import { settingsTab } from '$lib/settings.js';
 	import Icon from '$lib/components/Icon.svelte';
 	import { getDJ } from '$lib/dj/instance.js';
+	import { navLinks } from '$lib/nav.js';
 
-	const navLinks = [
-		{ label: 'Explore', href: '/', page: 'Explore', icon: 'compass' },
-		{ label: 'Builder', href: '/playlist-builder/', page: 'Playlist Builder', icon: 'wand' },
-		{ label: 'DJ', href: '/dj/', page: 'DJ', icon: 'disc' },
-		{ label: 'Profile', href: '/profile/', page: 'Profile', icon: 'user' }
-	];
 
 	// The DJ tab shows a dot while music plays anywhere in the app.
 	const player = getDJ()?.player;
@@ -36,15 +31,16 @@
 
 	<div class="actions">
 		<button class="btn small" on:click={() => ($paletteOpen = true)} aria-label="Search (⌘K)" aria-keyshortcuts="Control+K Meta+K">
-			<Icon name="search" size={15} /> Search <kbd class="mono">⌘K</kbd>
+			<Icon name="search" size={15} /> <span class="label">Search</span> <kbd class="mono">⌘K</kbd>
 		</button>
 		<button
 			class="btn small"
 			class:on={$playlistsPanelOpen}
 			aria-pressed={$playlistsPanelOpen}
+			aria-label="Playlists"
 			on:click={() => ($playlistsPanelOpen = !$playlistsPanelOpen)}
 		>
-			<Icon name="playlist" size={15} /> Playlists
+			<Icon name="playlist" size={15} /> <span class="label">Playlists</span>
 		</button>
 		<button
 			class="gear"
@@ -209,16 +205,23 @@
 	}
 
 	/* Below desktop the brand and actions shrink to their content. */
-	@media (max-width: 1179px) {
-		.brand,
-		.actions {
-			width: auto;
-		}
-		.actions kbd {
-			display: none;
-		}
-		.brand span {
-			display: none;
-		}
+	:global([data-narrow]) .brand,
+	:global([data-narrow]) .actions {
+		width: auto;
+	}
+	:global([data-narrow]) .brand span,
+	:global([data-narrow]) .actions kbd {
+		display: none;
+	}
+
+	/* Phone: the tab bar replaces the nav; Search and Playlists shrink to their icons. */
+	:global([data-bp='phone']) nav {
+		display: none;
+	}
+	:global([data-bp='phone']) .brand {
+		margin-right: auto;
+	}
+	:global([data-bp='phone']) .label {
+		display: none;
 	}
 </style>

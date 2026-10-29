@@ -11,10 +11,16 @@
 	/** Desktop only (12 columns): rows stretch so the grid fills the window
 	    and each widget scrolls on its own (R6, the handoff's no-page-scroll). */
 	export let fill = false;
+	/** The widget that takes a full-width row first when the grid goes below desktop. */
+	export let lead = null;
 
 	const CELL = 48;
 	const MIN_CELL = 32;
 	const BOTTOM_GAP = 20;
+	/** Tablet and phone panels cap at this many rows (336px) and scroll inside. */
+	const NARROW_MAX_H = 7;
+	/** Now playing needs a little more on a phone to stack its art above the title. */
+	const PHONE_ART_H = 8;
 
 	let el;
 	/** @type {any} */
@@ -32,25 +38,31 @@
 				animate: !reduced,
 				staticGrid: !editing,
 				handle: '.widget-handle',
-				// The brief's breakpoints (12 cols at a 1280px window, 8 from 1024, 6
-				// below), measured on the grid itself (a 1280px window leaves ~1245px
-				// after padding and the scrollbar) so the Playlists panel counts.
+				// The brief's breakpoints are applied below, once the widgets are placed at
+				// 12 columns: given here, gridstack would clamp them into a narrow
+				// window's columns before `stack` could lay them out.
 				// Below 720px a 3-column widget would be under 360px, so widgets
-				// stack in one column instead. A breakpoint's `w` is inclusive.
-				// columnMax is required: with several breakpoints gridstack doesn't
-				// default it, and growing past the widest one then never returned to 12.
-				columnOpts: {
-					columnMax: COLUMNS,
-					layout: 'list',
-					breakpoints: [
-						{ w: 719, c: 1 },
-						{ w: 959, c: 6 },
-						{ w: 1199, c: 8 }
-					]
-				}
+				// stack in one column instead.
 			},
 			el
 		);
+		// 12 columns from 1200px, 8 from 960, 6 from 720, else 1, measured on the grid
+		// itself (a 1280px window leaves ~1245px after padding and the scrollbar) so
+		// the Playlists panel counts. Widest first: gridstack matches in order. A
+		// breakpoint's `w` is inclusive. columnMax is required: with several
+		// breakpoints gridstack doesn't default it, and growing past the widest one
+		// then never returned to 12.
+		grid.updateOptions({
+			columnOpts: {
+				columnMax: COLUMNS,
+				layout: 'list',
+				breakpoints: [
+					{ w: 1199, c: 8 },
+					{ w: 959, c: 6, layout: stack },
+					{ w: 719, c: 1, layout: stack }
+				]
+			}
+		});
 		grid.on('change added removed', fit);
 		fit();
 		addEventListener('resize', onResize);
@@ -61,6 +73,32 @@
 		clearTimeout(resizeTimer);
 		grid?.destroy(false);
 	});
+
+	/**
+	 * Tablet (6 columns) and phone (1): the page scrolls instead of the grid. Keeps
+	 * the items' order; `lead` goes first at full width, Next moves is full width,
+	 * everything else takes half a row (a whole one on a phone). Heights are capped.
+	 */
+	function stack(column, _prev, _placed, nodes) {
+		const order = new Map(items.map((it, i) => [it.id, i]));
+		const rank = (n) => (n.id === lead ? -1 : order.get(n.id) ?? 0);
+		let x = 0;
+		let y = 0;
+		let rowH = 0;
+		for (const n of [...nodes].sort((a, b) => rank(a) - rank(b))) {
+			n.w = column === 1 || n.id === lead || n.id === 'moves' ? column : column / 2;
+			n.h = n.id === 'nowPlaying' && column === 1 ? PHONE_ART_H : Math.min(n.h, NARROW_MAX_H);
+			if (x + n.w > column) {
+				y += rowH;
+				x = rowH = 0;
+			}
+			n.x = x;
+			n.y = y;
+			x += n.w;
+			rowH = Math.max(rowH, n.h);
+			_placed.push(n);
+		}
+	}
 
 	/** Stretch the rows to the window's height on desktop; fixed 48px otherwise. */
 	function fit() {

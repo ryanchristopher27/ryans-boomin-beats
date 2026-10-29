@@ -329,15 +329,13 @@
 		border-radius: 4px;
 	}
 
-	@media (max-width: 759px) {
-		.hero,
-		.list-wrap {
-			padding-left: 16px;
-			padding-right: 16px;
-		}
-		.mosaic {
-			width: 160px;
-			height: 160px;
-		}
+	:global([data-bp='phone']) .hero,
+	:global([data-bp='phone']) .list-wrap {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+	:global([data-bp='phone']) .mosaic {
+		width: 160px;
+		height: 160px;
 	}
 </style>

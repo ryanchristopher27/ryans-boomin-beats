@@ -61,7 +61,7 @@
 		left: 0;
 		right: 0;
 		margin: 0 auto;
-		bottom: calc(var(--mini-h, 0px) + 72px);
+		bottom: calc(var(--mini-h, 0px) + var(--tab-h, 0px) + 72px);
 		z-index: 60;
 		display: flex;
 		align-items: center;

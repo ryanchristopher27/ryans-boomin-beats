@@ -188,18 +188,16 @@
 		min-height: 0;
 	}
 
-	@media (max-width: 1179px) {
-		.active {
-			grid-template-columns: minmax(0, 1fr);
-			height: auto;
-		}
-		.chat {
-			order: 1;
-			height: 520px;
-			border-top: 1px solid var(--border-subtle);
-		}
-		.chat :global(.conv) {
-			border-right: none;
-		}
+	:global([data-narrow]) .active {
+		grid-template-columns: minmax(0, 1fr);
+		height: auto;
+	}
+	:global([data-narrow]) .chat {
+		order: 1;
+		height: 520px;
+		border-top: 1px solid var(--border-subtle);
+	}
+	:global([data-narrow]) .chat :global(.conv) {
+		border-right: none;
 	}
 </style>
