@@ -14,6 +14,7 @@ import time
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 from spotipy import SpotifyException
 
 from config import SYNC_ENABLED
@@ -102,7 +103,8 @@ def normalize_playback(p: dict | None) -> dict:
         # guest requests to DJ5's insertion rule; the client turns that rule off.
         'smart_shuffle': p.get('smart_shuffle', False),
         'repeat': p.get('repeat_state', 'off'),
-        'device': {'name': device.get('name', ''), 'type': device.get('type', '')},
+        # volume lets a client lower Spotify for a preview and restore it after (F2).
+        'device': {'name': device.get('name', ''), 'type': device.get('type', ''), 'volume': device.get('volume_percent')},
         'context_uri': (p.get('context') or {}).get('uri'),
         # Podcasts/ads have no track item; the client shows a neutral state.
         'track': _track(p.get('item')),
@@ -227,3 +229,25 @@ def next_track(token: str = Depends(get_spotify_token)):
 @router.post('/player/previous/')
 def previous_track(token: str = Depends(get_spotify_token)):
     return _command(token, 'previous')
+
+
+class VolumeBody(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    percent: int = Field(..., ge=0, le=100)
+
+
+@router.post('/player/volume/')
+def set_volume(body: VolumeBody, token: str = Depends(get_spotify_token)):
+    """Set the active device's volume (F2: lower Spotify during a preview, then restore)."""
+    remaining = _player_locked_until - time.monotonic()
+    if remaining > 0:
+        return _rate_limited(remaining)
+    _state_cache.pop(hashlib.sha256(token.encode()).hexdigest(), None)
+    try:
+        user_client(token).volume(body.percent)
+    except SpotifyException as e:
+        log.info('[player] volume failed: %s', e)
+        if e.http_status == 429:
+            return _rate_limited(_lock_player(e))
+        return player_error(e)
+    return {'ok': True}

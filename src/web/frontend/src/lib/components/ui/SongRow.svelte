@@ -2,8 +2,10 @@
 	// The one song row (R2, docs/design/redesign-2026-10-27/SongRow.dc.html):
 	// rank · cover · title (+ ✦ when the DJ picked it) · artist · reason ·
 	// duration · Swap · +/✓. Lists add their own buttons through the `actions`
-	// slot. The preview badge on the cover arrives with F2.
+	// slot. Give it a `previewSong` and the cover previews that song (F2).
 	import Icon from '../Icon.svelte';
+	import Bars from './Bars.svelte';
+	import { preview } from '$lib/preview.js';
 	import { nameHue } from '$lib/dj/ambience.js';
 	import { compactRows } from '$lib/settings.js';
 
@@ -40,8 +42,12 @@
 	export let onSwap = null;
 	/** A Spotify track id: makes the row draggable onto a playlist. */
 	export let dragId = '';
+	/** The song to preview when the cover is clicked. Off when null.
+	 * @type {null | {id: string, title: string, artists: string[], image?: string, isrc?: string | null}} */
+	export let previewSong = null;
 
 	// Compact rows (Settings) tighten every list; a list can also ask for it.
+	$: previewing = !!previewSong && $preview?.song.id === previewSong.id;
 	$: dense = compact || $compactRows;
 	$: artistText = Array.isArray(artists) ? artists.join(', ') : artists;
 	// A deliberate placeholder when a song has no art: a gradient from the
@@ -64,16 +70,33 @@
 	}
 </script>
 
-<div class="row" class:compact={dense} class:selected class:openable={!!onOpen} title={reason || undefined} draggable={dragId ? 'true' : undefined} on:dragstart={dragId ? onDragStart : undefined}>
+<div class="row" class:compact={dense} class:selected class:previewing class:openable={!!onOpen} title={reason || undefined} draggable={dragId ? 'true' : undefined} on:dragstart={dragId ? onDragStart : undefined}>
 	<slot name="lead" />
 	{#if index != null}<span class="rank mono">{index}</span>{/if}
+	{#if previewSong}
+		<button class="cover-btn" class:on={previewing} on:mousedown|preventDefault|stopPropagation
+			on:click|stopPropagation={() => previewSong && preview.start(previewSong)} aria-label="{previewing ? 'Stop preview of' : 'Preview'} {title}" aria-pressed={previewing} title={previewing ? 'Stop preview' : 'Preview 15 seconds'}>
+			{#if image}
+				<img class="cover" src={image} alt="" loading="lazy" draggable="false" />
+			{:else}
+				<span class="cover blank mono" style:--h={hue} aria-hidden="true">{initials}</span>
+			{/if}
+			{#if previewing}
+				<span class="bars"><Bars count={4} height={14} color="#fff" /></span>
+			{:else}
+				<span class="badge" aria-hidden="true"><Icon name="play" size={8} filled /></span>
+			{/if}
+		</button>
+	{/if}
 	<!-- A button only when the row opens something; otherwise plain content. -->
 	<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
 	<svelte:element this={onOpen ? 'button' : 'div'} class="main" on:click={onOpen} aria-label={onOpen ? openLabel || undefined : undefined}>
-		{#if image}
-			<img class="cover" src={image} alt="" loading="lazy" draggable="false" />
-		{:else}
-			<span class="cover blank mono" style:--h={hue} aria-hidden="true">{initials}</span>
+		{#if !previewSong}
+			{#if image}
+				<img class="cover" src={image} alt="" loading="lazy" draggable="false" />
+			{:else}
+				<span class="cover blank mono" style:--h={hue} aria-hidden="true">{initials}</span>
+			{/if}
 		{/if}
 		<span class="text">
 			<span class="title-line">
@@ -128,6 +151,14 @@
 		background: rgba(var(--accent-rgb), 0.08);
 	}
 
+	.row.previewing {
+		background: rgba(var(--accent-rgb), 0.08);
+	}
+
+	.row.previewing .title {
+		color: var(--accent-tint-text);
+	}
+
 	.row[draggable='true'] {
 		cursor: grab;
 	}
@@ -180,6 +211,50 @@
 	.compact .cover {
 		width: 34px;
 		height: 34px;
+	}
+
+	/* The cover as the preview button: a play badge in its corner; while playing, an accent ring and white bars. */
+	.cover-btn {
+		position: relative;
+		flex: none;
+		padding: 0;
+		border: none;
+		border-radius: 7px;
+		background: none;
+		cursor: pointer;
+		transition: box-shadow var(--transition);
+	}
+
+	.cover-btn:hover .cover {
+		filter: brightness(0.85);
+	}
+
+	.cover-btn.on {
+		box-shadow: 0 0 0 2px var(--accent);
+	}
+
+	.badge {
+		position: absolute;
+		right: -3px;
+		bottom: -3px;
+		width: 16px;
+		height: 16px;
+		display: grid;
+		place-items: center;
+		padding-left: 1px;
+		border-radius: 50%;
+		background: var(--accent);
+		color: var(--accent-on);
+		box-shadow: 0 0 0 2px var(--surface-0);
+	}
+
+	.bars {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		border-radius: 7px;
+		background: rgba(0, 0, 0, 0.5);
 	}
 
 	.cover.blank {

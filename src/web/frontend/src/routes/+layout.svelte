@@ -4,6 +4,7 @@
 	import Header from './Header.svelte';
 	import PlaylistsPanel from '$lib/components/PlaylistsPanel.svelte';
 	import MiniPlayer from '$lib/components/dj/MiniPlayer.svelte';
+	import PreviewPill from '$lib/components/PreviewPill.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import Onboarding from '$lib/components/settings/Onboarding.svelte';
 	import { onboarding } from '$lib/onboarding.js';
@@ -49,6 +50,7 @@
 
 	<PlaylistsPanel />
 	{#if browser}<MiniPlayer />{/if}
+	<PreviewPill />
 	<Toast />
 	{#if browser && $onboarding}<Onboarding />{/if}
 </div>

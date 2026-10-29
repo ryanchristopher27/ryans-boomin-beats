@@ -139,6 +139,7 @@
 						showReason={false}
 						duration={s.spotify.duration_ms}
 						dragId={s.spotify.id}
+						previewSong={s.spotify}
 						onOpen={() => onOpen(s.spotify)}
 						openLabel="Explore {s.spotify.title}"
 						onAdd={() => queue(s.spotify.id)}
