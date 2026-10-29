@@ -15,7 +15,7 @@
 	import { getDJ } from '$lib/dj/instance.js';
 	import { access_token, playlistsPanelOpen } from '../stores.js';
 	import { playbackMotion, textScale } from '$lib/settings.js';
-	import { bpFor } from '$lib/breakpoint.js';
+	import { bpFor, breakpoint } from '$lib/breakpoint.js';
 	import './styles.css';
 
 	// Load the Spotify session app-wide so account actions work on every page,
@@ -46,6 +46,7 @@
 		const bp = bpFor(innerWidth, $textScale);
 		document.documentElement.dataset.bp = bp;
 		document.documentElement.toggleAttribute('data-narrow', bp !== 'desktop');
+		breakpoint.set(bp);
 	}
 	$: if (browser) document.documentElement.dataset.motion = $playbackMotion ? 'on' : 'off';
 </script>
@@ -111,6 +112,10 @@
 	/* Make room for the docked Playlists panel (it animates in; the page just reflows once). */
 	.app.panel-open main {
 		margin-right: var(--panel-width);
+	}
+	/* On a phone the panel covers the page instead (PlaylistsPanel.svelte). */
+	:global([data-bp='phone']) .app.panel-open main {
+		margin-right: 0;
 	}
 
 	/* Room for the phone tab bar. */

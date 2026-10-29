@@ -18,23 +18,29 @@
 
 	// On the DJ page "Queue it" adds to Up next through the DJ engine; elsewhere it queues on Spotify.
 	async function queue() {
-		queueing = true;
 		const song = $preview?.song;
-		if (!song) return;
-		const dj = getDJ();
-		if ($page.url.pathname.startsWith('/dj') && dj) {
-			if (SPOTIFY_ID.test(song.id)) {
-				await dj.add({ id: song.id, title: song.title, artists: song.artists, image: song.image, isrc: song.isrc });
-				say('Added to Up next.');
+		if (!song || queueing) return;
+		queueing = true;
+		try {
+			const dj = getDJ();
+			if ($page.url.pathname.startsWith('/dj') && dj) {
+				if (SPOTIFY_ID.test(song.id)) {
+					await dj.add({ id: song.id, title: song.title, artists: song.artists, image: song.image, isrc: song.isrc });
+					say('Added to Up next.');
+				} else {
+					const r = await dj.addPick({ id: song.id, title: song.title, artists: song.artists, image: song.image, isrc: song.isrc });
+					say(r.ok ? 'Added to Up next.' : MISS[r.reason]);
+				}
 			} else {
-				const r = await dj.addPick({ id: song.id, title: song.title, artists: song.artists, image: song.image, isrc: song.isrc });
-				say(r.ok ? 'Added to Up next.' : MISS[r.reason]);
+				// queueTracks resolves Deezer-keyed songs on Spotify first.
+				rememberSongs([song]);
+				say((await queueTracks([song.id])).message);
 			}
-		} else {
-			rememberSongs([song]);
-			say((await queueTracks([song.id])).message);
+		} catch {
+			say("Couldn't add that right now.");
+		} finally {
+			queueing = false;
 		}
-		queueing = false;
 	}
 </script>
 

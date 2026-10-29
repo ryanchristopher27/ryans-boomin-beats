@@ -2,6 +2,8 @@
 // a larger text size reaches the phone layout sooner. CSS media queries can't
 // divide by --text-scale, so the root carries the answer as data-bp (set in
 // +layout.svelte) and styles key off `[data-bp='phone']` / `[data-narrow]`.
+import { writable } from 'svelte/store';
+
 export const PHONE = 760;
 export const DESKTOP = 1180;
 
@@ -10,3 +12,6 @@ export function bpFor(width, scale = 1) {
 	const w = width / scale;
 	return w < PHONE ? 'phone' : w < DESKTOP ? 'tablet' : 'desktop';
 }
+
+/** The current breakpoint, for code that needs it (set alongside data-bp). */
+export const breakpoint = writable(/** @type {'phone' | 'tablet' | 'desktop'} */ ('desktop'));

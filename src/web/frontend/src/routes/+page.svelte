@@ -500,7 +500,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		max-height: calc(100vh - var(--header-height) - 100px - var(--mini-h, 0px));
+		max-height: calc(100vh - var(--header-height) - 100px - var(--mini-h, 0px) - var(--tab-h, 0px));
 		min-height: 0;
 	}
 

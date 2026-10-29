@@ -58,7 +58,11 @@
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
 			e.preventDefault();
 			if ($paletteOpen) close();
-			else $paletteOpen = true;
+			// Not over another dialog (Save tonight's set, first run): it would open underneath.
+			else if (!document.querySelector('[role=dialog]')) $paletteOpen = true;
+		} else if ($paletteOpen && e.key === 'Escape') {
+			// The input handles Esc itself; this catches it after a click elsewhere in the palette took focus.
+			close();
 		}
 	}
 

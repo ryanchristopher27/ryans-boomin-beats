@@ -7,6 +7,7 @@
 	import { KEY_LABEL, PRESETS, STORAGE_KEY, WIDGETS, addable, itemsFor, loadLayout, moveForKey, moveLabel } from '$lib/dj/layout.js';
 	import { queuedKeys } from '$lib/dj/logic.js';
 	import { say } from '$lib/toast.js';
+	import { breakpoint } from '$lib/breakpoint.js';
 	import Grid from '$lib/components/dj/Grid.svelte';
 	import Widget from '$lib/components/dj/Widget.svelte';
 	import NowPlaying from '$lib/components/dj/NowPlaying.svelte';
@@ -130,7 +131,8 @@
 
 	function onKey(e) {
 		if (editing) {
-			if (e.key === 'Escape' && !document.querySelector(':popover-open')) cancel();
+			// Esc belongs to an open palette or dialog, not to the layout draft.
+			if (e.key === 'Escape' && !document.querySelector(':popover-open, [role=dialog]')) cancel();
 			return;
 		}
 		// Compass keys (F3g): add the move's first pick that isn't queued yet.
@@ -200,7 +202,8 @@
 					<button role="radio" aria-checked={layout.preset === c.id} class:active={layout.preset === c.id} on:click={() => choose(c.id)}>{c.label}</button>
 				{/each}
 			</div>
-			<button class="btn" on:click={startEditing}><Icon name="layout" size={16} /> Edit layout</button>
+			<!-- Below desktop the grid is stacked (Grid.svelte), so there's no 12-column layout to edit. -->
+			<button class="btn" on:click={startEditing} disabled={$breakpoint !== 'desktop'} title={$breakpoint === 'desktop' ? undefined : 'Edit the layout on a wider window'}><Icon name="layout" size={16} /> Edit layout</button>
 			<button class="btn" on:click={() => (savingSet = true)}>Save tonight's set</button>
 		{/if}
 	</div>

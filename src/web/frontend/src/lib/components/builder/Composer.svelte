@@ -52,7 +52,7 @@
 
 <style>
 	.hero {
-		min-height: calc(100vh - var(--header-height) - var(--mini-h, 0px));
+		min-height: calc(100vh - var(--header-height) - var(--mini-h, 0px) - var(--tab-h, 0px));
 		padding: 12vh 32px 80px;
 		background: radial-gradient(90% 110% at 50% 0%, oklch(0.32 0.09 285) 0%, oklch(0.16 0.03 285) 55%, var(--surface-0) 100%);
 	}

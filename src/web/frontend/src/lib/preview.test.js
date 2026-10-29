@@ -43,6 +43,26 @@ describe('preview', () => {
 		expect(calls).toEqual([[20, false], [80, false]]);
 	});
 
+	test('a preview right after a restore ducks from the restored volume, not the lagging poll (review F2-2)', async () => {
+		let polled = 80;
+		const calls = [];
+		const p = createPreview({
+			fetchUrl: async (s) => `https://cdn/${s.id}.mp3`,
+			makeAudio: () => ({ play: async () => {}, pause() {}, addEventListener() {} }),
+			volume: { get: () => polled, set: async (percent) => (calls.push(percent), true) },
+			duck: () => true
+		});
+		await p.start(song('a'));
+		await vi.advanceTimersByTimeAsync(10);
+		polled = 20; // the poll now shows the ducked level
+		p.stop();
+		await p.start(song('b')); // before the next poll catches up
+		await vi.advanceTimersByTimeAsync(10);
+		p.stop();
+		await vi.advanceTimersByTimeAsync(10);
+		expect(calls).toEqual([20, 80, 20, 80]);
+	});
+
 	test('stop restores; stopping twice restores once', async () => {
 		const { p, calls } = setup();
 		await p.start(song('a'));

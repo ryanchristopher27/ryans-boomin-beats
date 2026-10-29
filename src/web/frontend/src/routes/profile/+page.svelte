@@ -654,7 +654,7 @@
 	}
 
 	.has-expanded .m {
-		height: calc(100vh - var(--header-height) - var(--mini-h, 0px) - 120px);
+		height: calc(100vh - var(--header-height) - var(--mini-h, 0px) - var(--tab-h, 0px) - 120px);
 		min-height: 420px;
 	}
 

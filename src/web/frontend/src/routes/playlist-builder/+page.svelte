@@ -155,7 +155,7 @@
 	.empty-error {
 		position: fixed;
 		left: 50%;
-		bottom: calc(var(--mini-h, 0px) + 24px);
+		bottom: calc(var(--mini-h, 0px) + var(--tab-h, 0px) + 24px);
 		transform: translateX(-50%);
 		display: flex;
 		align-items: center;
@@ -176,7 +176,7 @@
 	.active {
 		display: grid;
 		grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
-		height: calc(100vh - var(--header-height) - var(--mini-h, 0px));
+		height: calc(100vh - var(--header-height) - var(--mini-h, 0px) - var(--tab-h, 0px));
 	}
 
 	.chat {

@@ -12,6 +12,8 @@ import { say } from './toast.js';
 
 export const PREVIEW_SECONDS = 15;
 export const DUCK_PERCENT = 20;
+// Longer than a player poll (5 s), so the polled volume has caught up with a restore.
+const RESTORE_SETTLE_MS = 12_000;
 
 /**
  * @typedef {{id: string, title: string, artists: string[], image?: string, isrc?: string | null}} PreviewSong
@@ -37,6 +39,10 @@ export function createPreview({ fetchUrl, makeAudio, volume, duck, now = Date.no
 	let run = 0;
 	/** Spotify's volume from before ducking; non-null means it is currently lowered. */
 	let saved = null;
+	// The volume we last restored to. The polled player state lags a few seconds, so
+	// right after a restore it can still read the ducked level (review F2-2).
+	let restored = null;
+	let restoredAt = 0;
 	// Volume calls go out one at a time, so a restore can't overtake the duck it undoes.
 	/** @type {Promise<any>} */
 	let chain = Promise.resolve();
@@ -48,23 +54,28 @@ export function createPreview({ fetchUrl, makeAudio, volume, duck, now = Date.no
 		audio = null;
 	}
 
-	function restore(opts) {
+	/** @param {{keepalive?: boolean}} [opts] keepalive: the page is going away, so skip the queue. */
+	function restore(opts = {}) {
 		if (saved == null) return;
 		const v = saved;
 		saved = null;
-		send(v, opts);
+		restored = v;
+		restoredAt = now();
+		if (opts.keepalive) volume.set(v, opts).catch(() => false);
+		else send(v);
 	}
 
-	function stop() {
+	function stop(opts) {
 		run++;
 		endAudio();
 		state.set(null);
-		restore();
+		restore(opts);
 	}
 
 	async function duckNow(mine) {
-		const v = volume.get();
-		if (v == null) return;
+		const polled = volume.get();
+		if (polled == null) return;
+		const v = restored != null && now() - restoredAt < RESTORE_SETTLE_MS ? restored : polled;
 		saved = v;
 		const ok = await send(DUCK_PERCENT);
 		if (!ok) {
@@ -106,9 +117,10 @@ export function createPreview({ fetchUrl, makeAudio, volume, duck, now = Date.no
 		if (saved == null && duck()) duckNow(mine);
 	}
 
-	/** Page is closing: put Spotify's volume back with a request that outlives the page. */
+	/** The page is hidden or closing: end the preview and put Spotify's volume back
+	 *  with a request that outlives the page. */
 	function unload() {
-		restore({ keepalive: true });
+		stop({ keepalive: true });
 	}
 
 	return { subscribe: state.subscribe, start, stop, unload };
@@ -162,4 +174,8 @@ function realDeps() {
 
 export const preview = createPreview(realDeps());
 
-if (typeof window !== 'undefined') window.addEventListener('pagehide', () => preview.unload());
+if (typeof window !== 'undefined') {
+	window.addEventListener('pagehide', () => preview.unload());
+	// Phones often kill a background tab without pagehide.
+	document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && preview.unload());
+}

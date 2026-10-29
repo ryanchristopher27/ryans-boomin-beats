@@ -5,6 +5,7 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import 'gridstack/dist/gridstack.min.css';
 	import { COLUMNS, WIDGETS, completeSaved, nudgeBox } from '$lib/dj/layout.js';
+	import { textScale } from '$lib/settings.js';
 
 	export let items = [];
 	export let editing = false;
@@ -46,27 +47,34 @@
 			},
 			el
 		);
-		// 12 columns from 1200px, 8 from 960, 6 from 720, else 1, measured on the grid
-		// itself (a 1280px window leaves ~1245px after padding and the scrollbar) so
-		// the Playlists panel counts. Widest first: gridstack matches in order. A
-		// breakpoint's `w` is inclusive. columnMax is required: with several
-		// breakpoints gridstack doesn't default it, and growing past the widest one
-		// then never returned to 12.
+		applyBreakpoints($textScale);
+		grid.on('change added removed', fit);
+		fit();
+		addEventListener('resize', onResize);
+	});
+
+	// 12 columns from 1200px, 8 from 960, 6 from 720, else 1, measured on the grid
+	// itself (a 1280px window leaves ~1245px after padding and the scrollbar) so
+	// the Playlists panel counts. Scaled by text size like the app's breakpoints
+	// (lib/breakpoint.js), so the grid stacks when the rest goes tablet/phone.
+	// Widest first: gridstack matches in order. A breakpoint's `w` is inclusive.
+	// columnMax is required: with several breakpoints gridstack doesn't default it,
+	// and growing past the widest one then never returned to 12.
+	function applyBreakpoints(scale) {
+		const at = (px) => Math.round(px * scale) - 1;
 		grid.updateOptions({
 			columnOpts: {
 				columnMax: COLUMNS,
 				layout: 'list',
 				breakpoints: [
-					{ w: 1199, c: 8 },
-					{ w: 959, c: 6, layout: stack },
-					{ w: 719, c: 1, layout: stack }
+					{ w: at(1200), c: 8 },
+					{ w: at(960), c: 6, layout: stack },
+					{ w: at(720), c: 1, layout: stack }
 				]
 			}
 		});
-		grid.on('change added removed', fit);
-		fit();
-		addEventListener('resize', onResize);
-	});
+	}
+	$: if (grid) applyBreakpoints($textScale);
 
 	onDestroy(() => {
 		removeEventListener('resize', onResize);
@@ -79,6 +87,10 @@
 	 * the items' order; `lead` goes first at full width, Next moves is full width,
 	 * everything else takes half a row (a whole one on a phone). Heights are capped.
 	 */
+	// Full heights while stacked: `stack` caps them, and gridstack's layout cache keeps
+	// only x/y/w, so they come back from here on the way to 12 columns and in save().
+	const fullH = new Map();
+
 	function stack(column, _prev, _placed, nodes) {
 		const order = new Map(items.map((it, i) => [it.id, i]));
 		const rank = (n) => (n.id === lead ? -1 : order.get(n.id) ?? 0);
@@ -87,7 +99,8 @@
 		let rowH = 0;
 		for (const n of [...nodes].sort((a, b) => rank(a) - rank(b))) {
 			n.w = column === 1 || n.id === lead || n.id === 'moves' ? column : column / 2;
-			n.h = n.id === 'nowPlaying' && column === 1 ? PHONE_ART_H : Math.min(n.h, NARROW_MAX_H);
+			if (!fullH.has(n.id)) fullH.set(n.id, n.h);
+			n.h = n.id === 'nowPlaying' && column === 1 ? PHONE_ART_H : Math.min(fullH.get(n.id), NARROW_MAX_H);
 			if (x + n.w > column) {
 				y += rowH;
 				x = rowH = 0;
@@ -103,6 +116,15 @@
 	/** Stretch the rows to the window's height on desktop; fixed 48px otherwise. */
 	function fit() {
 		if (!grid) return;
+		if (fullH.size && grid.getColumn() === COLUMNS) {
+			grid.batchUpdate();
+			for (const [id, h] of fullH) {
+				const node = nodeFor(id);
+				if (node) grid.update(node, { h });
+			}
+			grid.batchUpdate(false);
+			fullH.clear();
+		}
 		const rows = Math.max(1, ...grid.engine.nodes.map((n) => n.y + n.h));
 		const top = el.getBoundingClientRect().top + scrollY;
 		const room = innerHeight - top - BOTTOM_GAP;
@@ -136,6 +158,7 @@
 	/** Positions as 12-column coordinates, whatever the current breakpoint. */
 	export function save() {
 		const saved = /** @type {any[]} */ (grid.save(false, false, undefined, COLUMNS));
+		for (const s of saved) if (fullH.has(s.id)) s.h = fullH.get(s.id);
 		return completeSaved(saved, items, new Map(grid.engine.nodes.map((n) => [n.id, n])));
 	}
 
