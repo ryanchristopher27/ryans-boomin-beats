@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from services.llm_auth import LLMCredentials, get_llm_credentials
-from services.llm_client import LLMClient
+from services.claude_code import ClaudeCodeError
+from services.llm_client import NeedsLLM
 from services.llm_json import LLMParseError, extract_json
 from services import deezer
 
@@ -69,7 +70,7 @@ async def generate_playlist(
     creds: LLMCredentials = Depends(get_llm_credentials),
 ):
     provider = creds.provider
-    client = LLMClient(provider=provider, api_key=creds.api_key)
+    client = creds.client()
     conversation = list(body.messages) + [{'role': 'user', 'content': body.prompt}]
 
     matched: list[dict] = []
@@ -106,8 +107,11 @@ async def generate_playlist(
 
         try:
             raw = await client.generate(llm_messages, SYSTEM_PROMPT)
+        except NeedsLLM:
+            raise
         except Exception as e:
-            last_error = f'{provider} request failed: {e}'
+            # Claude Code's messages (and the relay's) are written for the user.
+            last_error = str(e) if isinstance(e, ClaudeCodeError) else f'{provider} request failed: {e}'
             log.warning('[playlist] attempt %d: %s', attempt, last_error)
             failed = []
             continue

@@ -2,6 +2,7 @@
 	// Pick an AI provider and connect it (Settings' AI tab and first run).
 	import { llmConfig } from '../../../stores.js';
 	import { PROVIDERS, connectLLM, disconnectLLM } from '$lib/llm.js';
+	import { HELPER_COMMAND } from '$lib/llmRelay.js';
 
 	/** Called after a successful connect. */
 	export let onConnected = () => {};
@@ -53,8 +54,11 @@
 	</div>
 
 	<div class="form">
+		{#if chosen.id === 'helper'}
+			<p class="hint">Run <code>{HELPER_COMMAND}</code> in a terminal and leave it running, then paste the pairing code it prints. The first time, the browser asks to let this site reach your computer: choose Allow.</p>
+		{/if}
 		{#if !chosen.keyless}
-			<input class="key" type="password" placeholder={chosen.placeholder} bind:value={apiKey} aria-label="{chosen.label} API key" autocomplete="off" spellcheck="false" />
+			<input class="key" type="password" placeholder={chosen.placeholder} bind:value={apiKey} aria-label={chosen.keyName ?? `${chosen.label} API key`} autocomplete="off" spellcheck="false" />
 		{/if}
 		{#if errorMsg}<p class="error" role="alert">{errorMsg}</p>{/if}
 		<div class="buttons">
@@ -182,6 +186,19 @@
 	.key:focus {
 		outline: none;
 		border-color: var(--accent-tint-border);
+	}
+
+	.hint {
+		margin: 0;
+		font-size: calc(13px * var(--text-scale, 1));
+		line-height: 1.5;
+		color: var(--text-muted);
+	}
+
+	.hint code {
+		font-family: var(--font-mono);
+		font-size: 0.92em;
+		color: var(--text-primary);
 	}
 
 	.error {

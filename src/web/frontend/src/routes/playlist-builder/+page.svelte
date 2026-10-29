@@ -1,5 +1,6 @@
 <script>
 	import { openSettings } from '$lib/settings.js';
+	import { relayFetch } from '$lib/llmRelay.js';
 	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { PUBLIC_API_URL } from '$env/static/public';
@@ -21,7 +22,7 @@
 	import Conversation from '$lib/components/builder/Conversation.svelte';
 	import PlaylistView from '$lib/components/builder/PlaylistView.svelte';
 
-	const AI_NAMES = { claude: 'Claude', openai: 'OpenAI', groq: 'Groq', 'claude-code': 'Your Claude Code' };
+	const AI_NAMES = { claude: 'Claude', openai: 'OpenAI', groq: 'Groq', helper: 'Your Claude Code', 'claude-code': 'Claude Code' };
 	$: aiLabel = $llmConfig.connected ? AI_NAMES[$llmConfig.provider] ?? $llmConfig.provider : 'no AI connected';
 
 	let draft = '';
@@ -59,7 +60,7 @@
 		clearTimeout(stepTimer);
 		stepTimer = setTimeout(() => (step = 1), 4000);
 		try {
-			const res = await fetch(`${PUBLIC_API_URL}/llm/generate-playlist/`, {
+			const res = await relayFetch(`${PUBLIC_API_URL}/llm/generate-playlist/`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...spotifyHeaders(), ...llmHeaders() },
 				body: JSON.stringify({ prompt, messages: history, count })

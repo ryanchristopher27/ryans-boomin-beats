@@ -4,6 +4,9 @@
 import { PUBLIC_API_URL } from '$env/static/public';
 import { spotifyHeaders } from '../spotifyHeaders.js';
 import { llmHeaders } from '../llmHeaders.js';
+import { relayFetch } from '../llmRelay.js';
+
+const AI_PATHS = ['dj/suggest', 'dj/recap', 'song/profile'];
 
 /**
  * @param {string} method
@@ -12,12 +15,13 @@ import { llmHeaders } from '../llmHeaders.js';
  * @returns {Promise<{status: number, data: any}>}
  */
 export async function request(method, path, { json = undefined, headers = {} } = {}) {
-	const res = await fetch(`${PUBLIC_API_URL}/${path}`, {
+	const ai = AI_PATHS.some((p) => path.startsWith(p));
+	const res = await (ai ? relayFetch : fetch)(`${PUBLIC_API_URL}/${path}`, {
 		method,
 		headers: {
 			...spotifyHeaders(),
 			// The LLM key goes only where it's used.
-			...(path.startsWith('dj/suggest') || path.startsWith('song/profile') ? llmHeaders() : {}),
+			...(ai ? llmHeaders() : {}),
 			...(json !== undefined ? { 'Content-Type': 'application/json' } : {}),
 			...headers
 		},

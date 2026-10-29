@@ -4,6 +4,8 @@ result envelope. The CLI itself is never run here.
     python -m unittest tests.test_claude_code -v
 """
 import json
+from asyncio import run
+from types import SimpleNamespace
 import os
 import sys
 import unittest
@@ -32,23 +34,26 @@ class Availability(unittest.TestCase):
             self.assertFalse(claude_code.available())
 
 
+GET = SimpleNamespace(method='GET')  # no body, so no relay replies
+
+
 class Credentials(unittest.TestCase):
     def test_keyless_when_available(self):
         with mock.patch.object(claude_code, 'available', return_value=True):
-            creds = get_llm_credentials(x_llm_provider='claude-code', x_llm_key=None)
+            creds = run(get_llm_credentials(GET, x_llm_provider='claude-code', x_llm_key=None))
         self.assertEqual((creds.provider, creds.api_key), ('claude-code', ''))
 
     def test_refused_where_unavailable(self):
         with mock.patch.object(claude_code, 'available', return_value=False):
             with self.assertRaises(HTTPException) as ctx:
-                get_llm_credentials(x_llm_provider='claude-code', x_llm_key=None)
+                run(get_llm_credentials(GET, x_llm_provider='claude-code', x_llm_key=None))
         self.assertEqual(ctx.exception.status_code, 400)
 
     def test_other_providers_still_need_a_key(self):
         with self.assertRaises(HTTPException) as ctx:
-            get_llm_credentials(x_llm_provider='groq', x_llm_key=None)
+            run(get_llm_credentials(GET, x_llm_provider='groq', x_llm_key=None))
         self.assertEqual(ctx.exception.status_code, 401)
-        self.assertIsNone(get_optional_llm_credentials(x_llm_provider='claude', x_llm_key=None))
+        self.assertIsNone(run(get_optional_llm_credentials(GET, x_llm_provider='claude', x_llm_key=None)))
 
 
 class Envelope(unittest.TestCase):

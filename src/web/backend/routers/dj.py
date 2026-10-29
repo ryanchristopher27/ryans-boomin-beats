@@ -20,7 +20,7 @@ from spotipy import SpotifyException
 
 from services import lastfm_client
 from services.llm_auth import LLMCredentials, get_optional_llm_credentials
-from services.llm_client import LLMClient
+from services.llm_client import NeedsLLM
 from services.claude_code import ClaudeCodeError
 from services.llm_json import LLMParseError, extract_json
 from services.spotify_auth import get_spotify_token
@@ -462,9 +462,11 @@ async def recap(body: RecapRequest, creds: LLMCredentials | None = Depends(get_o
     """Save tonight's set (F3f): an AI-written description. Optional in the UI."""
     if creds is None:
         raise HTTPException(status_code=401, detail='Connect an AI in Settings to write a recap.')
-    client = LLMClient(provider=creds.provider, api_key=creds.api_key)
+    client = creds.client()
     try:
         text = await client.generate([{'role': 'user', 'content': recap_prompt(body.songs)}], _RECAP_SYSTEM)
+    except NeedsLLM:
+        raise
     except Exception as e:
         log.warning('[dj] recap via %s failed: %s', creds.provider, e)
         raise HTTPException(status_code=502, detail="Couldn't write a recap right now.")
@@ -514,9 +516,11 @@ async def suggest(
     if creds is None:
         return await suggest_without_llm(body, tags, all_recent)
 
-    client = LLMClient(provider=creds.provider, api_key=creds.api_key)
+    client = creds.client()
     try:
         raw = await client.generate([{'role': 'user', 'content': build_prompt(body, tags)}], SYSTEM_PROMPT)
+    except NeedsLLM:
+        raise
     except Exception as e:
         log.warning('[dj] %s request failed: %s', creds.provider, e)
         # Claude Code's messages are written for the user (e.g. "sign in again").

@@ -1,5 +1,6 @@
 <script>
 	import { openSettings } from '$lib/settings.js';
+	import { relayFetch } from '$lib/llmRelay.js';
 	// The Explore song page's left column (R3): Tags, What the AI hears, Sound
 	// profile and About. Picks go to exploreSession; the recipe column reads them.
 	import { PUBLIC_API_URL } from '$env/static/public';
@@ -33,7 +34,7 @@
 		try {
 			const artist = s.artists?.[0] ?? s.artist ?? '';
 			const params = new URLSearchParams({ title: s.title, artist });
-			const res = await fetch(`${PUBLIC_API_URL}/song/profile/?${params}`, { headers: { ...spotifyHeaders(), ...llmHeaders() } });
+			const res = await relayFetch(`${PUBLIC_API_URL}/song/profile/?${params}`, { headers: { ...spotifyHeaders(), ...llmHeaders() } });
 			const data = await res.json();
 			$exploreSession = { ...$exploreSession, key, profile: data };
 		} catch {

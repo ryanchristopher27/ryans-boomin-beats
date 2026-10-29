@@ -1,10 +1,40 @@
 import asyncio
 
+from services.claude_code import ClaudeCodeError
+
+
+class NeedsLLM(Exception):
+    """'Your Claude Code' on the hosted backend (provider 'helper'): the server
+    can't reach the user's machine, so it hands the prompt back. The page runs
+    it on the local helper and repeats the request with the reply appended to
+    `llm_replies`. Answered as 428 by main.py."""
+
+    def __init__(self, prompt: str):
+        super().__init__('This request needs a reply from your Claude Code.')
+        self.prompt = prompt
+
+
+class RelayError(ClaudeCodeError):
+    """The page couldn't get a reply from the helper; its message is written for the user."""
+
+
+def as_transcript(messages: list[dict], system_prompt: str = '') -> str:
+    """One prompt for a one-shot CLI: a multi-turn history goes in as a labelled transcript."""
+    if len(messages) == 1:
+        body = messages[0]['content']
+    else:
+        body = '\n\n'.join(f"{m['role'].capitalize()}: {m['content']}" for m in messages)
+    return f'{system_prompt}\n\n{body}' if system_prompt else body
+
 
 class LLMClient:
-    def __init__(self, provider: str, api_key: str):
+    def __init__(self, provider: str, api_key: str, replies: tuple[str, ...] = (), relay_error: str | None = None):
         self.provider = provider
         self.api_key = api_key
+        # The relay's replies so far, used in call order (each request replays from the start).
+        self.replies = list(replies)
+        # Set when the helper failed: the next call fails like any provider's would.
+        self.relay_error = relay_error
 
     async def generate(self, messages: list[dict], system_prompt: str) -> str:
         if self.provider == 'claude':
@@ -15,6 +45,12 @@ class LLMClient:
             return await self._generate_groq(messages, system_prompt)
         if self.provider == 'claude-code':
             return await self._generate_claude_code(messages, system_prompt)
+        if self.provider == 'helper':
+            if self.replies:
+                return self.replies.pop(0)
+            if self.relay_error:
+                raise RelayError(self.relay_error)
+            raise NeedsLLM(as_transcript(messages, system_prompt))
         raise ValueError(f'Unknown provider: {self.provider}')
 
     async def _generate_claude(self, messages: list[dict], system_prompt: str) -> str:
@@ -31,12 +67,7 @@ class LLMClient:
 
     async def _generate_claude_code(self, messages: list[dict], system_prompt: str) -> str:
         from services import claude_code
-        # One-shot CLI call: a multi-turn history goes in as a labelled transcript.
-        if len(messages) == 1:
-            prompt = messages[0]['content']
-        else:
-            prompt = '\n\n'.join(f"{m['role'].capitalize()}: {m['content']}" for m in messages)
-        return await claude_code.run(prompt, system_prompt)
+        return await claude_code.run(as_transcript(messages), system_prompt)
 
     async def _generate_openai(self, messages: list[dict], system_prompt: str) -> str:
         import openai

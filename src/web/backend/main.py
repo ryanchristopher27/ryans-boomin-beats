@@ -12,6 +12,7 @@ from config import ALLOWED_ORIGINS, ALLOWED_SPOTIFY_USERS, DEVICE_KEY
 from routers import search, profile
 from routers import llm_connect, llm_playlist, spotify_actions, song_profile, player, dj, dj_state, tracks
 from services import spotify_client, spotify_identity
+from services.llm_client import NeedsLLM
 
 # Without this, every log.info in services/ was dropped (Python's default is
 # WARNING); the search counter (plan Q4) relies on INFO reaching the logs.
@@ -119,6 +120,12 @@ async def upstream_unavailable_handler(request: Request, exc: Exception):
         content={"detail": "Spotify is not responding. Try again in a moment."},
         headers={"Access-Control-Allow-Origin": origin},
     )
+
+
+@app.exception_handler(NeedsLLM)
+async def needs_llm_handler(request: Request, exc: NeedsLLM):
+    # The page runs `prompt` on the user's helper and repeats the request (llm_client.NeedsLLM).
+    return JSONResponse(status_code=428, content={'needs_llm': {'prompt': exc.prompt}, 'detail': str(exc)})
 
 
 @app.exception_handler(SpotifyException)

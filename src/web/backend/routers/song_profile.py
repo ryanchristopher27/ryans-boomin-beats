@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, Query
 from services import lastfm_client
 from services.llm_auth import LLMCredentials, get_optional_llm_credentials
-from services.llm_client import LLMClient
+from services.llm_client import LLMClient, NeedsLLM
 from services.llm_json import LLMParseError, extract_json
 
 log = logging.getLogger(__name__)
@@ -114,10 +114,10 @@ def _parse_analysis(raw: str) -> dict:
     return {'analysis_text': analysis_text, 'scores': scores, 'tags': tags, 'error': error}
 
 
-async def _llm_analysis(title: str, artist: str, tags: list, provider: str, api_key: str) -> dict:
+async def _llm_analysis(title: str, artist: str, tags: list, provider: str, api_key: str, client: LLMClient | None = None) -> dict:
     tag_names = ', '.join(t['name'] for t in tags) if tags else 'none available'
     user_msg = f'Song: "{title}" by {artist}\nListener tags: {tag_names}'
-    client = LLMClient(provider=provider, api_key=api_key)
+    client = client or LLMClient(provider=provider, api_key=api_key)
     raw = await client.generate([{'role': 'user', 'content': user_msg}], ANALYSIS_PROMPT)
     return _parse_analysis(raw)
 
@@ -140,7 +140,8 @@ def _merge_tags(lastfm_tags: list, ai_tags: list) -> list:
     return merged
 
 
-@router.get('/song/profile/')
+# POST carries the relay's `llm_replies` (provider 'helper'); title/artist stay in the query.
+@router.api_route('/song/profile/', methods=['GET', 'POST'])
 async def song_profile(
     title: str = Query(...),
     artist: str = Query(...),
@@ -149,7 +150,22 @@ async def song_profile(
     provider = creds.provider if creds else None
     api_key = creds.api_key if creds else None
 
-    if creds:
+    if creds and provider == 'helper':
+        # One relayed call, grounded in the tags (two would mean two round trips).
+        # NeedsLLM propagates to main.py's 428 handler.
+        try:
+            lastfm_data = await lastfm_client.track_info(title, artist)
+        except Exception as e:
+            log.warning('[song-profile] Last.fm lookup failed: %s', e)
+            lastfm_data = lastfm_client._empty()
+        try:
+            analysis = await _llm_analysis(title, artist, lastfm_data['tags'], provider, api_key, creds.client())
+        except NeedsLLM:
+            raise
+        except Exception as e:
+            log.warning('[song-profile] relayed call failed: %s', e)
+            analysis = _empty_analysis(str(e))
+    elif creds:
         lastfm_data, analysis = await asyncio.gather(
             lastfm_client.track_info(title, artist),
             _llm_analysis(title, artist, [], provider, api_key),

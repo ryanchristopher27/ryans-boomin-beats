@@ -9,7 +9,8 @@ import { llmConfig } from '../stores.js';
 export function llmHeaders() {
 	const { provider, apiKey } = get(llmConfig) ?? {};
 	// 'Your Claude Code' runs on the local CLI login, so it has no key.
-	if (provider === 'claude-code') return { 'X-LLM-Provider': provider };
+	// The helper's pairing code is for the helper only; it never goes to the backend.
+	if (provider === 'claude-code' || provider === 'helper') return { 'X-LLM-Provider': provider };
 	if (!provider || !apiKey) return {};
 	return {
 		'X-LLM-Provider': provider,

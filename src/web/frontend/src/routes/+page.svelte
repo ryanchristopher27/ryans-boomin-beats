@@ -1,5 +1,6 @@
 <script>
 	import { openSettings } from '$lib/settings.js';
+	import { relayFetch } from '$lib/llmRelay.js';
 	import { onMount, tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { PUBLIC_API_URL } from '$env/static/public';
@@ -98,7 +99,7 @@
 		discoverError = '';
 		const chosen = aspects.filter((a) => $exploreSession.selectedAspects.includes(a.label));
 		try {
-			const res = await fetch(`${PUBLIC_API_URL}/llm/generate-playlist/`, {
+			const res = await relayFetch(`${PUBLIC_API_URL}/llm/generate-playlist/`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...spotifyHeaders(), ...llmHeaders() },
 				body: JSON.stringify({ prompt: discoverPrompt(song, $exploreSession.selectedTags, chosen), messages: [], count: 12 })
