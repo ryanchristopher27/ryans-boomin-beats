@@ -62,7 +62,7 @@
 			<p>Whisper mode: the DJ waits until you ask.</p>
 			<button class="btn primary" on:click={() => dj.loadSuggestions(undefined, true)}>Get moves</button>
 		</div>
-	{:else if s.status === 'loading'}
+	{:else if s.status === 'loading' && !s.moves.length}
 		<p class="reading" role="status"><Bars count={4} height={12} /> Reading the room…</p>
 		<div class:groups={!kind} aria-busy="true" aria-label="Loading moves">
 			{#each Array(kind ? 1 : 6) as _}
@@ -82,7 +82,8 @@
 	{:else if !moves.length}
 		<p class="empty">{missingCopy(kind)}</p>
 	{:else}
-		<div class:groups={!kind}>
+		<!-- A new round keeps the old board on screen (dimmed) until it lands. -->
+		<div class:groups={!kind} class:renewing={s.status === 'loading'} aria-busy={s.status === 'loading'}>
 			{#each moves as move, i (move.move)}
 				<section class="group" class:lead={move.move === 'toward' || move.move === 'drift'} class:flash={$flash === move.move} style:animation-delay="{i * 40}ms">
 					<h3>
@@ -137,6 +138,11 @@
 </div>
 
 <style>
+	.renewing {
+		opacity: 0.5;
+		transition: opacity 0.2s var(--ease);
+	}
+
 	.moves {
 		padding: 8px;
 	}

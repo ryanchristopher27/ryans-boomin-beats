@@ -200,6 +200,59 @@ describe('web DJ engine', () => {
 		expect(asks()).toBe(2); // Driver queues picks itself
 	});
 
+	test('the board stays when the song changes and comes back after a reload; the setting asks every song', async () => {
+		const server = fakeServer();
+		server.suggestMoves = true;
+		const storage = memoryStorage();
+		storage.set('dj_device_id', 'a');
+		const settle = () => new Promise((r) => setTimeout(r, 0));
+		const asks = () => server.calls.filter((c) => c.path === 'dj/suggest/').length;
+		let everySong = false;
+		const a = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0, locks: null, everySong: () => everySong });
+		await a.refresh();
+		const stop = a.watchSuggestions();
+		await settle();
+		expect(asks()).toBe(1);
+		expect(g(a.suggestions).forTrack.id).toBe('now');
+
+		server.playing = track('next');
+		await a.refresh();
+		await settle();
+		expect(asks()).toBe(1); // kept
+		expect(g(a.suggestions).forTrack.id).toBe('now');
+
+		// A reload (a new engine on the same storage) shows the saved board without asking.
+		const b = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0, locks: null, everySong: () => false });
+		expect(g(b.suggestions)).toMatchObject({ status: 'loaded', forTrack: { id: 'now' } });
+		await b.refresh();
+		b.watchSuggestions();
+		await settle();
+		expect(asks()).toBe(1);
+
+		everySong = true;
+		server.playing = track('third');
+		await a.refresh();
+		await settle();
+		expect(asks()).toBe(2);
+		expect(g(a.suggestions).forTrack.id).toBe('third');
+		stop();
+	});
+
+	test('a failed round keeps the board it would have replaced', async () => {
+		const server = fakeServer();
+		server.suggestMoves = true;
+		const storage = memoryStorage();
+		storage.set('dj_device_id', 'a');
+		const a = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0, locks: null });
+		await a.refresh();
+		a.watchSuggestions();
+		await new Promise((r) => setTimeout(r, 0));
+		server.suggestMoves = false; // the fake answers with no moves now
+		await a.loadSuggestions(undefined, true);
+		expect(g(a.suggestions)).toMatchObject({ status: 'loaded', error: 'No suggestions this time.' });
+		expect(g(a.suggestions).moves.length).toBe(2);
+	});
+
 	test('a per-move refresh re-asks only that move, with feedback, and keeps the rest', async () => {
 		const server = fakeServer();
 		server.suggestMoves = true;

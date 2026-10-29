@@ -58,7 +58,11 @@ function deviceLabel() {
  * @param {(() => Promise<unknown>) | null} [deps.onUnauthorized] refresh the Spotify token after a 401
  * @param {{request: (name: string, cb: () => Promise<unknown>) => unknown} | null} [deps.locks] Web Locks, to elect one driving tab per browser
  */
-export function createDJ({ request, hasLLM = () => true, storage = safeStorage(), label = deviceLabel(), now = () => Date.now(), debounceMs = 400, onUnauthorized = null, locks = /** @type {any} */ (globalThis.navigator)?.locks ?? null }) {
+/**
+ * `everySong`: ask for new moves on every song change. Off (the app's default,
+ * Controls → "New moves every song"), the board stays until the host asks.
+ */
+export function createDJ({ request, hasLLM = () => true, storage = safeStorage(), label = deviceLabel(), now = () => Date.now(), debounceMs = 400, onUnauthorized = null, locks = /** @type {any} */ (globalThis.navigator)?.locks ?? null, everySong = () => true }) {
 	const load = (k) => {
 		try {
 			return JSON.parse(storage.get(k) ?? 'null');
@@ -79,8 +83,19 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	let isPrimary = load('dj_is_primary') ?? true;
 	/** @type {import('svelte/store').Writable<{status: string, error: string | null, primary: any, notice: string | null, isPrimary: boolean, deviceID: string, label: string}>} */
 	const sync = writable({ status: 'unavailable', error: null, primary: null, notice: null, isPrimary, deviceID, label });
-	/** @type {import('svelte/store').Writable<{status: string, moves: any[], error: string | null}>} */
-	const suggestions = writable({ status: 'idle', moves: [], error: null });
+	// The board of moves and the song it was made for. Kept on this device, so a
+	// reload brings it back; a new night (SET_GAP_MS idle) starts without one.
+	const savedBoard = load('dj_board');
+	const fresh = savedBoard?.moves?.length && now() - (savedBoard.at ?? 0) < L.SET_GAP_MS;
+	/** @type {import('svelte/store').Writable<{status: string, moves: any[], error: string | null, source?: string, forTrack?: {id: string, title: string} | null}>} */
+	const suggestions = writable(
+		fresh
+			? { status: 'loaded', moves: savedBoard.moves, error: null, source: savedBoard.source, forTrack: savedBoard.forTrack ?? null }
+			: { status: 'idle', moves: [], error: null }
+	);
+	suggestions.subscribe((s) => {
+		if (s.status === 'loaded' && s.moves.length) storage.set('dj_board', JSON.stringify({ moves: s.moves, source: s.source, forTrack: s.forTrack ?? null, at: now() }));
+	});
 	// F3c: what the host said was off about each move this session, and which
 	// moves are being re-asked right now.
 	/** @type {import('svelte/store').Writable<Record<string, string[]>>} */
@@ -621,7 +636,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		}
 		if (s.track && s.track.id !== suggestedFor) {
 			suggestedFor = s.track.id;
-			prefetch();
+			prefetch({ keepBoard: !everySong() });
 		}
 	}
 
@@ -659,16 +674,40 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		// The library seeds Familiar ↔ New; rounds use it once it has arrived.
 		loadLibrary();
 		watchers++;
-		prefetch();
+		// Opening the DJ (or reloading it) shows the saved board rather than replacing it.
+		prefetch({ keepBoard: true });
 		return () => watchers--;
 	}
 
-	function prefetch() {
+	/**
+	 * New moves for the current song when the board should change. Option changes
+	 * always ask (the host wants different picks); a song change or opening the DJ
+	 * keeps a board that has moves, unless autopilot has used up every pick on it.
+	 * @param {{keepBoard?: boolean}} [opts]
+	 */
+	function prefetch({ keepBoard = false } = {}) {
 		const track = get(player).state?.track;
 		if (!track) return;
-		if (!watchers && L.AUTOPILOT_TARGET[d().options.mode] === 0) return;
-		if (d().options.mode === 'whisper') suggestions.set({ status: 'idle', moves: [], error: null });
-		else loadSuggestions(track);
+		const o = d().options;
+		if (!watchers && L.AUTOPILOT_TARGET[o.mode] === 0) return;
+		const s = get(suggestions);
+		const board = s.status === 'loaded' && s.moves.length > 0;
+		if (o.mode === 'whisper') {
+			// Whisper never asks on its own; it only clears to "Get moves" when there's no board.
+			if (!board) suggestions.set({ status: 'idle', moves: [], error: null });
+			return;
+		}
+		if (keepBoard && board && !boardUsedUp(s.moves)) return void autopilot();
+		loadSuggestions(track);
+	}
+
+	/** Autofill/Driver have queued every pick they would take from this board. */
+	function boardUsedUp(moves) {
+		const o = d().options;
+		if (!L.AUTOPILOT_TARGET[o.mode]) return false;
+		const queued = L.queuedKeys([...d().queue.sent, ...d().queue.upcoming, ...d().recent]);
+		const lead = o.goal ? (o.goal.kind === 'drift' ? 'drift' : 'toward') : null;
+		return L.autopilotCandidates(moves, o.adventurousness, queued, lead).length === 0;
 	}
 
 	const ref = (t) => ({ id: t.trackID ?? t.id ?? '', isrc: t.isrc ?? null, title: t.title, artist: t.artists?.[0] ?? t.artist ?? '' });
@@ -752,8 +791,9 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		const o = d().options;
 		// Settings that change the answer are part of the key.
 		const key = `${track.id}|${Math.floor(o.adventurousness * 3)}|${Math.floor((o.familiar ?? 0.5) * 3)}|${o.clean}|${L.goalKey(o.goal, now())}|${JSON.stringify(get(moveFeedback))}`;
+		const forTrack = { id: track.id, title: track.title };
 		if (!force && cache.has(key)) {
-			suggestions.set({ status: 'loaded', moves: cache.get(key), error: null });
+			suggestions.set({ status: 'loaded', moves: cache.get(key), error: null, forTrack });
 			return autopilot();
 		}
 		// Don't stack requests for the same answer (Groq's per-minute token limit).
@@ -766,18 +806,23 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 			if (inFlight !== key) return; // a newer track started its own load
 			const moves = r.data?.moves ?? [];
 			if (r.status !== 200 || !moves.length) {
-				suggestions.set({ status: 'failed', moves: [], error: r.data?.error ?? r.data?.detail ?? 'No suggestions this time.' });
+				fail(r.data?.error ?? r.data?.detail ?? 'No suggestions this time.');
 				return;
 			}
 			if (cache.size > 20) cache.clear();
 			cache.set(key, moves);
-			suggestions.set({ status: 'loaded', moves, error: null, source: r.data?.source ?? 'ai' });
+			suggestions.set({ status: 'loaded', moves, error: null, source: r.data?.source ?? 'ai', forTrack });
 			await autopilot();
 		} catch {
-			if (inFlight === key) suggestions.set({ status: 'failed', moves: [], error: "Couldn't reach the server." });
+			if (inFlight === key) fail("Couldn't reach the server.");
 		} finally {
 			if (inFlight === key) inFlight = null;
 		}
+	}
+
+	/** A failed round keeps the board it would have replaced; the error shows beside it. */
+	function fail(error) {
+		suggestions.update((s) => (s.moves.length ? { ...s, status: 'loaded', error } : { status: 'failed', moves: [], error }));
 	}
 
 	/** Autofill and Driver: keep the mode's target lined up from the current moves. Primary only. */

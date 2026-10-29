@@ -161,6 +161,11 @@
 	$: night = activePreset($doc.options);
 	$: requestCount = $doc.queue.requests.length;
 	$: upNextCount = $doc.queue.sent.length + $doc.queue.upcoming.length;
+	// The board stays when the song changes (unless "New moves every song" is on): say which song it's for.
+	$: nowTitle = $player.state?.track?.title ?? '';
+	$: boardFor = $suggestions.moves.length ? $suggestions.forTrack : null;
+	$: staleFor = boardFor && $player.state?.track && boardFor.id !== $player.state.track.id ? boardFor.title : null;
+	$: boardError = $suggestions.status === 'loaded' && $suggestions.moves.length && $suggestions.error ? `Couldn't get new picks: ${$suggestions.error}` : null;
 	$: pickCount = $suggestions.status === 'loaded' ? $suggestions.moves.reduce((n, m) => n + m.tracks.length, 0) : 0;
 	$: choices = [...Object.entries(PRESETS).map(([id, p]) => ({ id, label: p.label })), ...(layout.custom ? [{ id: 'custom', label: 'Your layout' }] : [])];
 </script>
@@ -177,6 +182,14 @@
 	<div class="bar">
 		<h1>DJ</h1>
 		<SyncBanner {dj} />
+		{#if staleFor || boardError}
+			<div class="board-note" role="status">
+				{#if boardError}<span class="err">{boardError}</span>{:else}<span>Picks for <b>{staleFor}</b></span>{/if}
+				<button class="btn small" on:click={() => dj.loadSuggestions(undefined, true)} disabled={$suggestions.status === 'loading'}>
+					<Icon name="refresh" size={13} /> {$suggestions.status === 'loading' ? 'Getting picks…' : `New picks for ${nowTitle}`}
+				</button>
+			</div>
+		{/if}
 		<div class="spacer" />
 		{#if editing}
 			<button class="btn" bind:this={addButton} popovertarget="add-widget" disabled={!addable(items).length}><Icon name="plus" size={16} /> Add widget</button>
@@ -399,6 +412,34 @@
 
 	.menu button:hover {
 		background: var(--hover);
+	}
+
+	.board-note {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-width: 0;
+		padding: 4px 4px 4px 12px;
+		border-radius: 999px;
+		background: var(--glass);
+		border: 1px solid var(--border-subtle);
+		font-size: calc(13px * var(--text-scale, 1));
+		color: var(--text-muted);
+	}
+
+	.board-note > span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.board-note b {
+		font-weight: 500;
+		color: var(--text-primary);
+	}
+
+	.board-note .err {
+		color: var(--warning);
 	}
 
 	.signin {

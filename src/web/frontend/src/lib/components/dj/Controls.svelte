@@ -3,7 +3,7 @@
 	import Goal from './Goal.svelte';
 	import { llmConfig } from '../../../stores.js';
 	import { PROVIDERS } from '$lib/llm.js';
-	import { openSettings } from '$lib/settings.js';
+	import { newMovesEverySong, openSettings } from '$lib/settings.js';
 
 	/** @type {any} */
 	export let dj;
@@ -77,6 +77,11 @@
 	<label class="toggle">
 		<span class="toggle-text">Clean only <span class="sub">Skip explicit songs in picks</span></span>
 		<input class="switch" type="checkbox" role="switch" checked={o.clean} on:change={(e) => dj.setClean(e.currentTarget.checked)} />
+	</label>
+
+	<label class="toggle">
+		<span class="toggle-text">New moves every song <span class="sub">Off keeps the board until you refresh it (this device)</span></span>
+		<input class="switch" type="checkbox" role="switch" bind:checked={$newMovesEverySong} />
 	</label>
 
 	{#if withGoal}

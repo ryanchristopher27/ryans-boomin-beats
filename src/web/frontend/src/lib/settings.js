@@ -2,8 +2,8 @@
 import { writable } from 'svelte/store';
 import { llmSettingsOpen } from '../stores.js';
 
-const KEYS = { textScale: 'bb-zoom', compact: 'bb-compact', motion: 'bb-motion', duck: 'bb-duck' };
-export const DEFAULTS = { textScale: 0.9, compact: false, motion: true, duck: true };
+const KEYS = { textScale: 'bb-zoom', compact: 'bb-compact', motion: 'bb-motion', duck: 'bb-duck', everySong: 'bb-dj-every-song' };
+export const DEFAULTS = { textScale: 0.9, compact: false, motion: true, duck: true, everySong: false };
 export const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.2];
 
 function saved(name) {
@@ -37,12 +37,15 @@ export const playbackMotion = saved('motion');
 
 /** Lower Spotify's volume while a preview plays (F2). */
 export const duckPreview = saved('duck');
+/** New DJ moves on every song change; off keeps the board until the host asks (dj.js). */
+export const newMovesEverySong = saved('everySong');
 
 export function resetSettings() {
 	textScale.set(DEFAULTS.textScale);
 	compactRows.set(DEFAULTS.compact);
 	playbackMotion.set(DEFAULTS.motion);
 	duckPreview.set(DEFAULTS.duck);
+	newMovesEverySong.set(DEFAULTS.everySong);
 }
 
 /** Which tab the gear popover shows. */

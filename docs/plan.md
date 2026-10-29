@@ -3681,3 +3681,11 @@ dev, then reviewed together. Tests: frontend 95, backend all OK.
   until the app starts.
 - **Needs a real phone:** the safe-area inset under the tab bar, ducking on the device that's
   playing (some devices refuse volume changes), and volume restore when a tab is killed.
+
+### The moves board stays (2026-10-28, owner request)
+The board of moves no longer resets when the song changes or the page reloads. It is saved on the
+device (`dj_board`, dropped after 6 h idle like the set log) with the song it was made for; the DJ
+toolbar shows "Picks for <song> · New picks for <now playing>" when they differ. Option changes
+(Bold, Familiar, goal) still ask for new picks; a failed round keeps the old board. Autofill and
+Driver queue from the board and only ask again once they've used every pick on it. **DJ controls
+→ "New moves every song"** (this device, off by default) restores the old ask-every-song behaviour.
