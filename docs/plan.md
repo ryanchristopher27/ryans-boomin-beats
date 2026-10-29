@@ -3656,3 +3656,28 @@ quota and AI tokens are real costs.
 **Play next instead of Play now.** True "play now" would mean skipping past songs already sent
 to Spotify's queue, which the app can't take back. "Play next" (move the song to the top of Up
 next) is honest and safe.
+
+### F2, F4, F5 results (2026-10-28)
+Built in parallel by three builders on their own worktrees and branches (f2, f4, f5), merged into
+dev, then reviewed together. Tests: frontend 95, backend all OK.
+- **F2 Previews:** a 30 s Deezer clip (`GET /preview/`, Deezer only, never cached) through
+  `<audio>`, stopping at 15 s. One global preview with a pill (Queue it / Stop). Covers in Explore,
+  Builder, DJ moves and search have a play badge. "Lower Spotify while previewing" (General, on by
+  default) ducks to 20% via `POST /player/volume/` and restores on stop, end, and page hide/close
+  (keepalive). Not wired yet: Up next, Requests, Recent, the Playlist widget, Profile top tracks.
+- **F4 Command palette:** ⌘K / Ctrl+K or the header Search button. Recent songs, type-ahead
+  matches from 3 characters (debounced, the existing Deezer/Last.fm search), Go to pages and
+  Settings. On the DJ page a song goes to Up next; elsewhere it opens in Explore.
+- **F5 Phone layout:** breakpoints on effective width (window ÷ text scale) set as `data-bp` /
+  `data-narrow` on the root; every 759/1179 media query converted. Phone: bottom tab bar, header
+  nav hidden (Search and Playlists icon-only), mini player trimmed, settings sheet, full-width dock,
+  16px padding. Below desktop the DJ grid stacks (6 columns tablet, 1 phone), Now playing first in
+  Compass and Board. Edit layout is desktop-only.
+- **Review fixes:** stacked heights no longer leak into the saved layout; the grid's breakpoints
+  scale with text size; a preview right after a restore ducks from the restored volume; Queue it
+  can't stick; the dock no longer squeezes the page on phone; panes leave room for the tab bar.
+- **Left as is:** `/preview/` answers 503 (not 404) for a Deezer id that doesn't exist, and has no
+  per-IP limit (it shares Deezer's rate gate with search). A phone first paints the desktop layout
+  until the app starts.
+- **Needs a real phone:** the safe-area inset under the tab bar, ducking on the device that's
+  playing (some devices refuse volume changes), and volume restore when a tab is killed.
