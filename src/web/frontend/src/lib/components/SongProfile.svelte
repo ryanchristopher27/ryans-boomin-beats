@@ -312,9 +312,7 @@
 		height: 12px;
 	}
 
-	@media (max-width: 759px) {
-		.aspects {
-			grid-template-columns: 1fr;
-		}
+	:global([data-bp='phone']) .aspects {
+		grid-template-columns: 1fr;
 	}
 </style>

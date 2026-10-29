@@ -212,7 +212,7 @@
 		</div>
 	{:else}
 		{#key gridKey}
-			<Grid bind:this={grid} bind:items {editing} fill let:item>
+			<Grid bind:this={grid} bind:items {editing} fill lead={layout.preset === 'compass' || layout.preset === 'board' ? 'nowPlaying' : null} let:item>
 				<Widget title={titleFor(item)} {editing} onRemove={() => grid.remove(item.id)} onNudge={(dx, dy, dw, dh) => nudge(item, dx, dy, dw, dh)}>
 					<svelte:fragment slot="badge">
 						{#if item.type === 'requests' && requestCount}
@@ -420,9 +420,7 @@
 		text-align: center;
 	}
 
-	@media (max-width: 759px) {
-		.dj-page {
-			padding: 12px 12px 0;
-		}
+	:global([data-bp='phone']) .dj-page {
+		padding: 12px 16px 0;
 	}
 </style>

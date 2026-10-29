@@ -410,14 +410,12 @@
 		font-size: calc(12px * var(--text-scale, 1));
 	}
 
-	@media (max-width: 759px) {
-		.popover {
-			top: auto;
-			left: 8px;
-			right: 8px;
-			bottom: 8px;
-			width: auto;
-			max-height: 82vh;
-		}
+	:global([data-bp='phone']) .popover {
+		top: auto;
+		left: 8px;
+		right: 8px;
+		bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+		width: auto;
+		max-height: 82vh;
 	}
 </style>

@@ -5,13 +5,8 @@
 	import { settingsTab } from '$lib/settings.js';
 	import Icon from '$lib/components/Icon.svelte';
 	import { getDJ } from '$lib/dj/instance.js';
+	import { navLinks } from '$lib/nav.js';
 
-	const navLinks = [
-		{ label: 'Explore', href: '/', page: 'Explore', icon: 'compass' },
-		{ label: 'Builder', href: '/playlist-builder/', page: 'Playlist Builder', icon: 'wand' },
-		{ label: 'DJ', href: '/dj/', page: 'DJ', icon: 'disc' },
-		{ label: 'Profile', href: '/profile/', page: 'Profile', icon: 'user' }
-	];
 
 	// The DJ tab shows a dot while music plays anywhere in the app.
 	const player = getDJ()?.player;
@@ -39,9 +34,10 @@
 			class="btn small"
 			class:on={$playlistsPanelOpen}
 			aria-pressed={$playlistsPanelOpen}
+			aria-label="Playlists"
 			on:click={() => ($playlistsPanelOpen = !$playlistsPanelOpen)}
 		>
-			<Icon name="playlist" size={15} /> Playlists
+			<Icon name="playlist" size={15} /> <span class="label">Playlists</span>
 		</button>
 		<button
 			class="gear"
@@ -198,13 +194,22 @@
 	}
 
 	/* Below desktop the brand and actions shrink to their content. */
-	@media (max-width: 1179px) {
-		.brand,
-		.actions {
-			width: auto;
-		}
-		.brand span {
-			display: none;
-		}
+	:global([data-narrow]) .brand,
+	:global([data-narrow]) .actions {
+		width: auto;
+	}
+	:global([data-narrow]) .brand span {
+		display: none;
+	}
+
+	/* Phone: the tab bar replaces the nav; Playlists shrinks to its icon. */
+	:global([data-bp='phone']) nav {
+		display: none;
+	}
+	:global([data-bp='phone']) .brand {
+		margin-right: auto;
+	}
+	:global([data-bp='phone']) .label {
+		display: none;
 	}
 </style>

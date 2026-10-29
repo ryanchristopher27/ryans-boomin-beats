@@ -512,31 +512,27 @@
 		align-self: flex-start;
 	}
 
-	@media (max-width: 1179px) {
-		.columns {
-			grid-template-columns: minmax(0, 1fr);
-		}
-		.recipe-col {
-			position: static;
-			max-height: none;
-		}
+	:global([data-narrow]) .columns {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	:global([data-narrow]) .recipe-col {
+		position: static;
+		max-height: none;
 	}
 
-	@media (max-width: 759px) {
-		.hero {
-			padding: 8vh 16px 40px;
-		}
-		.below,
-		.columns {
-			padding-left: 16px;
-			padding-right: 16px;
-		}
-		.pathbar {
-			padding: 10px 16px;
-		}
-		.big-cover {
-			width: 160px;
-			height: 160px;
-		}
+	:global([data-bp='phone']) .hero {
+		padding: 8vh 16px 40px;
+	}
+	:global([data-bp='phone']) .below,
+	:global([data-bp='phone']) .columns {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+	:global([data-bp='phone']) .pathbar {
+		padding: 10px 16px;
+	}
+	:global([data-bp='phone']) .big-cover {
+		width: 160px;
+		height: 160px;
 	}
 </style>

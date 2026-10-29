@@ -188,9 +188,7 @@
 		background: rgba(255, 255, 255, 0.08);
 	}
 
-	@media (max-width: 759px) {
-		.hero {
-			padding: 8vh 16px 48px;
-		}
+	:global([data-bp='phone']) .hero {
+		padding: 8vh 16px 48px;
 	}
 </style>

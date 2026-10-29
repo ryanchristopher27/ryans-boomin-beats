@@ -211,7 +211,7 @@
 		position: fixed;
 		top: var(--header-height);
 		right: 0;
-		bottom: var(--mini-h, 0px);
+		bottom: calc(var(--mini-h, 0px) + var(--tab-h, 0px));
 		z-index: 30;
 		width: var(--panel-width);
 		display: flex;
@@ -414,9 +414,7 @@
 		width: 70%;
 	}
 
-	@media (max-width: 759px) {
-		.dock {
-			width: 100%;
-		}
+	:global([data-bp='phone']) .dock {
+		width: 100%;
 	}
 </style>

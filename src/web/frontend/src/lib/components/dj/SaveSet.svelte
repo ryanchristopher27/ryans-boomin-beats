@@ -270,15 +270,13 @@
 		color: var(--text-muted);
 	}
 
-	@media (max-width: 759px) {
-		.modal {
-			grid-template-columns: minmax(0, 1fr);
-			overflow-y: auto;
-		}
-		.right {
-			border-left: none;
-			border-top: 1px solid var(--border-subtle);
-			max-height: 260px;
-		}
+	:global([data-bp='phone']) .modal {
+		grid-template-columns: minmax(0, 1fr);
+		overflow-y: auto;
+	}
+	:global([data-bp='phone']) .right {
+		border-left: none;
+		border-top: 1px solid var(--border-subtle);
+		max-height: 260px;
 	}
 </style>

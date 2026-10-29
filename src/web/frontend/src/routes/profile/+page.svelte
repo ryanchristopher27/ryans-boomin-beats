@@ -818,24 +818,20 @@
 		color: var(--text-subtle);
 	}
 
-	@media (max-width: 1179px) {
-		.m {
-			grid-column: span 6;
-		}
-		.has-expanded .m {
-			grid-column: span 12;
-		}
+	:global([data-narrow]) .m {
+		grid-column: span 6;
+	}
+	:global([data-narrow]) .has-expanded .m {
+		grid-column: span 12;
 	}
 
-	@media (max-width: 759px) {
-		.content {
-			padding: 20px 16px 40px;
-		}
-		.m {
-			grid-column: span 12;
-		}
-		.summary {
-			font-size: calc(18px * var(--text-scale, 1));
-		}
+	:global([data-bp='phone']) .content {
+		padding: 20px 16px 40px;
+	}
+	:global([data-bp='phone']) .m {
+		grid-column: span 12;
+	}
+	:global([data-bp='phone']) .summary {
+		font-size: calc(18px * var(--text-scale, 1));
 	}
 </style>

@@ -87,7 +87,7 @@
 		position: fixed;
 		left: 0;
 		right: 0;
-		bottom: 0;
+		bottom: var(--tab-h, 0px);
 		z-index: 40;
 		height: 64px;
 		display: grid;
@@ -262,5 +262,15 @@
 	.end .btn {
 		border-color: var(--border-control);
 		color: var(--text-primary);
+	}
+
+	/* Phone: song and transport only. */
+	:global([data-bp='phone']) .mini {
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 8px;
+		padding: 0 8px 0 12px;
+	}
+	:global([data-bp='phone']) .end {
+		display: none;
 	}
 </style>

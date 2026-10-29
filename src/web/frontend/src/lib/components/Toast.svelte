@@ -22,7 +22,7 @@
 	.region {
 		position: fixed;
 		left: 50%;
-		bottom: calc(var(--mini-h, 0px) + 16px);
+		bottom: calc(var(--mini-h, 0px) + var(--tab-h, 0px) + 16px);
 		transform: translateX(-50%);
 		z-index: 70;
 		pointer-events: none;
