@@ -204,3 +204,63 @@ Phase context: /build (SY3, W1–W4, Q0–Q4) · /review (W1–W4) · /brainstor
 
 ## Suggested Next Phase
 `/iterate` for the golden-query test and the small leftovers, while real use accumulates for the quota check. Before a public launch, `/brainstorm` the Apple Music path, since Deezer's terms and Spotify's quota both block it.
+
+---
+
+# Reflect — Web Redesign, Hosting, F1 + F3, and the Claude Code Relay
+Date: 2026-10-28
+Type: Milestone
+Phase context: /design export → /plan (redesign) → /loop /build R0–R6 → hosting → /build F1, F3a–F3h → relay → production deploys
+
+## Accomplished
+- Design handoff exported (context doc, screenshots, logo) and the Claude Design redesign built as Part 1 (R0–R6): tokens + Geist, shell, shared SongRow, Explore, Builder, Profile, DJ, audit + polish.
+- Web app hosted on Vercel (adapter-vercel, Node 22); the backend guard accepts a Spotify bearer token checked against `ALLOWED_SPOTIFY_USERS`.
+- F1: Settings (General + AI) and first-run onboarding.
+- F3a–F3h: night presets, Up next editing with undo, per-move refresh with feedback, Familiar ↔ New seeded from top tracks, a DJ without an AI key (Last.fm), Save tonight's set, the Compass layout with arrow keys, the Playlist widget and the Builder's "Start a DJ set".
+- "Your Claude Code" on the hosted site: the backend answers 428 with the prompt and the page relays it to trip-fairy-helper (0.1.5 published with Boomin Beats allowed).
+- Four production deploys; the Playlist widget and Up next were checked live against the real account.
+
+## What Worked
+- **A mocked-backend headless harness** (Playwright CLI session + route mocks) let every F3 milestone be checked visually and by state without touching Spotify, so nothing was queued or written by accident.
+- **Small milestone slices (F3a–F3h)** with a commit and tracker move each kept a long run reviewable and easy to deploy in one push.
+- **One seam for the relay.** All AI went through `LLMClient.generate`, so the relay is one provider plus a 428 handler; the four routes barely changed. Sending `llm_error` back instead of failing on the page let every route degrade the way it already does.
+- **The live check right after deploy** proved the newer Spotify `/items` route and paging before the user relied on them.
+
+## What Didn't Work
+- **The relay's last hop took three rounds to diagnose.** Tests and a local end-to-end run passed, but on the hosted site (1) an old `npm run ai` server from Oct 4 still held port 8787 with the old allowed sites, and (2) Chrome's per-site Local network access permission was off. The localhost version always worked, so it hid both.
+- **Mocks hid a missing-header bug.** Save tonight's set's recap never sent the AI headers (F3f). The harness answered the recap without checking headers, so it looked fine until the relay work exposed it.
+- **Multi-line Python string patches broke one edit** (`startSet` lost the `read()` header); the Edit tool would have failed loudly instead.
+- **The tracker review column grew again** (~25 tasks), the same friction as the October reflection.
+
+## Decisions Reviewed
+| Decision | Outcome | Confidence |
+|---|---|---|
+| Reskin first, features later (R then F) | Part 1 shipped cleanly; features layered on without rework | High |
+| No CSS zoom anywhere (gridstack drag) | Text size via `--text-scale` works everywhere | High |
+| Relay through the page (428 + replies replayed) over porting prompts to JS | One seam, routes unchanged; costs a repeat request per AI call | High |
+| Reuse trip-fairy-helper rather than a Boomin Beats package | One process, one port, one code; neutral name later (#8deebf) | High |
+| Play next instead of Play now | Avoids skipping songs already sent to Spotify | High |
+| iOS ignores `familiar` for now | iPhone edits reset it to Mix | Medium (needs the iOS field) |
+
+## Lessons Learned
+- **When a browser says "can't reach" a local helper, check what holds the port first** (`lsof -iTCP:<port>`), then the browser's local-network permission. A success on localhost doesn't prove the hosted path.
+- **Mocks should assert the headers a route needs**, not just answer it.
+- **A long-running dev server keeps the config it started with**; after changing shared code, restart every process that imports it.
+- Recurring: **close the review column at each reflect**, not only when it's huge.
+
+## Surprises
+- Vercel Hobby runtime logs show only app output, so a successful relayed request leaves no trace; the user's report was the only proof.
+- npm answers an unauthenticated publish with a 404, not a 401.
+- The Trip Fairy local server shares the helper core, so it picked up the new allowed site once restarted.
+
+## Memory Updates
+- Updated: Boomin Beats project memory (the relay, and the port 8787 / Chrome local-network debug order).
+
+## Next Steps
+1. Live-check Save tonight's set during a real session (a few songs played, then save; includes the recap).
+2. Teach the iOS app the `familiar` option so iPhone edits keep it.
+3. F2 Previews, F4 Command palette, F5 Phone layout (started in parallel).
+4. Carried: SY2 cellular check, DJ6 goals live check, quota check (e2df2d).
+
+## Suggested Next Phase
+`/build` for F2, F4 and F5 (running in parallel), then `/review` of the three before they deploy together.
