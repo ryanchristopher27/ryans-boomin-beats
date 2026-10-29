@@ -1,5 +1,5 @@
 <script>
-	import { page, llmConfig, playlistsPanelOpen, llmSettingsOpen } from '../stores.js';
+	import { page, llmConfig, playlistsPanelOpen, llmSettingsOpen, paletteOpen } from '../stores.js';
 	import BoominBeatsLogo from '$lib/images/BoominBeatsLogo.jpg';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
 	import { settingsTab } from '$lib/settings.js';
@@ -35,6 +35,9 @@
 	</nav>
 
 	<div class="actions">
+		<button class="btn small" on:click={() => ($paletteOpen = true)} aria-label="Search (⌘K)" aria-keyshortcuts="Control+K Meta+K">
+			<Icon name="search" size={15} /> Search <kbd class="mono">⌘K</kbd>
+		</button>
 		<button
 			class="btn small"
 			class:on={$playlistsPanelOpen}
@@ -80,7 +83,7 @@
 	}
 
 	.brand {
-		width: 220px;
+		width: 280px;
 		display: flex;
 		align-items: center;
 		gap: 10px;
@@ -144,7 +147,7 @@
 	}
 
 	.actions {
-		width: 220px;
+		width: 280px;
 		display: flex;
 		align-items: center;
 		justify-content: flex-end;
@@ -160,6 +163,14 @@
 	.actions .btn.on {
 		background: var(--surface-active);
 		border-color: var(--border-strong);
+	}
+
+	.actions kbd {
+		padding: 1px 5px;
+		border-radius: 5px;
+		border: 1px solid var(--border-control);
+		font-size: calc(11px * var(--text-scale, 1));
+		color: var(--text-subtle);
 	}
 
 	.gear {
@@ -202,6 +213,9 @@
 		.brand,
 		.actions {
 			width: auto;
+		}
+		.actions kbd {
+			display: none;
 		}
 		.brand span {
 			display: none;
