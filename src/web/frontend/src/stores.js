@@ -96,3 +96,6 @@ export const exploreSession = persisted('exploreSession_v2', {
 // Whether the AI settings popover in the header is open; the DJ page opens it
 // from its "needs key" state.
 export const llmSettingsOpen = writable(false);
+
+// The ⌘K command palette (CommandPalette.svelte); the header's Search button opens it too.
+export const paletteOpen = writable(false);
