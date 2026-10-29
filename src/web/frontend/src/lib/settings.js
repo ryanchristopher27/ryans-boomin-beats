@@ -2,8 +2,8 @@
 import { writable } from 'svelte/store';
 import { llmSettingsOpen } from '../stores.js';
 
-const KEYS = { textScale: 'bb-zoom', compact: 'bb-compact', motion: 'bb-motion' };
-export const DEFAULTS = { textScale: 0.9, compact: false, motion: true };
+const KEYS = { textScale: 'bb-zoom', compact: 'bb-compact', motion: 'bb-motion', duck: 'bb-duck' };
+export const DEFAULTS = { textScale: 0.9, compact: false, motion: true, duck: true };
 export const TEXT_SCALES = [0.8, 0.9, 1, 1.1, 1.2];
 
 function saved(name) {
@@ -35,10 +35,14 @@ export const compactRows = saved('compact');
 /** The visualizer, glowing covers and drifting colour while music plays. */
 export const playbackMotion = saved('motion');
 
+/** Lower Spotify's volume while a preview plays (F2). */
+export const duckPreview = saved('duck');
+
 export function resetSettings() {
 	textScale.set(DEFAULTS.textScale);
 	compactRows.set(DEFAULTS.compact);
 	playbackMotion.set(DEFAULTS.motion);
+	duckPreview.set(DEFAULTS.duck);
 }
 
 /** Which tab the gear popover shows. */

@@ -2,7 +2,7 @@
 	// The gear popover (F1): General and AI tabs, saved on this device.
 	import { onMount } from 'svelte';
 	import { llmConfig, access_token } from '../../../stores.js';
-	import { compactRows, playbackMotion, resetSettings, settingsTab, textScale, TEXT_SCALES } from '$lib/settings.js';
+	import { compactRows, duckPreview, playbackMotion, resetSettings, settingsTab, textScale, TEXT_SCALES } from '$lib/settings.js';
 	import { PROVIDERS } from '$lib/llm.js';
 	import { onboarding } from '$lib/onboarding.js';
 	import { logoutSpotify } from '$lib/spotifyAuth.js';
@@ -81,6 +81,10 @@
 			<label class="toggle">
 				<span class="label"><span class="title">Clean only</span><span class="sub">Skip explicit songs in DJ picks, playlists and recommendations.</span></span>
 				<input class="switch" type="checkbox" role="switch" checked={clean} disabled={!dj} on:change={(e) => dj?.setClean(e.currentTarget.checked)} />
+			</label>
+			<label class="toggle">
+				<span class="label"><span class="title">Lower Spotify while previewing</span><span class="sub">Drops Spotify's volume to about 20% during a preview, then restores it.</span></span>
+				<input class="switch" type="checkbox" role="switch" bind:checked={$duckPreview} />
 			</label>
 
 			<p class="section mono">MOTION</p>

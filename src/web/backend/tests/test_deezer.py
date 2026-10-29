@@ -145,6 +145,36 @@ class FindMany(unittest.TestCase):
         self.assertEqual(asyncio.run(deezer.find_many(songs[:1], broken))[('Electric', 'Alina Baraz')]['deezer_id'], 2)
 
 
+class Preview(unittest.TestCase):
+    def test_by_deezer_id_isrc_or_title(self):
+        dz = fake({('/track/7', ''): {'preview': 'https://cdn/7.mp3'}, ('/track/isrc:USAAA0000001', ''): {'id': 5, 'preview': 'https://cdn/5.mp3'},
+                   ('/search', 'Electric Alina Baraz'): {'data': [track(2, 'Electric', 'Alina Baraz')]}, ('/track/2', ''): {'preview': 'https://cdn/2.mp3'}})
+        self.assertEqual(asyncio.run(dz.preview(deezer_id=7)), 'https://cdn/7.mp3')
+        self.assertEqual(asyncio.run(dz.preview(isrc='USAAA0000001')), 'https://cdn/5.mp3')
+        self.assertEqual(asyncio.run(dz.preview(title='Electric', artist='Alina Baraz')), 'https://cdn/2.mp3')
+
+    def test_unknown_isrc_falls_back_to_title_and_nothing_found_is_none(self):
+        dz = fake({('/track/isrc:USAAA0000001', ''): {'error': {'code': 800, 'message': 'no data'}},
+                   ('/search', 'Electric Alina Baraz'): {'data': [track(2, 'Electric', 'Alina Baraz')]}, ('/track/2', ''): {'preview': 'https://cdn/2.mp3'}})
+        self.assertEqual(asyncio.run(dz.preview(isrc='USAAA0000001', title='Electric', artist='Alina Baraz')), 'https://cdn/2.mp3')
+        self.assertIsNone(asyncio.run(dz.preview(isrc='USAAA0000001')))
+        self.assertIsNone(asyncio.run(fake({('/track/7', ''): {'preview': ''}}).preview(deezer_id=7)))
+
+    def test_endpoint_returns_url_404_or_503_and_never_spends_spotify(self):
+        from fastapi.testclient import TestClient
+        import main
+        from services import spotify_client
+        before = spotify_client.searches_made
+        for routes, status in (({('/track/7', ''): {'preview': 'https://cdn/7.mp3'}}, 200), ({('/track/7', ''): {'preview': ''}}, 404),
+                               ({('/track/7', ''): {'error': {'code': 700}}}, 503)):
+            with mock.patch.object(deezer, 'client', return_value=fake(routes)):
+                r = TestClient(main.app).get('/preview/', params={'dz': 7})
+            self.assertEqual(r.status_code, status)
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(spotify_client.searches_made, before)
+        self.assertEqual(TestClient(main.app).get('/preview/', params={'isrc': 'bad'}).status_code, 422)
+
+
 class SearchEndpoint(unittest.TestCase):
     """Type-ahead: Last.fm ranks (originals first), Deezer fills in, re-uploads
     drop, and no Spotify search is spent. Last.fm and Deezer are faked."""

@@ -52,6 +52,7 @@
 	image={pick.image}
 	reason={pick.reason}
 	{compact}
+	previewSong={pick}
 	selected={$selected?.id === pick.id}
 	note={MISS[status] ?? ''}
 	noteTone="warning"

@@ -153,3 +153,20 @@ async def search(searchValue: str = Query(..., min_length=1, max_length=200)):
         song = found.get((h['title'], h['artist']))
         keep(deezer.as_track(song) if song else _bare(h['title'], h['artist'], h.get('image', '')))
     return {'type': 'searchSongs', 'tracks': tracks}
+
+
+@router.get("/preview/")
+async def preview(
+    dz: int | None = Query(None, ge=1),
+    isrc: str | None = Query(None, pattern=r'^[A-Za-z0-9]{12}$'),
+    title: str = Query('', max_length=300),
+    artist: str = Query('', max_length=300),
+):
+    """A fresh Deezer 30 s preview URL for a song (F2). Never touches Spotify."""
+    try:
+        url = await deezer.client().preview(dz, isrc, title, artist)
+    except deezer.DeezerUnavailable:
+        raise HTTPException(status_code=503, detail="Previews aren't available right now. Try again in a moment.")
+    if not url:
+        raise HTTPException(status_code=404, detail="No preview for this song.")
+    return {'url': url}

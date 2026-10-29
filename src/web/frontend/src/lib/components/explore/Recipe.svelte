@@ -104,6 +104,7 @@
 					image={s.spotify.image}
 					reason={s.reason ?? ''}
 					dragId={s.spotify.id}
+					previewSong={s.spotify}
 					onOpen={() => onOpen(s.spotify)}
 					openLabel="Explore {s.spotify.title}"
 					onAdd={() => queue(s.spotify.id)}

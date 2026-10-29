@@ -119,7 +119,7 @@
 					on:mousedown|preventDefault={() => choose(track)}
 					on:mouseenter={() => (activeIndex = i)}
 				>
-					<SongRow title={track.title} artists={track.artists} image={track.image} />
+					<SongRow title={track.title} artists={track.artists} image={track.image} previewSong={track} />
 				</li>
 			{/each}
 			{#if !tracks.length}<li class="none" role="presentation">No songs match “{searched}”. Try an artist name.</li>{/if}

@@ -159,6 +159,24 @@ class Deezer:
                 return _song(t)
         return await self._from_top_tracks(title, artist)
 
+    async def preview(self, deezer_id: int | None = None, isrc: str | None = None, title: str = '', artist: str = '') -> str | None:
+        """A fresh 30 s preview URL, or None. Deezer signs these and they expire
+        within hours, so they are fetched per play and never cached."""
+        data = None
+        if deezer_id is None and isrc:
+            try:
+                data = await self._get(f'/track/isrc:{isrc}')
+            except DeezerUnavailable:
+                pass  # unknown ISRC answers with an error body; title + artist still can match
+        if data is None:
+            if deezer_id is None:
+                song = await self.find(title, artist) if title and artist else None
+                if not song:
+                    return None
+                deezer_id = song['deezer_id']
+            data = await self._get(f'/track/{deezer_id}')
+        return data.get('preview') or None
+
     async def _from_top_tracks(self, title: str, artist: str) -> dict | None:
         lead = artists_of(artist)[0] if artists_of(artist) else artist
         found = (await self._get('/search/artist', q=lead, limit=1)).get('data', [])

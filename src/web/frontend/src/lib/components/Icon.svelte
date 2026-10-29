@@ -8,6 +8,7 @@
 
 	const paths = {
 		play: 'M7 4v16l13-8z',
+		stop: 'M6 6h12v12H6z',
 		pause: 'M6 5h4v14H6zM14 5h4v14h-4z',
 		prev: 'M20 5v14l-12-7zM4 5h2v14H4z',
 		next: 'M4 5v14l12-7zM18 5h2v14h-2z',

@@ -103,6 +103,7 @@ class RateLimits(unittest.TestCase):
         player._player_locked_until = 0.0
         player._state_cache.clear()
         self.calls = 0
+        self.volumes = []
         self.fail_with = None
         outer = self
 
@@ -116,6 +117,11 @@ class RateLimits(unittest.TestCase):
             def pause_playback(self):
                 pass
             start_playback = next_track = previous_track = pause_playback
+
+            def volume(self, percent):
+                outer.volumes.append(percent)
+                if outer.fail_with:
+                    raise outer.fail_with
         self.patch = mock.patch.object(player, 'user_client', return_value=FakeSpotify())
         self.patch.start()
         main.app.dependency_overrides[get_spotify_token] = lambda: 'tok'
@@ -146,6 +152,28 @@ class RateLimits(unittest.TestCase):
     def test_lockouts_are_capped(self):
         self.fail_with = SpotifyException(429, -1, 'too many', headers={'Retry-After': '86400'})
         self.assertEqual(self.client.get('/player/state/').json()['retry_after'], player._MAX_LOCKOUT)
+
+    def test_volume_sets_the_device_volume(self):
+        self.assertEqual(self.client.post('/player/volume/', json={'percent': 20}).json(), {'ok': True})
+        self.assertEqual(self.volumes, [20])
+
+    def test_volume_is_validated_at_the_boundary(self):
+        for body in ({'percent': 101}, {'percent': -1}, {'percent': 'loud'}, {}, {'percent': 5, 'x': 1}):
+            self.assertEqual(self.client.post('/player/volume/', json=body).status_code, 422)
+        self.assertEqual(self.volumes, [])
+
+    def test_volume_maps_player_errors_and_backs_off_on_429(self):
+        self.fail_with = SpotifyException(404, -1, 'Not found.')
+        self.assertEqual(self.client.post('/player/volume/', json={'percent': 20}).json(), {'error': 'no_active_device'})
+        self.fail_with = SpotifyException(429, -1, 'too many', headers={'Retry-After': '9'})
+        r = self.client.post('/player/volume/', json={'percent': 20})
+        self.assertEqual((r.status_code, r.json()['retry_after']), (503, 9))
+        self.client.post('/player/volume/', json={'percent': 20})  # locked out: Spotify isn't called again
+        self.assertEqual(len(self.volumes), 2)
+
+    def test_state_reports_the_device_volume(self):
+        n = normalize_playback(_playback(device={'name': 'MacBook', 'type': 'Computer', 'volume_percent': 63}))
+        self.assertEqual(n['device']['volume'], 63)
 
 
 if __name__ == '__main__':
