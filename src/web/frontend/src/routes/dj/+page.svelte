@@ -4,7 +4,7 @@
 	import { resolvedId, toSpotifyIds } from '$lib/playlistActions.js';
 	import { getDJ } from '$lib/dj/instance.js';
 	import { coverHue } from '$lib/dj/ambience.js';
-	import { KEY_LABEL, PRESETS, STORAGE_KEY, WIDGETS, addable, itemsFor, loadLayout, moveForKey, moveLabel } from '$lib/dj/layout.js';
+	import { KEY_LABEL, PRESETS, STORAGE_KEY, WIDGETS, addable, itemsFor, loadLayout, moveForKey, moveLabel, withChat } from '$lib/dj/layout.js';
 	import { queuedKeys } from '$lib/dj/logic.js';
 	import { say } from '$lib/toast.js';
 	import { breakpoint } from '$lib/breakpoint.js';
@@ -19,6 +19,8 @@
 	import SongProfile from '$lib/components/dj/SongProfile.svelte';
 	import Recent from '$lib/components/dj/Recent.svelte';
 	import Playlist from '$lib/components/dj/Playlist.svelte';
+	import Chat from '$lib/components/dj/Chat.svelte';
+	import { chatLog, clearChat } from '$lib/dj/chat.js';
 	import { provideDJContext } from '$lib/components/dj/context.js';
 	import { NIGHT, activePreset, applyPreset } from '$lib/dj/presets.js';
 	import { page as route } from '$app/stores';
@@ -42,6 +44,13 @@
 	}
 
 	let layout = loadLayout(read());
+	// Once per browser: a saved custom layout from before the chat widget gets it (withChat).
+	// A custom layout made after that first visit is the host's own choice.
+	const firstChatVisit = !seenChatWidget();
+	if (layout.custom && firstChatVisit) {
+		layout = { ...layout, custom: withChat(layout.custom) };
+		persist();
+	}
 	let items = itemsFor(layout);
 	let gridKey = 0;
 	let editing = false;
@@ -73,6 +82,16 @@
 		const tracks = songs.map((s) => ({ ...s, id: resolvedId(s.id) })).filter((t) => t.id);
 		await dj.addMany(tracks);
 		say(`Added ${tracks.length} song${tracks.length === 1 ? '' : 's'} to Up next.${missing ? ` ${missing} weren't on Spotify.` : ''}`);
+	}
+
+	function seenChatWidget() {
+		try {
+			const seen = localStorage.getItem('dj_chat_widget') === '1';
+			localStorage.setItem('dj_chat_widget', '1');
+			return seen;
+		} catch {
+			return true;
+		}
 	}
 
 	function read() {
@@ -258,6 +277,8 @@
 							<button class="icon-btn" on:click={() => dj.loadSuggestions(undefined, true)} disabled={$suggestions.status === 'loading'} aria-label="Refresh moves" title="Refresh moves">
 								<Icon name="refresh" size={16} />
 							</button>
+						{:else if item.type === 'chat' && $chatLog.length}
+							<button class="btn small" on:click={clearChat}>Clear</button>
 						{:else if item.type === 'upNext'}
 							<button class="btn small" class:primary={addingSong} on:click={() => (addingSong = !addingSong)} aria-expanded={addingSong}>
 								<Icon name={addingSong ? 'x' : 'search'} size={14} /> {addingSong ? 'Close' : 'Add song'}
@@ -285,6 +306,8 @@
 						<Recent {dj} />
 					{:else if item.type === 'playlist'}
 						<Playlist {dj} />
+					{:else if item.type === 'chat'}
+						<Chat {dj} />
 					{/if}
 				</Widget>
 			</Grid>

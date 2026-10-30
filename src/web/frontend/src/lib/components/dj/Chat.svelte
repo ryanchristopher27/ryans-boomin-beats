@@ -1,12 +1,13 @@
 <script>
-	// Ask the DJ (in DJ controls): new picks in your own words, or a change to the
-	// controls, the goal or the layout. lib/dj/chat.js sends and applies.
+	// The Ask the DJ widget: new picks in your own words, or a change to the
+	// controls, the goal or the layout. lib/dj/chat.js sends and applies; the
+	// widget header holds Clear (routes/dj/+page.svelte).
 	import { afterUpdate, tick } from 'svelte';
 	import Icon from '../Icon.svelte';
 	import Bars from '../ui/Bars.svelte';
 	import PickRow from './PickRow.svelte';
 	import { djContext } from './context.js';
-	import { chatBusy, chatLog, clearChat, sendChat } from '$lib/dj/chat.js';
+	import { chatBusy, chatLog, sendChat } from '$lib/dj/chat.js';
 	import { queuedKeys } from '$lib/dj/logic.js';
 	import { openSettings } from '$lib/settings.js';
 	import { hasLLM } from '$lib/dj/api.js';
@@ -48,11 +49,6 @@
 </script>
 
 <section class="chat" aria-label="Ask the DJ">
-	<div class="head">
-		<h3>Ask the DJ</h3>
-		{#if $chatLog.length}<button class="link" on:click={clearChat}>Clear</button>{/if}
-	</div>
-
 	{#if noAI}
 		<p class="note">Connect an AI to chat with the DJ. <button class="link" on:click={() => openSettings('ai')}>Add one</button></p>
 	{:else}
@@ -94,24 +90,14 @@
 </section>
 
 <style>
+	/* Fills the widget: the conversation scrolls, the composer stays at the bottom. */
 	.chat {
+		height: 100%;
+		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		padding-top: 12px;
-		border-top: 1px solid var(--border-subtle);
-	}
-
-	.head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-	}
-
-	h3 {
-		margin: 0;
-		font-size: calc(13px * var(--text-scale, 1));
-		font-weight: 600;
+		padding: 8px 12px 12px;
 	}
 
 	.link {
@@ -137,7 +123,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		max-height: 320px;
+		flex: 1;
+		min-height: 0;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 	}
@@ -232,6 +219,7 @@
 	}
 
 	.composer {
+		margin-top: auto;
 		display: flex;
 		align-items: flex-end;
 		gap: 6px;

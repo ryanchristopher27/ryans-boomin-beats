@@ -3,7 +3,7 @@
 // board). The log is kept on this device, so it survives a layout change (the
 // grid remounts its widgets) and a reload.
 import { get, writable } from 'svelte/store';
-import { WIDGETS, layoutFromChat } from './layout.js';
+import { WIDGETS, itemsFor, layoutFromChat, withChat } from './layout.js';
 
 const KEY = 'dj_chat';
 const KEEP = 30;
@@ -47,13 +47,14 @@ export function clearChat() {
 export function applyActions(actions, { dj, page }) {
 	const done = [];
 	for (const a of actions ?? []) {
+		// A layout the chat sets keeps the chat on screen (withChat), or the conversation would vanish.
 		if (a.type === 'preset' && PRESET_LABEL[a.name] && page) {
-			page.choose(a.name);
+			page.apply(withChat(itemsFor({ preset: a.name, custom: null })));
 			done.push(`Layout: ${PRESET_LABEL[a.name]}`);
 		} else if (a.type === 'layout' && page) {
 			const items = layoutFromChat(a.items);
 			if (items) {
-				page.apply(items);
+				page.apply(withChat(items));
 				done.push('Layout rearranged');
 			}
 		} else if (a.type === 'controls') {

@@ -17,7 +17,8 @@ export const WIDGETS = {
 	requests: { title: 'Requests', minW: 3, minH: 3, w: 3, h: 4 },
 	profile: { title: 'Song profile', minW: 3, minH: 5, w: 3, h: 9 },
 	recent: { title: 'Recently played', minW: 3, minH: 3, w: 3, h: 6 },
-	playlist: { title: 'Playlist', minW: 3, minH: 5, w: 3, h: 8 }
+	playlist: { title: 'Playlist', minW: 3, minH: 5, w: 3, h: 8 },
+	chat: { title: 'Ask the DJ', minW: 3, minH: 4, w: 3, h: 6 }
 };
 
 const w = (type, x, y, width, h, extra = {}) => ({ id: extra.kind ? `move-${extra.kind}` : type, type, x, y, w: width, h, ...extra });
@@ -30,8 +31,9 @@ export const PRESETS = {
 			w('nowPlaying', 0, 0, 3, 8),
 			w('controls', 0, 8, 3, 7),
 			w('moves', 3, 0, 6, 15),
-			w('requests', 9, 0, 3, 5),
-			w('upNext', 9, 5, 3, 10)
+			w('requests', 9, 0, 3, 4),
+			w('upNext', 9, 4, 3, 6),
+			w('chat', 9, 10, 3, 5)
 		]
 	},
 	board: {
@@ -74,6 +76,16 @@ function valid(item) {
 	if (!def || typeof item.id !== 'string') return false;
 	if (item.type === 'move' && !MOVE_KINDS.includes(item.kind)) return false;
 	return ['x', 'y', 'w', 'h'].every((k) => Number.isInteger(item[k]) && item[k] >= 0) && item.x + item.w <= COLUMNS;
+}
+
+/**
+ * The DJ chat moved out of DJ controls into its own widget (2026-10-29): a saved
+ * custom layout without it gets it once, under everything else.
+ */
+export function withChat(custom) {
+	if (!custom || custom.some((i) => i.type === 'chat')) return custom;
+	const y = Math.max(0, ...custom.map((i) => i.y + i.h));
+	return [...custom, { id: 'chat', type: 'chat', x: 0, y, w: 6, h: WIDGETS.chat.h }];
 }
 
 /**

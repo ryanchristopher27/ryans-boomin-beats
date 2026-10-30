@@ -22,8 +22,10 @@ test('applies each action and says what changed', () => {
 		],
 		{ dj, page }
 	);
-	expect(calls.map((c) => c[0])).toEqual(['preset', 'layout', 'mode', 'bold', 'goal', 'steer']);
-	expect(calls[1][1][0]).toMatchObject({ id: 'upNext', w: 4, h: 8 });
+	expect(calls.map((c) => c[0])).toEqual(['layout', 'layout', 'mode', 'bold', 'goal', 'steer']);
+	// Both layouts keep the chat: Compass gets it added; the custom one too.
+	expect(calls[0][1].map((i) => i.id)).toContain('chat');
+	expect(calls[1][1].map((i) => i.id)).toEqual(['upNext', 'chat']);
 	expect(done).toEqual(['Layout: Compass', 'Layout rearranged', 'Mode: Driver', 'Safe ↔ Bold: 80%', 'Goal: drift', 'New moves: more upbeat']);
 });
 

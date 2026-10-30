@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { COLUMNS, PRESETS, WIDGETS, addable, completeSaved, itemsFor, layoutFromChat, loadLayout, moveForKey, nudgeBox } from './layout.js';
+import { COLUMNS, PRESETS, WIDGETS, addable, completeSaved, itemsFor, layoutFromChat, loadLayout, moveForKey, nudgeBox, withChat } from './layout.js';
 
 describe('layout', () => {
 	test('presets fit the grid and respect minimum sizes', () => {
@@ -68,5 +68,14 @@ describe('layoutFromChat', () => {
 			{ id: 'move-lift', type: 'move', kind: 'lift', x: 8, y: 0, w: 4, h: 5 }
 		]);
 		expect(layoutFromChat([{ type: 'bogus' }])).toBeNull();
+	});
+});
+
+describe('withChat', () => {
+	test('adds the chat once, under everything else', () => {
+		const custom = [{ id: 'moves', type: 'moves', x: 0, y: 0, w: 6, h: 10 }, { id: 'upNext', type: 'upNext', x: 6, y: 2, w: 3, h: 12 }];
+		const out = withChat(custom);
+		expect(out.at(-1)).toEqual({ id: 'chat', type: 'chat', x: 0, y: 14, w: 6, h: WIDGETS.chat.h });
+		expect(withChat(out)).toBe(out);
 	});
 });

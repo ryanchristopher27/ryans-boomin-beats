@@ -1,7 +1,6 @@
 <script>
 	import Icon from '../Icon.svelte';
 	import Goal from './Goal.svelte';
-	import Chat from './Chat.svelte';
 	import { llmConfig } from '../../../stores.js';
 	import { PROVIDERS } from '$lib/llm.js';
 	import { newMovesEverySong, openSettings } from '$lib/settings.js';
@@ -79,8 +78,6 @@
 		<span class="toggle-text">New moves every song <span class="sub">Off keeps the board until you refresh it (this device)</span></span>
 		<input class="switch" type="checkbox" role="switch" bind:checked={$newMovesEverySong} />
 	</label>
-
-	<Chat {dj} />
 
 	{#if withGoal}
 		<div class="docked"><Goal {dj} /></div>
