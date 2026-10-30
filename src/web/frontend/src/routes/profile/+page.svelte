@@ -140,6 +140,32 @@
 	}
 	const rankText = (r) => (r.short ? `#${r.short}` : r.long ? `#${r.long} ever` : '');
 
+	// Rows that fill the 12 columns: What's new / clock / Your listening, then Eras / Taste.
+	// A card without data drops out and the rest of its row widens.
+	$: hasChurn = !!churnData && (churnData.artists.new.length || churnData.artists.staples.length || churnData.tracks.new.length);
+	$: hasClock = recentData?.count > 0 || recentNeedsReauth;
+	$: spans = rowSpans(
+		[
+			['churn', hasChurn, 6],
+			['clock', hasClock, 3],
+			['listening', !!listening, 3]
+		],
+		[
+			['eras', decadeData.length > 0, 4],
+			['taste', !!tasteData, 8]
+		]
+	);
+	function rowSpans(...rows) {
+		const out = {};
+		for (const row of rows) {
+			const shown = row.filter(([, on]) => on);
+			const used = shown.reduce((n, [, , w]) => n + w, 0);
+			// Hand the missing cards' columns to the first card in the row.
+			shown.forEach(([id, , w], i) => (out[id] = w + (i === 0 ? 12 - used : 0)));
+		}
+		return out;
+	}
+
 	// --- Listening clock (recently played → hour/day counts, local time) ---
 	let recentData = null;
 	let recentLoaded = false;
@@ -396,16 +422,8 @@
 						</div>
 					{/if}
 
-					{#if shows('eras') && decadeData.length}
-						<div class="m short" style:--span={expanded ? 12 : 3}>
-							<DashboardModule title="Eras" expanded={expanded === 'eras'} onToggleExpand={() => toggle('eras')}>
-								<div class="pad chart"><ColumnChart items={decadeData} /></div>
-							</DashboardModule>
-						</div>
-					{/if}
-
-					{#if shows('churn') && churnData && (churnData.artists.new.length || churnData.artists.staples.length || churnData.tracks.new.length)}
-						<div class="m short" style:--span={expanded ? 12 : 7}>
+					{#if shows('churn') && hasChurn}
+						<div class="m short" style:--span={expanded ? 12 : spans.churn}>
 							<DashboardModule title="What's new vs staples" expanded={expanded === 'churn'} onToggleExpand={() => toggle('churn')}>
 								<div class="pad churn">
 									<div class="segmented small" role="radiogroup" aria-label="Show">
@@ -421,7 +439,7 @@
 														<li>
 															<button class="churn-item" on:click={() => openChurn(it)} title={churnKind === 'artists' ? `Build songs like ${it.name}` : `Explore ${it.title}`}>
 																{#if it.image}<img src={it.image} alt="" class:round={churnKind === 'artists'} />{:else}<span class="ph" class:round={churnKind === 'artists'} />{/if}
-																<span class="who">{it.name ?? it.title}{#if it.artists}<small>{it.artists.join(', ')}</small>{/if}</span>
+																<span class="churn-who">{it.name ?? it.title}{#if it.artists}<small>{it.artists.join(', ')}</small>{/if}</span>
 																<span class="rank mono">{g.key === 'rising' ? `↑${it.ranks.medium - it.ranks.short}` : rankText(it.ranks)}</span>
 															</button>
 														</li>
@@ -435,27 +453,8 @@
 						</div>
 					{/if}
 
-					{#if shows('taste') && tasteData}
-						<div class="m short" style:--span={expanded ? 12 : 5}>
-							<DashboardModule title="Taste over time" expanded={expanded === 'taste'} onToggleExpand={() => toggle('taste')}>
-								<div class="pad">
-									{#if audioSeries.length}
-										<TrendChart labels={tasteData.timeframes} series={audioSeries} min={0} max={100} />
-									{:else}
-										<TrendChart labels={tasteData.timeframes} series={[{ name: 'Release year', values: tasteData.release_year }]} min={eraMin} max={eraMax} />
-									{/if}
-									<dl class="stats">
-										{#each tasteData.timeframes as tf, i}
-											<div><dt>{tf}</dt><dd class="mono">{fmtDur(tasteData.avg_duration_ms[i])} · {tasteData.explicit_pct[i]}% explicit</dd></div>
-										{/each}
-									</dl>
-								</div>
-							</DashboardModule>
-						</div>
-					{/if}
-
-					{#if shows('clock') && (recentData?.count > 0 || recentNeedsReauth)}
-						<div class="m short" style:--span={expanded ? 12 : 4}>
+					{#if shows('clock') && hasClock}
+						<div class="m short" style:--span={expanded ? 12 : spans.clock}>
 							<DashboardModule title="Listening clock" expanded={expanded === 'clock'} onToggleExpand={() => toggle('clock')}>
 								<div class="pad clock">
 									{#if recentNeedsReauth}
@@ -473,7 +472,7 @@
 					{/if}
 
 					{#if shows('listening') && listening}
-						<div class="m short" style:--span={expanded ? 12 : 4}>
+						<div class="m short" style:--span={expanded ? 12 : spans.listening}>
 							<DashboardModule title="Your listening" expanded={expanded === 'listening'} onToggleExpand={() => toggle('listening')}>
 								<div class="pad">
 									<dl class="tiles">
@@ -486,6 +485,33 @@
 									<p class="clock-label mono">HOURS PER WEEK</p>
 									<ColumnChart items={weekBars} />
 									<p class="note">Since {since}. Saved each time you open Profile or the DJ, so it grows as you use the app (Spotify only keeps your last 50 plays).</p>
+								</div>
+							</DashboardModule>
+						</div>
+					{/if}
+
+					{#if shows('eras') && decadeData.length}
+						<div class="m short" style:--span={expanded ? 12 : spans.eras}>
+							<DashboardModule title="Eras" expanded={expanded === 'eras'} onToggleExpand={() => toggle('eras')}>
+								<div class="pad chart"><ColumnChart items={decadeData} /></div>
+							</DashboardModule>
+						</div>
+					{/if}
+
+					{#if shows('taste') && tasteData}
+						<div class="m short" style:--span={expanded ? 12 : spans.taste}>
+							<DashboardModule title="Taste over time" expanded={expanded === 'taste'} onToggleExpand={() => toggle('taste')}>
+								<div class="pad">
+									{#if audioSeries.length}
+										<TrendChart labels={tasteData.timeframes} series={audioSeries} min={0} max={100} />
+									{:else}
+										<TrendChart labels={tasteData.timeframes} series={[{ name: 'Release year', values: tasteData.release_year }]} min={eraMin} max={eraMax} />
+									{/if}
+									<dl class="stats">
+										{#each tasteData.timeframes as tf, i}
+											<div><dt>{tf}</dt><dd class="mono">{fmtDur(tasteData.avg_duration_ms[i])} · {tasteData.explicit_pct[i]}% explicit</dd></div>
+										{/each}
+									</dl>
 								</div>
 							</DashboardModule>
 						</div>
@@ -567,8 +593,8 @@
 
 	.avatar {
 		flex: none;
-		width: 88px;
-		height: 88px;
+		width: 64px;
+		height: 64px;
 		border-radius: 50%;
 		object-fit: cover;
 		box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
@@ -592,7 +618,7 @@
 
 	h1 {
 		margin: 0;
-		font-size: calc(clamp(32px, 5vw, 56px) * var(--text-scale, 1));
+		font-size: calc(clamp(28px, 3.6vw, 44px) * var(--text-scale, 1));
 		font-weight: 700;
 		line-height: 1;
 		letter-spacing: -0.04em;
@@ -602,6 +628,11 @@
 		margin: 0;
 		font-size: calc(13px * var(--text-scale, 1));
 		color: var(--text-subtle);
+	}
+
+	/* Period and Log out sit at the right of the name row. */
+	.periods {
+		margin-left: auto;
 	}
 
 	.periods button {
@@ -734,7 +765,7 @@
 	}
 
 	.m.tall {
-		height: 520px;
+		height: 440px;
 	}
 
 	.m.short {
@@ -931,7 +962,7 @@
 		border-radius: 50%;
 	}
 
-	.who {
+	.churn-who {
 		flex: 1;
 		min-width: 0;
 		display: flex;
@@ -947,7 +978,7 @@
 		text-overflow: ellipsis;
 	}
 
-	.who small {
+	.churn-who small {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		font-size: calc(11px * var(--text-scale, 1));
@@ -963,7 +994,8 @@
 	/* Your listening: the headline numbers above its chart. */
 	.tiles {
 		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
+		/* Four across when the card is wide, two by two when it's a third of the row. */
+		grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
 		gap: 8px;
 		margin: 0 0 10px;
 	}
