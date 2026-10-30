@@ -3703,3 +3703,14 @@ Sonnet: ~5 s, and three in parallel finished in ~7 s.
 - Background boards: when the song changes and the board is kept, the new song's board is built
   quietly, so "New picks" is instant; ~45 s before a song ends, the board for the next song the DJ
   sent is built too. Rounds for the same answer are joined, not repeated.
+
+### DJ chat (2026-10-29, owner request)
+"Ask the DJ" at the bottom of DJ controls. `POST /dj/chat/` (`routers/dj_chat.py`) sends the
+message with the night (now playing, recent, queued), the controls and the current layout plus the
+widget catalog through the usual AI path (helper relay included). The AI answers with a reply,
+up to 6 songs (checked on Deezer like the moves; + adds to Up next, cover previews) and actions,
+validated on the server (`clean_actions`) and again on the page (`layoutFromChat`):
+preset, a full custom layout, controls (mode, Safe↔Bold, Familiar↔New), the goal, and
+`refresh_moves` (a note added to every move's feedback, then the board is re-asked). The log is
+kept on the device (`dj_chat`, last 30), so it survives layout changes and reloads. Real Sonnet:
+13 s per message, valid JSON with picks and a valid layout.

@@ -77,6 +77,30 @@ function valid(item) {
 }
 
 /**
+ * A layout the DJ chat proposed, made safe for the grid: known widgets only, ids
+ * as the presets use them, sizes at least each widget's minimum and inside 12
+ * columns, no duplicates. Null when nothing usable is left.
+ * @param {{type: string, kind?: string, x: number, y: number, w: number, h: number}[]} proposed
+ */
+export function layoutFromChat(proposed) {
+	const seen = new Set();
+	const out = [];
+	for (const p of Array.isArray(proposed) ? proposed : []) {
+		const def = WIDGETS[p?.type];
+		if (!def || (p.type === 'move' && !MOVE_KINDS.includes(p.kind))) continue;
+		const id = p.type === 'move' ? `move-${p.kind}` : p.type;
+		if (seen.has(id)) continue;
+		const int = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(Number(v) || 0)));
+		const w = int(p.w, def.minW, COLUMNS);
+		const item = { id, type: p.type, x: int(p.x, 0, COLUMNS - w), y: int(p.y, 0, 60), w, h: int(p.h, def.minH, 30), ...(p.type === 'move' ? { kind: p.kind } : {}) };
+		if (!valid(item)) continue;
+		seen.add(id);
+		out.push(item);
+	}
+	return out.length ? out : null;
+}
+
+/**
  * The saved layout: `{preset, custom}`, where `custom` is "Your layout" (null
  * until the user edits one). Missing or corrupt parts fall back to Host.
  * @returns {{preset: string, custom: any[] | null}}

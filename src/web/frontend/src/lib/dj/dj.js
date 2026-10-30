@@ -895,6 +895,14 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		return { moves: merged, source, error: merged.length ? null : errors.find(Boolean) ?? 'No suggestions this time.' };
 	}
 
+	/** Steer the whole board (DJ chat: "more upbeat"): the note joins every move's feedback, then re-ask. */
+	function steerMoves(note) {
+		const moves = L.roundMoves(d().options.goal);
+		moveFeedback.update((fb) => Object.fromEntries([...Object.entries(fb), ...moves.map((m) => [m, [...new Set([...(fb[m] ?? []), note])].slice(-6)])]));
+		cache.clear();
+		return loadSuggestions(undefined, true);
+	}
+
 	/** A failed round keeps the board it would have replaced; the error shows beside it. */
 	function fail(error) {
 		suggestions.update((s) => (s.moves.length ? { ...s, status: 'loaded', error } : { status: 'failed', moves: [], error }));
@@ -982,6 +990,7 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		setlog,
 		clearSet: () => setlog.set([]),
 		refreshMove,
+		steerMoves,
 		// lifecycle
 		start,
 		stop,

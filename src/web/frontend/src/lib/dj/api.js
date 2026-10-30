@@ -6,7 +6,7 @@ import { spotifyHeaders } from '../spotifyHeaders.js';
 import { llmHeaders } from '../llmHeaders.js';
 import { relayFetch } from '../llmRelay.js';
 
-const AI_PATHS = ['dj/suggest', 'dj/recap', 'song/profile'];
+const AI_PATHS = ['dj/suggest', 'dj/recap', 'dj/chat', 'song/profile'];
 
 /**
  * @param {string} method

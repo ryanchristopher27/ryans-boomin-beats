@@ -13,7 +13,9 @@ export function provideDJContext() {
 		/** @type {import('svelte/store').Writable<Song | null>} null = follow now playing */
 		selected: writable(null),
 		/** The move a Compass key just added from; its card flashes (F3g). */
-		flash: writable(/** @type {string | null} */ (null))
+		flash: writable(/** @type {string | null} */ (null)),
+		/** The page's layout, for the DJ chat: set by the DJ page. */
+		page: /** @type {{preset: () => string, items: () => any[], choose: (p: string) => void, apply: (items: any[]) => void} | null} */ (null)
 	};
 	setContext(KEY, ctx);
 	return ctx;
@@ -21,7 +23,7 @@ export function provideDJContext() {
 
 /** Outside the DJ page (or in tests) there's nothing to link, so hand back inert stores. */
 export function djContext() {
-	return getContext(KEY) ?? { selected: writable(null), flash: writable(null) };
+	return getContext(KEY) ?? { selected: writable(null), flash: writable(null), page: null };
 }
 
 /** "Removed X." with Undo, in the app-wide toast. */

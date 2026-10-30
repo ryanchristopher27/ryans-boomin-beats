@@ -31,7 +31,8 @@
 
 	const dj = /** @type {any} */ (getDJ());
 	const { doc, suggestions, player } = dj;
-	const { flash } = provideDJContext();
+	const djCtx = provideDJContext();
+	const { flash } = djCtx;
 	// Screen-reader feedback for keyboard move/resize.
 	let announcement = '';
 
@@ -96,6 +97,16 @@
 		gridKey++;
 		persist();
 	}
+
+	/** A layout the DJ chat proposed (already checked by layoutFromChat) becomes Your layout. */
+	function applyLayout(next) {
+		editing = false;
+		layout = { preset: 'custom', custom: next };
+		items = itemsFor(layout);
+		gridKey++;
+		persist();
+	}
+	djCtx.page = { preset: () => layout.preset, items: () => items, choose, apply: applyLayout };
 
 	function startEditing() {
 		before = items.map((i) => ({ ...i }));

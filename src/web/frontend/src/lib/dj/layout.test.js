@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { COLUMNS, PRESETS, WIDGETS, addable, completeSaved, itemsFor, loadLayout, moveForKey, nudgeBox } from './layout.js';
+import { COLUMNS, PRESETS, WIDGETS, addable, completeSaved, itemsFor, layoutFromChat, loadLayout, moveForKey, nudgeBox } from './layout.js';
 
 describe('layout', () => {
 	test('presets fit the grid and respect minimum sizes', () => {
@@ -51,5 +51,22 @@ describe('layout', () => {
 		expect(key('x')).toBe(null);
 		expect(key('h', { target: { tagName: 'INPUT' } })).toBe(null);
 		expect(key('ArrowUp', { metaKey: true })).toBe(null);
+	});
+});
+
+describe('layoutFromChat', () => {
+	test('keeps known widgets, fixes sizes and ids, drops duplicates and junk', () => {
+		const out = layoutFromChat([
+			{ type: 'upNext', x: 0, y: 0, w: 1, h: 1 },
+			{ type: 'move', kind: 'lift', x: 11, y: 0, w: 4, h: 5 },
+			{ type: 'move', kind: 'nope', x: 0, y: 0, w: 3, h: 3 },
+			{ type: 'bogus', x: 0, y: 0, w: 3, h: 3 },
+			{ type: 'upNext', x: 4, y: 0, w: 3, h: 8 }
+		]);
+		expect(out).toEqual([
+			{ id: 'upNext', type: 'upNext', x: 0, y: 0, w: WIDGETS.upNext.minW, h: WIDGETS.upNext.minH },
+			{ id: 'move-lift', type: 'move', kind: 'lift', x: 8, y: 0, w: 4, h: 5 }
+		]);
+		expect(layoutFromChat([{ type: 'bogus' }])).toBeNull();
 	});
 });

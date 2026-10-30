@@ -10,7 +10,7 @@ from spotipy import SpotifyException
 
 from config import ALLOWED_ORIGINS, ALLOWED_SPOTIFY_USERS, DEVICE_KEY
 from routers import search, profile
-from routers import llm_connect, llm_playlist, spotify_actions, song_profile, player, dj, dj_state, tracks
+from routers import llm_connect, llm_playlist, spotify_actions, song_profile, player, dj, dj_chat, dj_state, tracks
 from services import spotify_client, spotify_identity
 from services.llm_client import NeedsLLM
 
@@ -167,5 +167,6 @@ app.include_router(spotify_actions.router)
 app.include_router(song_profile.router)
 app.include_router(player.router)
 app.include_router(dj.router)
+app.include_router(dj_chat.router)
 app.include_router(dj_state.router)
 app.include_router(tracks.router)

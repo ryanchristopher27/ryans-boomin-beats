@@ -1,6 +1,7 @@
 <script>
 	import Icon from '../Icon.svelte';
 	import Goal from './Goal.svelte';
+	import Chat from './Chat.svelte';
 	import { llmConfig } from '../../../stores.js';
 	import { PROVIDERS } from '$lib/llm.js';
 	import { newMovesEverySong, openSettings } from '$lib/settings.js';
@@ -112,6 +113,8 @@
 			</ul>
 		</details>
 	{/if}
+
+	<Chat {dj} />
 </div>
 
 <style>
