@@ -75,11 +75,6 @@
 	</label>
 
 	<label class="toggle">
-		<span class="toggle-text">Clean only <span class="sub">Skip explicit songs in picks</span></span>
-		<input class="switch" type="checkbox" role="switch" checked={o.clean} on:change={(e) => dj.setClean(e.currentTarget.checked)} />
-	</label>
-
-	<label class="toggle">
 		<span class="toggle-text">New moves every song <span class="sub">Off keeps the board until you refresh it (this device)</span></span>
 		<input class="switch" type="checkbox" role="switch" bind:checked={$newMovesEverySong} />
 	</label>
