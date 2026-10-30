@@ -12,7 +12,7 @@ from spotipy import Spotify, SpotifyException
 from routers.player import _track, player_error
 from services.spotify_auth import get_spotify_token
 from services.spotify_client import user_client
-from services import churn, history_store, spotify_identity
+from services import churn, history_store, library, spotify_identity, track_cache
 
 log = logging.getLogger(__name__)
 
@@ -191,6 +191,47 @@ async def top_churn(token: str = Depends(get_spotify_token)):
         _churn_cache.clear()
     _churn_cache[key] = (time.monotonic(), result)
     return result
+
+
+@router.get("/spotify/library-stats/")
+async def library_stats(token: str = Depends(get_spotify_token)):
+    """Liked Songs and playlist stats for Profile (services/library.py). One request
+    checks Liked Songs for changes; a full scan runs only when it changed."""
+    spotify = user_client(token)
+    try:
+        me, first = await asyncio.gather(
+            asyncio.to_thread(spotify_identity.user_id, token),
+            asyncio.to_thread(spotify.current_user_saved_tracks, limit=50, offset=0),
+        )
+        total = first.get('total', 0)
+        newest = (first.get('items') or [{}])[0].get('added_at')
+        key = track_cache.key('library', me)
+        cached = (await asyncio.to_thread(track_cache.get_many, [key])).get(key)
+        if cached and cached.get('total') == total and cached.get('newest') == newest:
+            liked = cached
+        else:
+            gate = asyncio.Semaphore(6)
+
+            async def page(offset):
+                async with gate:
+                    return (await asyncio.to_thread(spotify.current_user_saved_tracks, limit=50, offset=offset)).get('items', [])
+
+            rest = await asyncio.gather(*(page(o) for o in range(50, min(total, library.MAX_SONGS), 50)))
+            items = [*first.get('items', []), *(it for p in rest for it in p)]
+            liked = library.summarize(items, total)
+            await asyncio.to_thread(track_cache.put_many, {key: liked})
+        playlists, offset = [], 0
+        while True:
+            pl = await asyncio.to_thread(spotify.current_user_playlists, limit=50, offset=offset)
+            playlists += pl.get('items', [])
+            if not pl.get('next') or offset > 1000:
+                break
+            offset += 50
+    except SpotifyException as e:
+        if e.http_status in (401, 403):
+            raise HTTPException(status_code=403, detail='reconnect')
+        raise HTTPException(status_code=502, detail="Couldn't reach Spotify.")
+    return {'liked': liked, 'playlists': library.playlist_stats(playlists, me)}
 
 
 @router.get("/spotify/taste-over-time/")

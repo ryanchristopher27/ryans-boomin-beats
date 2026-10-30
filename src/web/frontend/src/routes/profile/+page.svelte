@@ -28,7 +28,7 @@
 	const PERIODS = ['short_term', 'medium_term', 'long_term'];
 	let time_period = 'short_term';
 
-	/** @type {null | 'tracks' | 'artists' | 'genres' | 'eras' | 'taste' | 'clock' | 'listening' | 'churn'} */
+	/** @type {null | 'tracks' | 'artists' | 'genres' | 'eras' | 'taste' | 'clock' | 'listening' | 'churn' | 'library'} */
 	let expanded = null;
 	const toggle = (id) => (expanded = expanded === id ? null : id);
 	// Reactive, so the template's {#if shows(...)} re-runs when `expanded` changes.
@@ -72,6 +72,7 @@
 			top_tracks = data.top_tracks ?? [];
 			fetchTasteOverTime();
 			fetchChurn();
+			fetchLibrary();
 			fetchRecentlyPlayed();
 		} catch {
 			error = "Couldn't load your profile. Try again in a moment.";
@@ -140,6 +141,23 @@
 	}
 	const rankText = (r) => (r.short ? `#${r.short}` : r.long ? `#${r.long} ever` : '');
 
+	// --- Your library: Liked Songs and playlists (one request unless the library changed) ---
+	let libraryData = null;
+	let libraryLoaded = false;
+	async function fetchLibrary() {
+		if (libraryLoaded || !token) return;
+		libraryLoaded = true;
+		try {
+			const res = await fetch(`${PUBLIC_API_URL}/spotify/library-stats/`, { headers: bearer(token) });
+			if (res.ok) libraryData = await res.json();
+		} catch {
+			/* the module just doesn't show */
+		}
+	}
+	$: liked = libraryData?.liked;
+	$: likeBars = (liked?.months ?? []).map((m) => ({ label: new Date(`${m.month}-15T12:00`).toLocaleDateString(undefined, { month: 'narrow' }), value: m.count }));
+	$: likingSince = liked?.oldest ? new Date(liked.oldest).getFullYear() : null;
+
 	// Rows that fill the 12 columns: What's new / clock / Your listening, then Eras / Taste.
 	// A card without data drops out and the rest of its row widens.
 	$: hasChurn = !!churnData && (churnData.artists.new.length || churnData.artists.staples.length || churnData.tracks.new.length);
@@ -151,8 +169,9 @@
 			['listening', !!listening, 3]
 		],
 		[
-			['eras', decadeData.length > 0, 4],
-			['taste', !!tasteData, 8]
+			['eras', decadeData.length > 0, 3],
+			['taste', !!tasteData, 5],
+			['library', !!libraryData, 4]
 		]
 	);
 	function rowSpans(...rows) {
@@ -491,15 +510,38 @@
 					{/if}
 
 					{#if shows('eras') && decadeData.length}
-						<div class="m short" style:--span={expanded ? 12 : spans.eras}>
+						<div class="m mid" style:--span={expanded ? 12 : spans.eras}>
 							<DashboardModule title="Eras" expanded={expanded === 'eras'} onToggleExpand={() => toggle('eras')}>
 								<div class="pad chart"><ColumnChart items={decadeData} /></div>
 							</DashboardModule>
 						</div>
 					{/if}
 
+					{#if shows('library') && libraryData}
+						<div class="m mid" style:--span={expanded ? 12 : spans.library}>
+							<DashboardModule title="Your library" expanded={expanded === 'library'} onToggleExpand={() => toggle('library')}>
+								<div class="pad">
+									<dl class="tiles four">
+										<div><dt>Liked songs</dt><dd class="mono">{liked.total.toLocaleString()}</dd></div>
+										<div><dt>Liked this year</dt><dd class="mono">{liked.this_year.toLocaleString()}</dd></div>
+										<div><dt>Your playlists</dt><dd class="mono">{libraryData.playlists.owned}</dd></div>
+										<div><dt>Songs in them</dt><dd class="mono">{libraryData.playlists.songs.toLocaleString()}</dd></div>
+									</dl>
+									<p class="clock-label mono">LIKES PER MONTH</p>
+									<ColumnChart items={likeBars} />
+									<p class="note">
+										{#if likingSince}Liking songs since {likingSince}.{/if}
+										{#if liked.top_artists[0]}Most liked: <b>{liked.top_artists[0].name}</b> ({liked.top_artists[0].count}).{/if}
+										{#if libraryData.playlists.biggest}Biggest playlist: <b>{libraryData.playlists.biggest.name}</b> ({libraryData.playlists.biggest.songs.toLocaleString()}).{/if}
+									</p>
+									{#if liked.scanned < liked.total}<p class="note">Based on your newest {liked.scanned.toLocaleString()} likes.</p>{/if}
+								</div>
+							</DashboardModule>
+						</div>
+					{/if}
+
 					{#if shows('taste') && tasteData}
-						<div class="m short" style:--span={expanded ? 12 : spans.taste}>
+						<div class="m mid" style:--span={expanded ? 12 : spans.taste}>
 							<DashboardModule title="Taste over time" expanded={expanded === 'taste'} onToggleExpand={() => toggle('taste')}>
 								<div class="pad">
 									{#if audioSeries.length}
@@ -772,6 +814,11 @@
 		height: 300px;
 	}
 
+	/* The last row (Eras / Your library / Taste): room for a chart under the numbers. */
+	.m.mid {
+		height: 380px;
+	}
+
 	.has-expanded .m {
 		height: calc(100vh - var(--header-height) - var(--mini-h, 0px) - var(--tab-h, 0px) - 120px);
 		min-height: 420px;
@@ -998,6 +1045,10 @@
 		grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
 		gap: 8px;
 		margin: 0 0 10px;
+	}
+
+	.tiles.four {
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 	}
 
 	.tiles div {

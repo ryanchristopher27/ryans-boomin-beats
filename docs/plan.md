@@ -3740,3 +3740,10 @@ kept on the device (`dj_chat`, last 30), so it survives layout changes and reloa
   (`services/churn.py`): new this month (4-week top only), rising (≥10 places higher than over
   6 months), staples (in all three), fading (all-time top, missing from the last 4 weeks). A Profile
   card with Artists/Tracks tabs; artists open a Builder prompt, tracks open in Explore.
+- **Your library** (Profile). `GET /spotify/library-stats/`: Liked Songs (`GET /me/tracks`, still
+  200 after the Feb 2026 migration) summarised in `services/library.py` (total, liked this year and
+  month, likes per month for 12 months, liking since, decades, most-liked artists) plus playlist
+  stats (yours, songs in them, biggest, collaborative). A full scan is one request per 50 likes
+  (capped at the newest 5,000), cached in `track_lookup` under ('library', user) and rebuilt only
+  when the total or newest like changes; otherwise one request per visit. The last Profile row is
+  Eras / Your library / Taste over time at 380px.
