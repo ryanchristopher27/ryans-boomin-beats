@@ -61,8 +61,9 @@ function deviceLabel() {
 /**
  * `everySong`: ask for new moves on every song change. Off (the app's default,
  * Controls → "New moves every song"), the board stays until the host asks.
+ * `parallelMoves`: ask one move per request, all at once (see fetchBoard).
  */
-export function createDJ({ request, hasLLM = () => true, storage = safeStorage(), label = deviceLabel(), now = () => Date.now(), debounceMs = 400, onUnauthorized = null, locks = /** @type {any} */ (globalThis.navigator)?.locks ?? null, everySong = () => true }) {
+export function createDJ({ request, hasLLM = () => true, storage = safeStorage(), label = deviceLabel(), now = () => Date.now(), debounceMs = 400, onUnauthorized = null, locks = /** @type {any} */ (globalThis.navigator)?.locks ?? null, everySong = () => true, parallelMoves = () => false }) {
 	const load = (k) => {
 		try {
 			return JSON.parse(storage.get(k) ?? 'null');
@@ -138,8 +139,12 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 	let backoffMs = 0;
 	let suggestedFor = null;
 	const cache = new Map();
-	/** @type {string | null} */
-	let inFlight = null;
+	/** Rounds being fetched, by board key: a second ask for the same answer joins it. */
+	const pending = new Map();
+	/** The board key the screen wants; a slower, older round doesn't overwrite it. */
+	let shownKey = null;
+	/** The next song whose board was built in the background before it started. */
+	let nextPrepared = null;
 
 	/** Every change to synced state goes through here. */
 	function edit(fn) {
@@ -638,6 +643,19 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 			suggestedFor = s.track.id;
 			prefetch({ keepBoard: !everySong() });
 		}
+		prepareNext(s);
+	}
+
+	// Near the end of a song, build the board for the song the DJ sent next, so
+	// its moves are ready the moment it starts (a cache hit in loadSuggestions).
+	const NEXT_BOARD_LEAD_MS = 45_000;
+	function prepareNext(s) {
+		const next = d().queue.sent[0];
+		if (!next || !s.is_playing || !s.track || !watchers || !hasLLM() || d().options.mode === 'whisper') return;
+		const left = (s.track.duration_ms ?? 0) - (s.progress_ms ?? 0);
+		if (left <= 0 || left > NEXT_BOARD_LEAD_MS || nextPrepared === next.trackID || next.trackID === s.track.id) return;
+		nextPrepared = next.trackID;
+		loadSuggestions({ id: next.trackID, title: next.title, artists: next.artists, isrc: next.isrc ?? null }, false, { background: true });
 	}
 
 	function rate(track, more) {
@@ -697,7 +715,12 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 			if (!board) suggestions.set({ status: 'idle', moves: [], error: null });
 			return;
 		}
-		if (keepBoard && board && !boardUsedUp(s.moves)) return void autopilot();
+		if (keepBoard && board && !boardUsedUp(s.moves)) {
+			autopilot();
+			// Build this song's board quietly, so "New picks" shows it at once.
+			if (watchers && hasLLM() && s.forTrack?.id !== track.id) loadSuggestions(track, false, { background: true });
+			return;
+		}
 		loadSuggestions(track);
 	}
 
@@ -786,38 +809,90 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		}
 	}
 
-	async function loadSuggestions(track = get(player).state?.track, force = false) {
-		if (!track) return;
+	/** Settings that change the answer are part of a board's cache key. */
+	function boardKey(track) {
 		const o = d().options;
-		// Settings that change the answer are part of the key.
-		const key = `${track.id}|${Math.floor(o.adventurousness * 3)}|${Math.floor((o.familiar ?? 0.5) * 3)}|${o.clean}|${L.goalKey(o.goal, now())}|${JSON.stringify(get(moveFeedback))}`;
+		return `${track.id}|${Math.floor(o.adventurousness * 3)}|${Math.floor((o.familiar ?? 0.5) * 3)}|${o.clean}|${L.goalKey(o.goal, now())}|${JSON.stringify(get(moveFeedback))}`;
+	}
+
+	/**
+	 * Moves for a track. On screen by default; `background` only fills the cache, so
+	 * a later show (a song change, "New picks") is instant. Rounds already running
+	 * for the same answer are joined, not repeated.
+	 * @param {any} [track]
+	 * @param {boolean} [force] skip the cache (the refresh button)
+	 * @param {{background?: boolean}} [opts]
+	 */
+	async function loadSuggestions(track = get(player).state?.track, force = false, { background = false } = {}) {
+		if (!track) return;
+		const key = boardKey(track);
 		const forTrack = { id: track.id, title: track.title };
-		if (!force && cache.has(key)) {
-			suggestions.set({ status: 'loaded', moves: cache.get(key), error: null, forTrack });
-			return autopilot();
+		if (!background) shownKey = key;
+		const showing = () => !background && shownKey === key; // a newer load hasn't taken over
+		const show = () => {
+			if (!showing()) return false;
+			const b = cache.get(key);
+			suggestions.set({ status: 'loaded', moves: b.moves, error: null, source: b.source, forTrack });
+			return true;
+		};
+		if (!force && cache.has(key)) return show() && autopilot();
+		if (!force && pending.has(key)) {
+			if (background) return;
+			suggestions.update((s) => ({ ...s, status: 'loading' }));
+			const error = await pending.get(key);
+			if (cache.has(key)) return show() && autopilot();
+			if (showing()) fail(error);
+			return;
 		}
-		// Don't stack requests for the same answer (Groq's per-minute token limit).
-		if (inFlight === key) return;
-		inFlight = key;
-		suggestions.update((s) => ({ ...s, status: 'loading' }));
-		const body = suggestBody(track);
-		try {
-			const r = await request('POST', 'dj/suggest/', { json: body });
-			if (inFlight !== key) return; // a newer track started its own load
-			const moves = r.data?.moves ?? [];
-			if (r.status !== 200 || !moves.length) {
-				fail(r.data?.error ?? r.data?.detail ?? 'No suggestions this time.');
-				return;
-			}
+		if (!background) suggestions.update((s) => ({ ...s, status: 'loading' }));
+		// Each move as it lands, on screen; the round is cached when all are in.
+		const onPartial = (moves, source) => showing() && suggestions.set({ status: 'loaded', moves, error: null, source, forTrack, partial: true });
+		const round = fetchBoard(track, onPartial);
+		pending.set(key, round.then((r) => r.error));
+		const { moves, source, error } = await round;
+		pending.delete(key);
+		if (moves.length) {
 			if (cache.size > 20) cache.clear();
-			cache.set(key, moves);
-			suggestions.set({ status: 'loaded', moves, error: null, source: r.data?.source ?? 'ai', forTrack });
-			await autopilot();
-		} catch {
-			if (inFlight === key) fail("Couldn't reach the server.");
-		} finally {
-			if (inFlight === key) inFlight = null;
+			cache.set(key, { moves, source });
+			if (show()) await autopilot();
+		} else if (showing()) fail(error);
+	}
+
+	/**
+	 * One request for the whole board, or (`parallelMoves`) one per move at once:
+	 * each is a short answer, so the first moves show in seconds instead of
+	 * waiting for one long one. Groq stays whole (its per-minute token limit).
+	 * @returns {Promise<{moves: any[], source?: string, error: string | null}>}
+	 */
+	async function fetchBoard(track, onPartial) {
+		const ask = async (extra) => {
+			try {
+				const r = await request('POST', 'dj/suggest/', { json: suggestBody(track, extra) });
+				if (r.status === 200 && r.data?.moves?.length) return { moves: r.data.moves, source: r.data.source ?? 'ai' };
+				return { moves: [], error: r.data?.error ?? r.data?.detail ?? 'No suggestions this time.' };
+			} catch {
+				return { moves: [], error: "Couldn't reach the server." };
+			}
+		};
+		if (!hasLLM() || !parallelMoves()) {
+			const r = await ask({});
+			return { moves: r.moves, source: r.source, error: r.error ?? null };
 		}
+		const order = L.roundMoves(d().options.goal);
+		let merged = [];
+		let source = 'ai';
+		const errors = [];
+		await Promise.all(
+			order.map(async (m) => {
+				const r = await ask({ only_moves: [m] });
+				const got = r.moves.find((x) => x.move === m);
+				if (!got?.tracks.length) return void errors.push(r.error);
+				source = r.source ?? source;
+				merged = L.mergeMove(merged, got, order);
+				onPartial(merged, source);
+			})
+		);
+		return { moves: merged, source, error: merged.length ? null : errors.find(Boolean) ?? 'No suggestions this time.' };
 	}
 
 	/** A failed round keeps the board it would have replaced; the error shows beside it. */

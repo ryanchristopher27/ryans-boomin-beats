@@ -3,15 +3,21 @@ import asyncio
 from services.claude_code import ClaudeCodeError
 
 
+# The model the helper runs. Without one, Claude Code uses the CLI's default
+# (often Opus): a DJ round took 39 s there against 13 s on Sonnet (2026-10-29).
+HELPER_MODEL = 'claude-sonnet-5-5'
+
+
 class NeedsLLM(Exception):
     """'Your Claude Code' on the hosted backend (provider 'helper'): the server
     can't reach the user's machine, so it hands the prompt back. The page runs
     it on the local helper and repeats the request with the reply appended to
     `llm_replies`. Answered as 428 by main.py."""
 
-    def __init__(self, prompt: str):
+    def __init__(self, prompt: str, model: str = HELPER_MODEL):
         super().__init__('This request needs a reply from your Claude Code.')
         self.prompt = prompt
+        self.model = model
 
 
 class RelayError(ClaudeCodeError):

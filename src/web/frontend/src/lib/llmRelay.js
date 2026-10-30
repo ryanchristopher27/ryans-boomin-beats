@@ -35,8 +35,9 @@ export async function checkHelper() {
 	if (!h.claude) throw new Error('The helper is running, but Claude Code isn\'t installed or signed in on this computer. Run `claude` and /login.');
 }
 
-async function askHelper(prompt) {
-	const { text } = await callHelper('/ai/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt }) });
+/** `model`: the backend names one (Sonnet), so the CLI's default (often Opus) isn't used. */
+async function askHelper(prompt, model) {
+	const { text } = await callHelper('/ai/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, model }) });
 	return text ?? '';
 }
 
@@ -60,14 +61,15 @@ export async function relayFetch(url, init = {}) {
 	for (let round = 0; ; round++) {
 		const res = await fetch(url, { ...init, method: 'POST', headers, body: JSON.stringify({ ...base, llm_replies: replies, llm_error }) });
 		if (res.status !== 428 || llm_error) return res;
-		const prompt = (await res.clone().json().catch(() => null))?.needs_llm?.prompt;
+		const needs = (await res.clone().json().catch(() => null))?.needs_llm;
+		const prompt = needs?.prompt;
 		if (!prompt) return res;
 		if (round === MAX_ROUNDS) {
 			llm_error = 'Your Claude Code was asked too many times for one request.';
 			continue;
 		}
 		try {
-			replies.push(await askHelper(prompt));
+			replies.push(await askHelper(prompt, needs.model));
 		} catch (e) {
 			llm_error = e.message;
 		}

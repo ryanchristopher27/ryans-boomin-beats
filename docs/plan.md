@@ -3689,3 +3689,17 @@ toolbar shows "Picks for <song> · New picks for <now playing>" when they differ
 (Bold, Familiar, goal) still ask for new picks; a failed round keeps the old board. Autofill and
 Driver queue from the board and only ask again once they've used every pick on it. **DJ controls
 → "New moves every song"** (this device, off by default) restores the old ask-every-song behaviour.
+
+### Faster DJ picks (2026-10-29)
+Measured on the real DJ prompt through `claude -p`: **Opus 39 s** (the CLI's default, which the
+helper relay used because it named no model), **Sonnet 13 s**, the `haiku` alias (Haiku 4.5) 94 s
+with runaway output, and Haiku 5.5 2.4 s but it returned only one of five moves. One move alone on
+Sonnet: ~5 s, and three in parallel finished in ~7 s.
+- The relay now names `claude-sonnet-5-5` (`HELPER_MODEL`); the helper passes it to `--model`.
+- Rounds ask one move per request, all at once, and each move shows as it lands
+  (`fetchBoard`, `mergeMove`, `roundMoves`); Groq stays one request (per-minute token limit).
+  `/dj/suggest/` caches recently-played (60 s) and Last.fm track info (10 min) per instance, since
+  a round is now 5 requests (10 through the relay).
+- Background boards: when the song changes and the board is kept, the new song's board is built
+  quietly, so "New picks" is instant; ~45 s before a song ends, the board for the next song the DJ
+  sent is built too. Rounds for the same answer are joined, not repeated.

@@ -125,7 +125,7 @@ async def upstream_unavailable_handler(request: Request, exc: Exception):
 @app.exception_handler(NeedsLLM)
 async def needs_llm_handler(request: Request, exc: NeedsLLM):
     # The page runs `prompt` on the user's helper and repeats the request (llm_client.NeedsLLM).
-    return JSONResponse(status_code=428, content={'needs_llm': {'prompt': exc.prompt}, 'detail': str(exc)})
+    return JSONResponse(status_code=428, content={'needs_llm': {'prompt': exc.prompt, 'model': exc.model}, 'detail': str(exc)})
 
 
 @app.exception_handler(SpotifyException)

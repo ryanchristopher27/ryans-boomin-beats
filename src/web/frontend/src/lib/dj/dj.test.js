@@ -218,24 +218,55 @@ describe('web DJ engine', () => {
 		server.playing = track('next');
 		await a.refresh();
 		await settle();
-		expect(asks()).toBe(1); // kept
-		expect(g(a.suggestions).forTrack.id).toBe('now');
+		expect(g(a.suggestions).forTrack.id).toBe('now'); // the board on screen stays
+		expect(asks()).toBe(2); // ...while the new song's board is built in the background
+		await a.loadSuggestions(); // "New picks for next": already built, no new ask
+		expect(asks()).toBe(2);
+		expect(g(a.suggestions).forTrack.id).toBe('next');
 
-		// A reload (a new engine on the same storage) shows the saved board without asking.
+		// A reload (a new engine on the same storage) shows the saved board at once.
 		const b = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0, locks: null, everySong: () => false });
-		expect(g(b.suggestions)).toMatchObject({ status: 'loaded', forTrack: { id: 'now' } });
-		await b.refresh();
-		b.watchSuggestions();
-		await settle();
-		expect(asks()).toBe(1);
+		expect(g(b.suggestions)).toMatchObject({ status: 'loaded', forTrack: { id: 'next' } });
 
 		everySong = true;
 		server.playing = track('third');
 		await a.refresh();
 		await settle();
-		expect(asks()).toBe(2);
+		expect(asks()).toBe(3);
 		expect(g(a.suggestions).forTrack.id).toBe('third');
 		stop();
+	});
+
+	test('parallel rounds ask one move per request and show moves as they land', async () => {
+		const server = fakeServer();
+		server.suggestMoves = true;
+		const storage = memoryStorage();
+		storage.set('dj_device_id', 'a');
+		const a = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0, locks: null, parallelMoves: () => true });
+		await a.refresh();
+		a.watchSuggestions();
+		await new Promise((r) => setTimeout(r, 0));
+		const asked = server.suggestBodies.map((b) => b.only_moves);
+		expect(asked).toEqual([['hold'], ['lift'], ['drop'], ['pivot'], ['curveball']]);
+		expect(g(a.suggestions).moves.map((m) => m.move)).toEqual(['hold', 'lift', 'drop', 'pivot', 'curveball']);
+	});
+
+	test('near the end of a song, the next sent song gets its board in the background', async () => {
+		const server = fakeServer();
+		server.suggestMoves = true;
+		const storage = memoryStorage();
+		storage.set('dj_device_id', 'a');
+		const a = createDJ({ request: server.request('a'), storage, label: 'a', hasLLM: () => true, debounceMs: 0, locks: null });
+		await a.refresh();
+		a.watchSuggestions();
+		await a.add(track('t1')); // sent to Spotify as the next song
+		await a.flush();
+		await new Promise((r) => setTimeout(r, 0));
+		const before = server.suggestBodies.length;
+		server.playing = { ...track('now'), duration_ms: 30000 }; // 29 s left
+		await a.refresh();
+		await new Promise((r) => setTimeout(r, 0));
+		expect(server.suggestBodies.slice(before).map((b) => b.now_playing.id)).toEqual(['t1']);
 	});
 
 	test('a failed round keeps the board it would have replaced', async () => {

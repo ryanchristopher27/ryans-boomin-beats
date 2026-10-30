@@ -185,7 +185,8 @@
 		{#if staleFor || boardError}
 			<div class="board-note" role="status">
 				{#if boardError}<span class="err">{boardError}</span>{:else}<span>Picks for <b>{staleFor}</b></span>{/if}
-				<button class="btn small" on:click={() => dj.loadSuggestions(undefined, true)} disabled={$suggestions.status === 'loading'}>
+				<!-- Not forced: the board built in the background for this song shows at once. -->
+				<button class="btn small" on:click={() => dj.loadSuggestions()} disabled={$suggestions.status === 'loading'}>
 					<Icon name="refresh" size={13} /> {$suggestions.status === 'loading' ? 'Getting picks…' : `New picks for ${nowTitle}`}
 				</button>
 			</div>

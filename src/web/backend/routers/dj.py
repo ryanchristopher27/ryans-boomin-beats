@@ -8,9 +8,11 @@ Spotify's recommendations and audio-features endpoints are dead on this client
 ID (DJ0 / V1 audits), so the vibe signal is Last.fm tags + the model's own ear.
 """
 import asyncio
+import hashlib
 import json
 import logging
 import re
+import time
 from typing import Annotated, Literal
 
 import requests
@@ -405,6 +407,38 @@ async def fill_moves(moves, exclude, per_move, avoid_artists=(), clean=False, va
         matched += found
 
 
+# A board is asked one move at a time, in parallel (and twice per move through the
+# helper relay), so the per-request lookups are cached briefly per user and song.
+_CACHE_TTL = 60
+_CACHE_MAX = 256
+_recent_cache: dict[str, tuple[float, list]] = {}
+_info_cache: dict[tuple[str, str], tuple[float, dict]] = {}
+
+
+def _cached(cache: dict, key, ttl: float):
+    hit = cache.get(key)
+    return hit[1] if hit and time.monotonic() - hit[0] < ttl else None
+
+
+def _remember(cache: dict, key, value):
+    if len(cache) >= _CACHE_MAX:
+        cache.clear()
+    cache[key] = (time.monotonic(), value)
+    return value
+
+
+def _spotify_recent_cached(token: str) -> list[TrackRef]:
+    key = hashlib.sha256(token.encode()).hexdigest()
+    hit = _cached(_recent_cache, key, _CACHE_TTL)
+    return hit if hit is not None else _remember(_recent_cache, key, _spotify_recent(token))
+
+
+async def _track_info_cached(title: str, artist: str) -> dict:
+    key = (title.lower(), artist.lower())
+    hit = _cached(_info_cache, key, 10 * _CACHE_TTL)
+    return hit if hit is not None else _remember(_info_cache, key, await lastfm_client.track_info(title, artist))
+
+
 def _spotify_recent(token: str, limit: int = 20) -> list[TrackRef]:
     """The user's last plays from Spotify, so history survives an app relaunch
     (the client only remembers what it saw this session). Best effort."""
@@ -505,8 +539,8 @@ async def suggest(
     token: str = Depends(get_spotify_token),
 ):
     info, spotify_recent = await asyncio.gather(
-        lastfm_client.track_info(body.now_playing.title, body.now_playing.artist),
-        asyncio.to_thread(_spotify_recent, token),
+        _track_info_cached(body.now_playing.title, body.now_playing.artist),
+        asyncio.to_thread(_spotify_recent_cached, token),
     )
     tags = [t['name'] for t in info['tags'][:8]]
     # Everything played recently is excluded below, but only the head goes in the prompt.

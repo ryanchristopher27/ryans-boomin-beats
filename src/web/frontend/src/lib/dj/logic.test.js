@@ -1,7 +1,7 @@
 // Ports of the iOS BoominBeatsTests (QueueLogicTests + SyncTests), so both
 // clients' queue logic is held to the same cases.
 import { describe, expect, test } from 'vitest';
-import { arrival, autopilotCandidates, detectRequests, docsEqual, emptyDoc, goalKey, merge, reconciled } from './logic.js';
+import { arrival, autopilotCandidates, detectRequests, docsEqual, emptyDoc, goalKey, merge, mergeMove, reconciled, roundMoves } from './logic.js';
 
 const item = (id, skip = false) => ({ id: `e-${id}-${Math.random()}`, trackID: id, title: id, artists: ['A'], image: '', skipOnArrival: skip });
 const ids = (items) => items.map((i) => i.trackID);
@@ -148,5 +148,22 @@ describe("tonight's set", () => {
 	test('stats count time, DJ picks and guest requests', async () => {
 		const { setStats } = await import('./logic.js');
 		expect(setStats([song('a', { dj: true }), song('b', { guest: true }), song('c')])).toEqual({ songs: 3, minutes: 9, djPicks: 1, requests: 1 });
+	});
+});
+
+describe('parallel rounds', () => {
+	test('roundMoves mirrors the backend: a goal move first, only when the goal makes one', () => {
+		expect(roundMoves(null)).toEqual(['hold', 'lift', 'drop', 'pivot', 'curveball']);
+		expect(roundMoves({ kind: 'drift' })[0]).toBe('drift');
+		expect(roundMoves({ kind: 'arc' })[0]).toBe('toward');
+		expect(roundMoves({ kind: 'destination', destination: '  ' })).toHaveLength(5);
+	});
+
+	test('mergeMove keeps display order and drops songs another move has', () => {
+		const order = ['hold', 'lift', 'drop'];
+		const t = (id) => ({ id, title: id });
+		let b = mergeMove([], { move: 'drop', tracks: [t('a')] }, order);
+		b = mergeMove(b, { move: 'hold', tracks: [t('a'), t('b')] }, order);
+		expect(b.map((m) => [m.move, m.tracks.map((x) => x.id)])).toEqual([['hold', ['b']], ['drop', ['a']]]);
 	});
 });

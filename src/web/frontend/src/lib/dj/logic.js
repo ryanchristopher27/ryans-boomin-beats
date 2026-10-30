@@ -255,3 +255,24 @@ export function setStats(log) {
 		requests: log.filter((e) => e.guest).length
 	};
 }
+
+/** The moves a full DJ round asks for, in display order: a goal's move first (mirrors moves_for in routers/dj.py). */
+export function roundMoves(goal) {
+	const base = ['hold', 'lift', 'drop', 'pivot', 'curveball'];
+	if (!goal) return base;
+	if (goal.kind === 'drift') return ['drift', ...base];
+	if (goal.kind === 'arc' || (goal.kind === 'destination' && goal.destination?.trim())) return ['toward', ...base];
+	return base;
+}
+
+/**
+ * Add one move's picks to a board as they arrive (parallel rounds), in `order`,
+ * dropping songs another move already has.
+ */
+export function mergeMove(board, move, order) {
+	const seen = new Set(board.flatMap((m) => m.tracks.flatMap((t) => [t.id, t.isrc].filter(Boolean))));
+	const tracks = move.tracks.filter((t) => !seen.has(t.id) && !(t.isrc && seen.has(t.isrc)));
+	if (!tracks.length) return board;
+	const rank = (m) => (order.includes(m.move) ? order.indexOf(m.move) : order.length);
+	return [...board.filter((m) => m.move !== move.move), { ...move, tracks }].sort((a, b) => rank(a) - rank(b));
+}
