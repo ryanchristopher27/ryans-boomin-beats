@@ -1,4 +1,7 @@
+import asyncio
+import hashlib
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -9,7 +12,7 @@ from spotipy import Spotify, SpotifyException
 from routers.player import _track, player_error
 from services.spotify_auth import get_spotify_token
 from services.spotify_client import user_client
-from services import history_store, spotify_identity
+from services import churn, history_store, spotify_identity
 
 log = logging.getLogger(__name__)
 
@@ -147,6 +150,47 @@ def top_tracks(
             'image': image,
         })
     return {'tracks': tracks}
+
+
+_churn_cache: dict[str, tuple[float, dict]] = {}
+_CHURN_TTL = 600
+
+
+def _top(spotify: Spotify, kind: str, rng: str) -> list[dict]:
+    if kind == 'artists':
+        items = spotify.current_user_top_artists(limit=50, time_range=rng).get('items', [])
+        return [{'id': a['id'], 'name': a.get('name', ''), 'image': ((a.get('images') or [{}])[-1]).get('url', '')} for a in items if a.get('id')]
+    items = spotify.current_user_top_tracks(limit=50, time_range=rng).get('items', [])
+    out = []
+    for t in items:
+        if not t.get('id'):
+            continue
+        images = (t.get('album') or {}).get('images') or []
+        out.append({'id': t['id'], 'title': t.get('name', ''), 'artists': [a.get('name', '') for a in t.get('artists', [])],
+                    'image': images[-1]['url'] if images else ''})
+    return out
+
+
+@router.get("/spotify/top-churn/")
+async def top_churn(token: str = Depends(get_spotify_token)):
+    """What's new vs what's a staple: top artists and tracks compared across the
+    three time ranges (services/churn.py). Six top-item calls, no search; cached
+    10 minutes per user since Profile loads it on every visit."""
+    key = hashlib.sha256(token.encode()).hexdigest()
+    hit = _churn_cache.get(key)
+    if hit and time.monotonic() - hit[0] < _CHURN_TTL:
+        return hit[1]
+    spotify = user_client(token)
+    ranges = ('short_term', 'medium_term', 'long_term')
+    try:
+        tops = await asyncio.gather(*(asyncio.to_thread(_top, spotify, kind, rng) for kind in ('artists', 'tracks') for rng in ranges))
+    except SpotifyException as e:
+        raise HTTPException(status_code=403 if e.http_status in (401, 403) else 502, detail='reconnect' if e.http_status in (401, 403) else "Couldn't reach Spotify.")
+    result = {'artists': churn.compare(*tops[:3]), 'tracks': churn.compare(*tops[3:])}
+    if len(_churn_cache) >= 256:
+        _churn_cache.clear()
+    _churn_cache[key] = (time.monotonic(), result)
+    return result
 
 
 @router.get("/spotify/taste-over-time/")

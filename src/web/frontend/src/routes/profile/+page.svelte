@@ -28,7 +28,7 @@
 	const PERIODS = ['short_term', 'medium_term', 'long_term'];
 	let time_period = 'short_term';
 
-	/** @type {null | 'tracks' | 'artists' | 'genres' | 'eras' | 'taste' | 'clock' | 'listening'} */
+	/** @type {null | 'tracks' | 'artists' | 'genres' | 'eras' | 'taste' | 'clock' | 'listening' | 'churn'} */
 	let expanded = null;
 	const toggle = (id) => (expanded = expanded === id ? null : id);
 	// Reactive, so the template's {#if shows(...)} re-runs when `expanded` changes.
@@ -71,6 +71,7 @@
 			top_artists = data.top_artists ?? [];
 			top_tracks = data.top_tracks ?? [];
 			fetchTasteOverTime();
+			fetchChurn();
 			fetchRecentlyPlayed();
 		} catch {
 			error = "Couldn't load your profile. Try again in a moment.";
@@ -109,6 +110,35 @@
 	$: eraMin = eraYears.length ? Math.min(...eraYears) - 2 : 2000;
 	$: eraMax = eraYears.length ? Math.max(...eraYears) + 2 : 2025;
 	$: audioSeries = tasteData?.audio_features ? Object.entries(tasteData.audio_features).map(([name, values]) => ({ name, values })) : [];
+
+	// --- What's new vs what's a staple: top items compared across the three periods ---
+	let churnData = null;
+	let churnLoaded = false;
+	let churnKind = 'artists';
+	async function fetchChurn() {
+		if (churnLoaded || !token) return;
+		churnLoaded = true;
+		try {
+			const res = await fetch(`${PUBLIC_API_URL}/spotify/top-churn/`, { headers: bearer(token) });
+			if (res.ok) churnData = await res.json();
+		} catch {
+			/* the module just doesn't show */
+		}
+	}
+	const CHURN_GROUPS = [
+		{ key: 'new', label: 'New this month', note: 'In your last 4 weeks, not before' },
+		{ key: 'rising', label: 'Rising', note: 'Climbing past your 6-month list' },
+		{ key: 'staples', label: 'Staples', note: 'Top in every period' },
+		{ key: 'fading', label: 'Fading', note: 'All-time favourites missing lately' }
+	];
+	$: churnGroups = churnData ? CHURN_GROUPS.map((g) => ({ ...g, items: churnData[churnKind][g.key] })).filter((g) => g.items.length) : [];
+	/** Artists open a Builder prompt; tracks open in Explore. */
+	function openChurn(it) {
+		if (churnKind === 'tracks') return explore(it);
+		$builderRequest = `songs like ${it.name}`;
+		goto('/playlist-builder/');
+	}
+	const rankText = (r) => (r.short ? `#${r.short}` : r.long ? `#${r.long} ever` : '');
 
 	// --- Listening clock (recently played → hour/day counts, local time) ---
 	let recentData = null;
@@ -370,6 +400,37 @@
 						<div class="m short" style:--span={expanded ? 12 : 3}>
 							<DashboardModule title="Eras" expanded={expanded === 'eras'} onToggleExpand={() => toggle('eras')}>
 								<div class="pad chart"><ColumnChart items={decadeData} /></div>
+							</DashboardModule>
+						</div>
+					{/if}
+
+					{#if shows('churn') && churnData && (churnData.artists.new.length || churnData.artists.staples.length || churnData.tracks.new.length)}
+						<div class="m short" style:--span={expanded ? 12 : 7}>
+							<DashboardModule title="What's new vs staples" expanded={expanded === 'churn'} onToggleExpand={() => toggle('churn')}>
+								<div class="pad churn">
+									<div class="segmented small" role="radiogroup" aria-label="Show">
+										<button role="radio" aria-checked={churnKind === 'artists'} class:active={churnKind === 'artists'} on:click={() => (churnKind = 'artists')}>Artists</button>
+										<button role="radio" aria-checked={churnKind === 'tracks'} class:active={churnKind === 'tracks'} on:click={() => (churnKind = 'tracks')}>Tracks</button>
+									</div>
+									<div class="churn-groups">
+										{#each churnGroups as g (g.key)}
+											<section>
+												<h3>{g.label} <span>{g.note}</span></h3>
+												<ul>
+													{#each g.items as it (it.id)}
+														<li>
+															<button class="churn-item" on:click={() => openChurn(it)} title={churnKind === 'artists' ? `Build songs like ${it.name}` : `Explore ${it.title}`}>
+																{#if it.image}<img src={it.image} alt="" class:round={churnKind === 'artists'} />{:else}<span class="ph" class:round={churnKind === 'artists'} />{/if}
+																<span class="who">{it.name ?? it.title}{#if it.artists}<small>{it.artists.join(', ')}</small>{/if}</span>
+																<span class="rank mono">{g.key === 'rising' ? `↑${it.ranks.medium - it.ranks.short}` : rankText(it.ranks)}</span>
+															</button>
+														</li>
+													{/each}
+												</ul>
+											</section>
+										{/each}
+									</div>
+								</div>
 							</DashboardModule>
 						</div>
 					{/if}
@@ -807,6 +868,96 @@
 		background: var(--accent);
 		transform-origin: left;
 		transition: transform 0.25s var(--ease);
+	}
+
+	/* What's new vs staples */
+	.churn-groups {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: 14px 18px;
+		margin-top: 12px;
+	}
+
+	.churn h3 {
+		margin: 0 0 6px;
+		font-size: calc(13px * var(--text-scale, 1));
+		font-weight: 600;
+	}
+
+	.churn h3 span {
+		margin-left: 6px;
+		font-weight: 400;
+		color: var(--text-subtle);
+		font-size: calc(11px * var(--text-scale, 1));
+	}
+
+	.churn ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.churn-item {
+		width: 100%;
+		height: auto;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 5px 6px;
+		border: none;
+		border-radius: 8px;
+		background: none;
+		color: var(--text-primary);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.churn-item:hover {
+		background: var(--hover);
+	}
+
+	.churn-item img,
+	.churn-item .ph {
+		flex: none;
+		width: 30px;
+		height: 30px;
+		border-radius: 6px;
+		object-fit: cover;
+		background: var(--surface-2);
+	}
+
+	.churn-item .round {
+		border-radius: 50%;
+	}
+
+	.who {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: center;
+		gap: 1px;
+		text-align: left;
+		line-height: 1.3;
+		font-size: calc(13px * var(--text-scale, 1));
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.who small {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		font-size: calc(11px * var(--text-scale, 1));
+		color: var(--text-muted);
+	}
+
+	.rank {
+		flex: none;
+		font-size: calc(11px * var(--text-scale, 1));
+		color: var(--text-subtle);
 	}
 
 	/* Your listening: the headline numbers above its chart. */

@@ -3733,3 +3733,10 @@ kept on the device (`dj_chat`, last 30), so it survives layout changes and reloa
   nationalities, decades or opinions; "hip-hop"/"hip hop" and "rnb"/"r&b" merged), top 3 per
   artist, cached 30 days in `track_lookup` under a `lastfm-tags` key. Live history check: the
   first Profile load after deploy stored 51 plays.
+- **Genres live check:** 49 of 50 top artists got genres, Profile load 1.6 s. Place tags ("north
+  carolina") are now filtered, including from cached rows.
+- **What's new vs staples** (top-item churn). `GET /spotify/top-churn/` fetches top artists and
+  tracks for all three ranges (6 calls, no search, cached 10 min) and compares them
+  (`services/churn.py`): new this month (4-week top only), rising (≥10 places higher than over
+  6 months), staples (in all three), fading (all-time top, missing from the last 4 weeks). A Profile
+  card with Artists/Tracks tabs; artists open a Builder prompt, tracks open in Explore.

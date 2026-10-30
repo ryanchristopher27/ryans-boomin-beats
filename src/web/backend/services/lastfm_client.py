@@ -137,7 +137,16 @@ _NOT_GENRES = {
     'chill', 'mellow', 'sexy', 'party', 'catchy', 'fun',
     'bosnian', 'serbian', 'croatian', 'dutch', 'italian', 'spanish', 'brazilian', 'mexican', 'nigerian',
     'african', 'jamaican', 'norwegian', 'danish', 'finnish', 'polish', 'russian', 'new zealand', 'nz',
+    # Places (cities and states are common artist tags).
+    'north carolina', 'south carolina', 'california', 'texas', 'georgia', 'florida', 'new jersey', 'virginia',
+    'atlanta', 'chicago', 'detroit', 'houston', 'memphis', 'new orleans', 'new york', 'nyc', 'brooklyn',
+    'los angeles', 'la', 'bay area', 'toronto', 'london', 'philadelphia', 'seattle', 'miami', 'compton',
 }
+
+
+def is_genre_tag(name: str) -> bool:
+    """False for the tags `genre_tags` always drops; also used on cached results."""
+    return name not in _NOT_GENRES
 # One spelling per genre: "hip-hop" and "hip hop" are the same bar on Profile.
 _SPELLING = {'rnb': 'r&b', 'r and b': 'r&b', 'rhythm and blues': 'r&b', 'hiphop': 'hip hop', 'electronica': 'electronic'}
 

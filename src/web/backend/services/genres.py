@@ -30,4 +30,5 @@ async def fill_genres(artists: list[dict]) -> None:
         await asyncio.to_thread(track_cache.put_many, fresh)
     for a in empty:
         hit = cached.get(keys[a['name']]) or fresh.get(keys[a['name']])
-        a['genres'] = (hit or {}).get('tags', [])
+        # Re-filtered, so a tag added to the not-a-genre list drops out of cached rows too.
+        a['genres'] = [t for t in (hit or {}).get('tags', []) if lastfm_client.is_genre_tag(t)]
