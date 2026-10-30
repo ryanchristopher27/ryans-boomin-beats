@@ -1,23 +1,28 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Query
 from spotipy import Spotify
 
 from services.spotify_auth import get_spotify_token
 from services.spotify_client import user_client
+from services.genres import fill_genres
 
 router = APIRouter()
 
 
 @router.get("/get-profile/")
-def get_profile(
+async def get_profile(
     num_tops: int = Query(10),
     time_period: str = Query('short_term'),
     token: str = Depends(get_spotify_token),
 ):
     spotify = user_client(token)
 
-    current_user = spotify.me()
-    top_artists = spotify.current_user_top_artists(limit=num_tops, offset=0, time_range=time_period)
-    top_tracks = spotify.current_user_top_tracks(limit=num_tops, offset=0, time_range=time_period)
+    current_user, top_artists, top_tracks = await asyncio.gather(
+        asyncio.to_thread(spotify.me),
+        asyncio.to_thread(spotify.current_user_top_artists, limit=num_tops, offset=0, time_range=time_period),
+        asyncio.to_thread(spotify.current_user_top_tracks, limit=num_tops, offset=0, time_range=time_period),
+    )
 
     top_artists_objects = []
     for artist in top_artists['items']:
@@ -29,6 +34,9 @@ def get_profile(
             'images': artist.get('images', []),
             'url': artist.get('external_urls', {}).get('spotify', ''),
         })
+
+    # Spotify's genres are empty for this app; Last.fm tags fill them (services/genres.py).
+    await fill_genres(top_artists_objects)
 
     top_tracks_objects = []
     for track in top_tracks['items']:

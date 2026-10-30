@@ -126,3 +126,54 @@ async def track_info(title: str, artist: str) -> dict:
 
 def _empty() -> dict:
     return {'tags': [], 'listeners': 0, 'play_count': 0, 'wiki_summary': ''}
+
+
+# Last.fm tags are free text; these are common ones that aren't genres.
+_NOT_GENRES = {
+    'seen live', 'favorites', 'favourites', 'favorite', 'favourite', 'love', 'awesome', 'beautiful', 'cool',
+    'male vocalists', 'female vocalists', 'male vocalist', 'female vocalist', 'singer-songwriter',
+    'american', 'british', 'uk', 'usa', 'canadian', 'english', 'australian', 'french', 'german', 'swedish',
+    'korean', 'japanese', 'irish', 'scottish', 'spotify', 'albums i own', 'under 2000 listeners', 'all',
+    'chill', 'mellow', 'sexy', 'party', 'catchy', 'fun',
+    'bosnian', 'serbian', 'croatian', 'dutch', 'italian', 'spanish', 'brazilian', 'mexican', 'nigerian',
+    'african', 'jamaican', 'norwegian', 'danish', 'finnish', 'polish', 'russian', 'new zealand', 'nz',
+}
+# One spelling per genre: "hip-hop" and "hip hop" are the same bar on Profile.
+_SPELLING = {'rnb': 'r&b', 'r and b': 'r&b', 'rhythm and blues': 'r&b', 'hiphop': 'hip hop', 'electronica': 'electronic'}
+
+
+def genre_tags(tags: list[dict], artist: str, limit: int = 3) -> list[str]:
+    """The genre-like tags from Last.fm's [{name, count}] (count is 0-100, relative
+    to the top tag): no artist names, nationalities, decades or opinions."""
+    me = artist.casefold().strip()
+    out = []
+    for t in tags:
+        name = str(t.get('name') or '').strip().lower().replace('-', ' ')
+        name = _SPELLING.get(name, name)
+        try:
+            count = int(t.get('count') or 0)
+        except (TypeError, ValueError):
+            count = 0
+        if (count < 10 or not name or len(name) > 30 or name in _NOT_GENRES or name == me
+                or re.fullmatch(r"\d{2,4}s?|'\d0s", name) or name in out):
+            continue
+        out.append(name)
+        if len(out) == limit:
+            break
+    return out
+
+
+async def artist_top_tags(artist: str) -> list[str] | None:
+    """Genre-like tags for an artist from Last.fm (Spotify's artist genres come
+    back empty for this app, 2026-10-29), or None when Last.fm didn't answer."""
+    if not LASTFM_API_KEY or not artist:
+        return None
+    params = {'method': 'artist.getTopTags', 'artist': artist, 'api_key': LASTFM_API_KEY, 'format': 'json', 'autocorrect': 1}
+    try:
+        async with httpx.AsyncClient() as client:
+            data = (await client.get(BASE_URL, params=params, timeout=4.0)).json()
+        tags = data['toptags']['tag']
+    except Exception as e:
+        log.info('[lastfm] tags failed: %s', e)
+        return None
+    return genre_tags(tags if isinstance(tags, list) else [tags], artist)

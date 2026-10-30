@@ -3728,3 +3728,8 @@ kept on the device (`dj_chat`, last 30), so it survives layout changes and reloa
   clock uses it once it holds more than 50 plays, and a new "Your listening" card shows hours,
   plays, day streak, artists this week and hours per week. Gaps: plays older than the last 50
   when neither Profile nor the DJ was opened in time.
+- **Genres fixed with Last.fm** (same day). `/get-profile/` fills empty artist genres from
+  Last.fm `artist.getTopTags` (`services/genres.py`), keeping genre-like tags (no artist names,
+  nationalities, decades or opinions; "hip-hop"/"hip hop" and "rnb"/"r&b" merged), top 3 per
+  artist, cached 30 days in `track_lookup` under a `lastfm-tags` key. Live history check: the
+  first Profile load after deploy stored 51 plays.
