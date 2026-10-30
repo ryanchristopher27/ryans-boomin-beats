@@ -269,6 +269,18 @@ describe('web DJ engine', () => {
 		expect(server.suggestBodies.slice(before).map((b) => b.now_playing.id)).toEqual(['t1']);
 	});
 
+	test('the DJ page saves the listening history once when it opens', async () => {
+		const server = fakeServer();
+		const a = tab(server, 'a');
+		await a.refresh();
+		const syncs = () => server.calls.filter((c) => c.path === 'history/sync/').length;
+		const stop1 = a.watchSuggestions();
+		const stop2 = a.watchSuggestions(); // the mini player and the page both watch
+		expect(syncs()).toBe(1);
+		stop1();
+		stop2();
+	});
+
 	test('a failed round keeps the board it would have replaced', async () => {
 		const server = fakeServer();
 		server.suggestMoves = true;

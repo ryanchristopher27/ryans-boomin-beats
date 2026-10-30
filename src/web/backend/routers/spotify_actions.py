@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,6 +9,7 @@ from spotipy import Spotify, SpotifyException
 from routers.player import _track, player_error
 from services.spotify_auth import get_spotify_token
 from services.spotify_client import user_client
+from services import history_store, spotify_identity
 
 log = logging.getLogger(__name__)
 
@@ -202,19 +204,50 @@ def taste_over_time(token: str = Depends(get_spotify_token)):
     }
 
 
-@router.get("/spotify/recently-played/")
-def recently_played(token: str = Depends(get_spotify_token)):
-    """Return play timestamps for the listening clock. Spotify caps this at the
-    50 most-recent plays. Needs the user-read-recently-played scope."""
-    spotify = user_client(token)
+def _recent_items(token: str) -> list[dict]:
     try:
-        res = spotify.current_user_recently_played(limit=50)
+        return user_client(token).current_user_recently_played(limit=50).get('items', [])
     except SpotifyException as e:
         if e.http_status in (401, 403):
             raise HTTPException(status_code=403, detail="reconnect")
         raise HTTPException(status_code=500, detail=str(e))
-    played_at = [it['played_at'] for it in res.get('items', []) if it.get('played_at')]
-    return {'played_at': played_at, 'count': len(played_at)}
+
+
+def _store_recent(token: str, items: list[dict]) -> str | None:
+    """Keep these plays in the listening history; returns the user id, or None if storage is off."""
+    try:
+        user = spotify_identity.user_id(token)
+        history_store.save(history_store.rows_from_recent(user, items))
+        return user
+    except (history_store.Unavailable, HTTPException) as e:
+        log.info('[history] not stored: %s', e)
+        return None
+
+
+@router.get("/spotify/recently-played/")
+def recently_played(tz: int = Query(default=0, ge=-840, le=840), token: str = Depends(get_spotify_token)):
+    """Play timestamps for the listening clock. Spotify only keeps the 50 most
+    recent, so they're also saved to the listening history, and `history` holds
+    stats over the last 90 days of saved plays (in the caller's time zone: `tz`
+    is JavaScript's getTimezoneOffset()). Needs user-read-recently-played."""
+    items = _recent_items(token)
+    played_at = [it['played_at'] for it in items if it.get('played_at')]
+    history = None
+    user = _store_recent(token, items)
+    if user:
+        try:
+            since = datetime.now(timezone.utc) - timedelta(days=history_store.WINDOW_DAYS)
+            history = history_store.stats(history_store.plays_since(user, since), tz)
+        except history_store.Unavailable as e:
+            log.info('[history] not read: %s', e)
+    return {'played_at': played_at, 'count': len(played_at), 'history': history}
+
+
+@router.post("/history/sync/")
+def sync_history(token: str = Depends(get_spotify_token)):
+    """Save the latest plays (the DJ page calls this while open), so history has no gaps."""
+    items = _recent_items(token)
+    return {'stored': _store_recent(token, items) is not None, 'seen': len(items)}
 
 
 # Spotify's February 2026 migration consolidated the per-type save/remove/contains

@@ -3714,3 +3714,17 @@ preset, a full custom layout, controls (mode, Safe↔Bold, Familiar↔New), the 
 `refresh_moves` (a note added to every move's feedback, then the board is re-asked). The log is
 kept on the device (`dj_chat`, last 30), so it survives layout changes and reloads. Real Sonnet:
 13 s per message, valid JSON with picks and a valid layout.
+
+### Genres check and listening history (2026-10-29)
+- **Genres are empty.** A real Profile load (medium_term, 50 artists) returned `genres: []` for
+  all 50 top artists, so Top genres and the genre part of the summary never show. Fix candidate:
+  Last.fm `artist.getTopTags`, cached. `/me` `followers.total` still works (29), despite the Feb
+  2026 changelog.
+- **Listening history** (`listening_history`, migration 20261029160000, applied to boomin-beats).
+  One row per play keyed by (user, played_at); RLS on, no policies, backend-only. Saved from
+  `/spotify/recently-played/` (Profile) and `POST /history/sync/` (DJ page on open + every
+  30 min). `/spotify/recently-played/?tz=` adds `history`: 90-day stats in the caller's local
+  time (hours, days, 12 weeks of plays/minutes/artists, streak, top artist). Profile's listening
+  clock uses it once it holds more than 50 plays, and a new "Your listening" card shows hours,
+  plays, day streak, artists this week and hours per week. Gaps: plays older than the last 50
+  when neither Profile nor the DJ was opened in time.

@@ -28,7 +28,7 @@
 	const PERIODS = ['short_term', 'medium_term', 'long_term'];
 	let time_period = 'short_term';
 
-	/** @type {null | 'tracks' | 'artists' | 'genres' | 'eras' | 'taste' | 'clock'} */
+	/** @type {null | 'tracks' | 'artists' | 'genres' | 'eras' | 'taste' | 'clock' | 'listening'} */
 	let expanded = null;
 	const toggle = (id) => (expanded = expanded === id ? null : id);
 	// Reactive, so the template's {#if shows(...)} re-runs when `expanded` changes.
@@ -118,7 +118,8 @@
 		if (recentLoaded || !token) return;
 		recentLoaded = true;
 		try {
-			const res = await fetch(`${PUBLIC_API_URL}/spotify/recently-played/`, { headers: bearer(token) });
+			// tz: the history stats come back bucketed in this browser's local time.
+			const res = await fetch(`${PUBLIC_API_URL}/spotify/recently-played/?tz=${new Date().getTimezoneOffset()}`, { headers: bearer(token) });
 			if (res.status === 403) recentNeedsReauth = true;
 			else if (res.ok) recentData = await res.json();
 		} catch {
@@ -129,9 +130,16 @@
 	const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Mon … Sun
 	const DAY_INITIAL = { 0: 'S', 1: 'M', 2: 'T', 3: 'W', 4: 'T', 5: 'F', 6: 'S' };
 	const DAY_NAME = { 0: 'Sun', 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
-	$: hourCounts = countBy(recentData, (d) => d.getHours(), 24);
+	// Saved listening history (90 days) once it holds more than Spotify's last 50 plays.
+	$: hist = recentData?.history?.plays > (recentData?.count ?? 0) ? recentData.history : null;
+	$: hourCounts = hist ? hist.hours : countBy(recentData, (d) => d.getHours(), 24);
 	$: hourCells = hourCounts.map((value, h) => ({ value, label: `${h}:00`, tick: HOUR_TICKS[h] || '' }));
-	$: dayCells = ((c) => DAY_ORDER.map((day) => ({ value: c[day], label: DAY_NAME[day], tick: DAY_INITIAL[day] })))(countBy(recentData, (d) => d.getDay(), 7));
+	$: dayCells = ((c) => DAY_ORDER.map((day) => ({ value: c[day], label: DAY_NAME[day], tick: DAY_INITIAL[day] })))(hist ? hist.days : countBy(recentData, (d) => d.getDay(), 7));
+	// "Your listening": the saved history, from its first play.
+	$: listening = recentData?.history?.plays ? recentData.history : null;
+	$: since = listening?.since ? new Date(listening.since).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+	$: thisWeek = listening?.weeks.at(-1);
+	$: weekBars = (listening?.weeks ?? []).slice(-8).map((w) => ({ label: new Date(`${w.start}T12:00`).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }), value: Math.round((w.minutes / 60) * 10) / 10 }));
 	function countBy(d, key, n) {
 		const counts = new Array(n).fill(0);
 		(d?.played_at || []).forEach((ts) => counts[key(new Date(ts))]++);
@@ -396,8 +404,27 @@
 										<Heatmap cells={hourCells} />
 										<p class="clock-label mono">BY DAY</p>
 										<Heatmap cells={dayCells} />
-										<p class="note">Based on your last {recentData.count} plays (Spotify's limit).</p>
+										<p class="note">{hist ? `Based on ${hist.plays} plays since ${since}.` : `Based on your last ${recentData.count} plays (Spotify's limit).`}</p>
 									{/if}
+								</div>
+							</DashboardModule>
+						</div>
+					{/if}
+
+					{#if shows('listening') && listening}
+						<div class="m short" style:--span={expanded ? 12 : 4}>
+							<DashboardModule title="Your listening" expanded={expanded === 'listening'} onToggleExpand={() => toggle('listening')}>
+								<div class="pad">
+									<dl class="tiles">
+										<div><dt>Hours</dt><dd class="mono">{Math.round(listening.minutes / 60)}</dd></div>
+										<div><dt>Plays</dt><dd class="mono">{listening.plays}</dd></div>
+										<div><dt>Day streak</dt><dd class="mono">{listening.streak}</dd></div>
+										<div><dt>Artists this week</dt><dd class="mono">{thisWeek?.artists ?? 0}</dd></div>
+									</dl>
+									{#if listening.top_artist}<p class="note">Most played: <b>{listening.top_artist}</b></p>{/if}
+									<p class="clock-label mono">HOURS PER WEEK</p>
+									<ColumnChart items={weekBars} />
+									<p class="note">Since {since}. Saved each time you open Profile or the DJ, so it grows as you use the app (Spotify only keeps your last 50 plays).</p>
 								</div>
 							</DashboardModule>
 						</div>
@@ -780,6 +807,35 @@
 		background: var(--accent);
 		transform-origin: left;
 		transition: transform 0.25s var(--ease);
+	}
+
+	/* Your listening: the headline numbers above its chart. */
+	.tiles {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 8px;
+		margin: 0 0 10px;
+	}
+
+	.tiles div {
+		display: flex;
+		flex-direction: column-reverse;
+		gap: 2px;
+		padding: 8px 10px;
+		border-radius: 10px;
+		background: var(--surface-2);
+	}
+
+	.tiles dt {
+		font-size: calc(11px * var(--text-scale, 1));
+		color: var(--text-muted);
+	}
+
+	.tiles dd {
+		margin: 0;
+		font-size: calc(18px * var(--text-scale, 1));
+		font-weight: 600;
+		color: var(--text-primary);
 	}
 
 	.stats {

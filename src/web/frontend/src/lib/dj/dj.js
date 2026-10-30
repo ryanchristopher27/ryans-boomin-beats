@@ -694,7 +694,26 @@ export function createDJ({ request, hasLLM = () => true, storage = safeStorage()
 		watchers++;
 		// Opening the DJ (or reloading it) shows the saved board rather than replacing it.
 		prefetch({ keepBoard: true });
-		return () => watchers--;
+		// Save Spotify's last 50 plays to the listening history while the DJ is open,
+		// so a night of music isn't lost past that window (Profile → Your listening).
+		if (!historyTimer) {
+			syncHistory();
+			historyTimer = setInterval(syncHistory, HISTORY_SYNC_MS);
+		}
+		return () => {
+			watchers--;
+			if (!watchers) {
+				clearInterval(historyTimer);
+				historyTimer = null;
+			}
+		};
+	}
+
+	// 50 plays is two to three hours of music, so every 30 minutes leaves no gaps.
+	const HISTORY_SYNC_MS = 30 * 60 * 1000;
+	let historyTimer = null;
+	function syncHistory() {
+		request('POST', 'history/sync/').catch(() => {}); // best effort
 	}
 
 	/**
