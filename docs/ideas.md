@@ -12,6 +12,7 @@
     - Make each modular section scrollable rather than making the whole page scrollable.
 
 - Make a radar chart showing the amount you have listened to each of the top genres
+
 ## Profile metrics from Spotify (research, 2026-10-29)
 Read-only research against the Feb/Mar 2026 Spotify changelogs and the app's own probes
 (plan.md 1684-1755). Still useful in Development Mode: top items, recently played, saved tracks,
