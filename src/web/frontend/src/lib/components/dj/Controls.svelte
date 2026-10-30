@@ -80,6 +80,8 @@
 		<input class="switch" type="checkbox" role="switch" bind:checked={$newMovesEverySong} />
 	</label>
 
+	<Chat {dj} />
+
 	{#if withGoal}
 		<div class="docked"><Goal {dj} /></div>
 	{/if}
@@ -114,7 +116,6 @@
 		</details>
 	{/if}
 
-	<Chat {dj} />
 </div>
 
 <style>
