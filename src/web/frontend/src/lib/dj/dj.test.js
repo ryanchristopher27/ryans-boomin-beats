@@ -62,10 +62,10 @@ function memoryStorage() {
 	return { get: (k) => m.get(k) ?? null, set: (k, v) => m.set(k, v) };
 }
 
-const tab = (server, name) => {
+const tab = (server, name, now) => {
 	const storage = memoryStorage();
 	storage.set('dj_device_id', name);
-	return createDJ({ request: server.request(name), storage, label: name, hasLLM: () => false, debounceMs: 0, locks: null });
+	return createDJ({ request: server.request(name), storage, label: name, hasLLM: () => false, debounceMs: 0, locks: null, now });
 };
 
 describe('web DJ engine', () => {
@@ -413,7 +413,10 @@ describe('web DJ engine', () => {
 
 	test('polling: 5 s while playing, near-end wake for the driver, backoff on 503 (477d21)', async () => {
 		const server = fakeServer();
-		const a = tab(server, 'a');
+		// A frozen clock: progress is extrapolated from now(), so a real
+		// millisecond ticking during refresh() would turn 3300 into 3299.
+		const t = 1_000_000;
+		const a = tab(server, 'a', () => t);
 		await a.refresh(); // playing, 1 s into a 200 s track
 		expect(a.nextDelay()).toBe(5000);
 
